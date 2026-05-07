@@ -1,0 +1,127 @@
+-- Seed data for RSPP
+
+insert into public.catalogo_rischi (id_rischio, nome_rischio, categoria, macro_categoria, attivo, ordine)
+values
+('S01','Incendio ed esplosione','Sicurezza','Rischi per la Sicurezza',true,10),
+('S02','Macchine e attrezzature da lavoro','Sicurezza','Rischi per la Sicurezza',true,20),
+('S03','Impianti ed apparecchiature elettriche','Sicurezza','Rischi per la Sicurezza',true,30),
+('S04','Fulminazione / scariche atmosferiche','Sicurezza','Rischi per la Sicurezza',true,40),
+('S05','Atmosfere esplosive (ATEX)','Sicurezza','Rischi per la Sicurezza',true,50),
+('S06','Ambienti confinati / sospetti inquinamento','Sicurezza','Rischi per la Sicurezza',true,60),
+('S07','Luoghi di lavoro — strutture e ambienti','Sicurezza','Rischi per la Sicurezza',true,70),
+('S08','Rischio taglio e punta','Sicurezza','Rischi per la Sicurezza',true,80),
+('S09','Caduta dall''alto / attivita in quota','Sicurezza','Rischi per la Sicurezza',true,90),
+('S10','Incidenti stradali / circolazione veicoli','Sicurezza','Rischi per la Sicurezza',true,100),
+('S11','Gestione lavoratori disabili','Sicurezza','Rischi per la Sicurezza',true,110),
+('F01','Rumore','Agenti fisici','Rischi per la Salute',true,120),
+('F02','Vibrazioni mano-braccio','Agenti fisici','Rischi per la Salute',true,130),
+('F03','Vibrazioni corpo intero','Agenti fisici','Rischi per la Salute',true,140),
+('F04','Campi elettromagnetici','Agenti fisici','Rischi per la Salute',true,150),
+('F05','Radiazioni ottiche artificiali','Agenti fisici','Rischi per la Salute',true,160),
+('F06','Radiazioni ionizzanti / Radon','Agenti fisici','Rischi per la Salute',true,170),
+('F07','Microclima','Agenti fisici','Rischi per la Salute',true,180),
+('F08','Illuminamento (igiene)','Agenti fisici','Rischi per la Salute',true,190),
+('E01','Movimentazione manuale dei carichi (MMC)','Ergonomico','Rischi per la Salute',true,200),
+('E02','Sovraccarico biomeccanico arti superiori','Ergonomico','Rischi per la Salute',true,210),
+('E03','Videoterminali (VDT)','Ergonomico','Rischi per la Salute',true,220),
+('E04','Posture incongrue / rischio posturale','Ergonomico','Rischi per la Salute',true,230),
+('C01','Agenti chimici','Sostanze pericolose','Rischi per la Salute',true,240),
+('C02','Agenti cancerogeni e mutageni','Sostanze pericolose','Rischi per la Salute',true,250),
+('C03','Amianto','Sostanze pericolose','Rischi per la Salute',true,260),
+('C04','Gas Radon','Sostanze pericolose','Rischi per la Salute',true,270),
+('C05','Fumo passivo','Sostanze pericolose','Rischi per la Salute',true,280),
+('B01','Agenti biologici generici','Biologico','Rischi per la Salute',true,290),
+('B02','Legionellosi','Biologico','Rischi per la Salute',true,300),
+('B03','Rischio biologico SARS-CoV-2 / pandemia','Biologico','Rischi per la Salute',true,310),
+('P01','Stress lavoro-correlato','Psicosociale','Rischi Psicosociali e Trasversali',true,320),
+('P02','Mobbing e burn-out','Psicosociale','Rischi Psicosociali e Trasversali',true,330),
+('P03','Rischio rapina e aggressione','Psicosociale','Rischi Psicosociali e Trasversali',true,340),
+('P04','Lavoratrici gestanti e madri','Trasversale','Rischi Psicosociali e Trasversali',true,350),
+('P05','Tipologia contrattuale (lavoro atipico)','Trasversale','Rischi Psicosociali e Trasversali',true,360),
+('P06','Invecchiamento lavorativo','Trasversale','Rischi Psicosociali e Trasversali',true,370),
+('P07','Parita di genere','Trasversale','Rischi Psicosociali e Trasversali',true,380),
+('P08','Lavoro agile / smart working','Trasversale','Rischi Psicosociali e Trasversali',true,390),
+('P09','Lavoratori stranieri','Trasversale','Rischi Psicosociali e Trasversali',true,400)
+on conflict (id_rischio) do update
+set nome_rischio = excluded.nome_rischio,
+    categoria = excluded.categoria,
+    macro_categoria = excluded.macro_categoria,
+    attivo = excluded.attivo,
+    ordine = excluded.ordine;
+
+insert into public.tipi_rilevamento (nome_tipo, unita_misura, limite_legge_default, normativa_rif, attivo)
+values
+('Illuminamento — postazione VDT', 'lux', 500, 'UNI EN 12464-1', true),
+('Illuminamento — zona di transito', 'lux', 100, 'UNI EN 12464-1', true),
+('Rumore — LEX,8h', 'dB(A)', 80, 'D.Lgs. 81/08 Tit. VIII Capo II', true),
+('Rumore — picco Ppeak', 'Pa', 112, 'D.Lgs. 81/08 Tit. VIII Capo II', true),
+('Microclima — temperatura estiva', '°C', 26, 'UNI EN ISO 7730', true),
+('Microclima — temperatura invernale', '°C', 20, 'UNI EN ISO 7730', true),
+('Microclima — umidita relativa', '%', 50, 'UNI EN ISO 7730', true),
+('Microclima — velocita aria', 'm/s', 0.15, 'UNI EN ISO 7730', true),
+('Vibrazioni — sistema mano-braccio', 'm/s²', 2.5, 'UNI EN ISO 5349', true),
+('Vibrazioni — corpo intero', 'm/s²', 0.5, 'ISO 2631-1', true),
+('Gas Radon', 'Bq/m³', 300, 'D.Lgs. 101/2020', true)
+on conflict (nome_tipo) do update
+set unita_misura = excluded.unita_misura,
+    limite_legge_default = excluded.limite_legge_default,
+    normativa_rif = excluded.normativa_rif,
+    attivo = excluded.attivo;
+
+insert into public.profili (nome_profilo, tipo_personale, tipo_profilo, attivo)
+values
+('Impiegato VDT', 'Personale amministrativo e di accoglienza', 'Standard', true),
+('Manutentore', 'Personale tecnico di manutenzione', 'Standard', true),
+('Addetto alle pulizie', 'Personale addetto alla pulizia e igiene', 'Standard', true),
+('Governante', 'Personale di coordinamento e supervisione', 'Standard', true),
+('Autista / addetto agli spostamenti', 'Personale con mansioni esterne su strada', 'Standard', true),
+('Operaio generico', 'Personale operativo non specializzato', 'Standard', true),
+('Magazziniere', 'Personale addetto al magazzino e stoccaggio', 'Standard', true),
+('Operatore sanitario', 'Personale sanitario e di assistenza', 'Standard', true),
+('Addetto alla ristorazione', 'Personale di cucina e sala', 'Standard', true),
+('Vigilanza e sicurezza', 'Personale addetto alla sorveglianza', 'Standard', true)
+on conflict (nome_profilo, tipo_profilo, azienda_proprietaria_id) do nothing;
+
+insert into public.documenti_catalogo (codice, categoria, nome, default_attivo, attivo, ordine)
+values
+('DVR_CORPO_CENTRALE', 'DVR Classico', 'DVR Corpo Centrale', true, true, 10),
+('APPENDICE_A_ORGANIGRAMMA', 'Appendici', 'Appendice A: Organigramma Aziendale della sicurezza e mansionario tecnico operativo', false, true, 20),
+('APPENDICE_B1_PROFILI', 'Appendici', 'Appendice B.1: Profili di rischio occupazionale', false, true, 30),
+('APPENDICE_B2_MISURE', 'Appendici', 'Appendice B.2: Programma delle misure per miglioramento livelli di sicurezza (Art. 28 c.2 lett. C D.Lgs. 81/08)', false, true, 40),
+('APPENDICE_B3_ALTRE_SEDI', 'Appendici', 'Appendice B.3: Misure per altre sedi operative', false, true, 50),
+('APPENDICE_C_SORVEGLIANZA', 'Appendici', 'Appendice C: Protocollo di sorveglianza sanitaria', false, true, 60),
+('MOD_MICROCLIMA', 'Moduli', 'Analisi delle condizioni microclimatiche all’interno degli ambienti di lavoro', false, true, 70),
+('MOD_VDT_ILLUMINAMENTO', 'Moduli', 'Analisi delle postazioni munite di videoterminale e dei livelli di illuminamento', false, true, 80),
+('MOD_STRESS_LC', 'Moduli', 'Valutazione del rischio stress lavoro correlato', false, true, 90),
+('MOD_EMERGENZE', 'Moduli', 'Piano di gestione delle emergenze', false, true, 100),
+('MOD_INCENDIO', 'Moduli', 'Valutazione del rischio incendio', false, true, 110),
+('MOD_RUMORE', 'Moduli', 'Valutazione del rischio rumore', false, true, 120),
+('MOD_VIBRAZIONI', 'Moduli', 'Valutazione del rischio vibrazioni', false, true, 130),
+('MOD_CHIMICO', 'Moduli', 'Valutazione del rischio chimico', false, true, 140),
+('MOD_MMC', 'Moduli', 'Valutazione del rischio movimentazione manuale dei carichi', false, true, 150),
+('MOD_SOVRACCARICO_AS', 'Moduli', 'Valutazione del rischio di Sovraccarico Biomeccanico degli Arti Superiori', false, true, 160),
+('MOD_BIOLOGICO', 'Moduli', 'Valutazione del rischio biologico', false, true, 170),
+('MOD_CANCEROGENI_MUTAGENI', 'Moduli', 'Protezione da agenti cancerogeni e mutageni', false, true, 180),
+('MOD_FUMO_PASSIVO', 'Moduli', 'Valutazione del rischio di esposizione al fumo passivo di tabacco', false, true, 190),
+('MOD_DPI', 'Moduli', 'Piano di utilizzo dei Dispositivi di Protezione Individuale', false, true, 200),
+('MOD_LAVORATORI_ESTERO', 'Moduli', 'Valutazione dei rischi generici ed aggravati per i lavoratori inviati all’estero', false, true, 210),
+('MOD_GAS_RADON', 'Moduli', 'Monitoraggio gas radon', false, true, 220),
+('MOD_SCARICHE_ATMOSFERICHE', 'Moduli', 'Valutazione del rischio scariche atmosferiche', false, true, 230),
+('NOTA_ANTINCENDIO', 'Note informative e procedure', 'Informativa antincendio per i lavoratori', false, true, 240),
+('NOTA_LAVORATRICI_MADRI', 'Note informative e procedure', 'Nota informativa per le lavoratrici madri', false, true, 250),
+('NOTA_SMART_WORKING', 'Note informative e procedure', 'Nota informativa smart working', false, true, 260),
+('PROC_INFORTUNI_NEARMISS', 'Note informative e procedure', 'Procedura per la gestione di infortuni, incidenti e near miss', false, true, 270),
+('VADEMECUM_ANTIRAPINA', 'Note informative e procedure', 'Vademecum antirapina', false, true, 280),
+('VADEMECUM_AGGRESSIONI', 'Note informative e procedure', 'Vademecum aggressioni e molestie', false, true, 290),
+('MOD_GESTIONE_DPI', 'Note informative e procedure', 'Moduli per la gestione dei DPI', false, true, 300),
+('PROC_LAVORO_SICUREZZA', 'Note informative e procedure', 'Procedure di lavoro in sicurezza (specifiche attività)', false, true, 310),
+('DVR_STANDARDIZZATE', 'DVR Procedure Standardizzate', 'DVR Procedure Standardizzate', false, true, 320),
+('ALLEGATO_TITOLI_RSPP', 'Allegati', 'Titoli abilitativi del RSPP', false, true, 330),
+('ALLEGATO_QUESTIONARIO_STRESS', 'Allegati', 'Questionario di valutazione del rischio stress lavoro correlato', false, true, 340),
+('ALLEGATO_RISCHIO_MOLESTIE', 'Allegati', 'Valutazione del rischio molestie', false, true, 350)
+on conflict (codice) do update
+set categoria = excluded.categoria,
+    nome = excluded.nome,
+    default_attivo = excluded.default_attivo,
+    attivo = excluded.attivo,
+    ordine = excluded.ordine;

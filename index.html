@@ -735,10 +735,14 @@
                     <span>Admin Utenti</span>
                 </div>
                 
-                <div class="nav-section" data-min-role="rspp">Modelli documenti</div>
+                <div class="nav-section" data-min-role="editor">Modelli documenti</div>
                 <div class="nav-item" onclick="navigateTo('modelli')" data-page="modelli" data-min-role="rspp">
                     <span class="nav-icon">📁</span>
                     <span>Modelli</span>
+                </div>
+                <div class="nav-item" onclick="navigateTo('loghi')" data-page="loghi" data-min-role="editor">
+                    <span class="nav-icon">🖼️</span>
+                    <span>Loghi</span>
                 </div>
 
                 <div class="nav-section" data-role-section="viewer">Output</div>
@@ -786,6 +790,7 @@
                 output: 'output'
             },
             modelliAllowedExt: ['docx', 'doc', 'dotx', 'pdf'],
+            loghiAllowedExt: ['png', 'jpg', 'jpeg', 'webp', 'svg'],
             TESTO_TRASCURABILE: 'Rischio non rilevato per il profilo professionale. Le caratteristiche dell\'attivita e dell\'ambiente di lavoro non comportano esposizione a tale tipologia di rischio.'
         };
 
@@ -805,7 +810,8 @@
                 rilevamentiAmbientali: [],
                 documentiCatalogo: [],
                 aziendeDocumenti: [],
-                modelliStorageByCodice: {}
+                modelliStorageByCodice: {},
+                loghiStorageByAziendaId: {}
             }
         };
 
@@ -1009,6 +1015,7 @@
             testi: 'viewer',
             genera: 'viewer',
             modelli: 'rspp',
+            loghi: 'editor',
             admin: 'admin'
         };
 
@@ -1126,6 +1133,7 @@
                     case 'testi': await renderTestiDvr(); break;
                     case 'genera': await renderGeneraDvr(); break;
                     case 'modelli': await renderModelli(); break;
+                    case 'loghi': await renderLoghi(); break;
                     case 'admin': await renderAdminUsers(); break;
                     default: main.innerHTML = '<p>Pagina non trovata</p>';
                 }
@@ -3331,8 +3339,13 @@
 
             main.addEventListener('change', (e) => {
                 const input = e.target;
-                if (!input.matches?.('input.modelli-file-input[data-codice]')) return;
-                uploadModelloDocumento(input.dataset.codice, input);
+                if (input.matches?.('input.modelli-file-input[data-codice]')) {
+                    uploadModelloDocumento(input.dataset.codice, input);
+                    return;
+                }
+                if (input.matches?.('input.loghi-file-input[data-azienda-id]')) {
+                    uploadLogoAzienda(input.dataset.aziendaId, input);
+                }
             });
 
             main.addEventListener('click', (e) => {
@@ -3352,6 +3365,24 @@
                 if (dl) {
                     e.preventDefault();
                     downloadModelloDocumento(dl.dataset.codice);
+                    return;
+                }
+                const pickLogo = e.target.closest?.('[data-action="pick-logo"]');
+                if (pickLogo) {
+                    e.preventDefault();
+                    pickLogo.closest('tr')?.querySelector('input.loghi-file-input')?.click();
+                    return;
+                }
+                const delLogo = e.target.closest?.('[data-action="delete-logo"]');
+                if (delLogo) {
+                    e.preventDefault();
+                    deleteLogoAzienda(delLogo.dataset.aziendaId);
+                    return;
+                }
+                const dlLogo = e.target.closest?.('[data-action="download-logo"]');
+                if (dlLogo) {
+                    e.preventDefault();
+                    downloadLogoAzienda(dlLogo.dataset.aziendaId);
                 }
             });
         }
@@ -3486,6 +3517,209 @@
             } catch (error) {
                 console.error(error);
                 showToast('Errore download: ' + error.message, 'error');
+            }
+        }
+
+
+        function logoStoragePath(aziendaId, fileName) {
+            const ext = (fileName.split('.').pop() || 'png').toLowerCase();
+            const allowed = CONFIG.loghiAllowedExt || ['png', 'jpg', 'jpeg', 'webp', 'svg'];
+            const safeExt = allowed.includes(ext) ? ext : 'png';
+            return aziendaId + '.' + safeExt;
+        }
+
+        async function loadLoghiStorageIndex() {
+            const bucket = CONFIG.storage.loghi;
+            const { data, error } = await supabaseClient.storage.from(bucket).list('', {
+                limit: 1000,
+                sortBy: { column: 'name', order: 'asc' }
+            });
+            if (error) throw error;
+            const byAziendaId = {};
+            (data || []).forEach(obj => {
+                if (!obj?.name || obj.name.endsWith('/')) return;
+                if (!obj.name.includes('.')) return;
+                const aziendaId = codiceFromStorageName(obj.name);
+                if (!aziendaId) return;
+                byAziendaId[aziendaId] = obj;
+            });
+            STATE.data.loghiStorageByAziendaId = byAziendaId;
+            return byAziendaId;
+        }
+
+        function renderLogoRow(azienda, file, canManage, previewUrl) {
+            const idAttr = attrEsc(azienda.id);
+            const previewHtml = previewUrl
+                ? '<img src="' + attrEsc(previewUrl) + '" alt="Logo" style="max-height:40px;max-width:120px;object-fit:contain;">'
+                : (file ? '<span class="badge info">Caricato</span>' : '<span class="badge warning">Mancante</span>');
+            let actionsHtml = '';
+            if (canManage) {
+                actionsHtml += '<button type="button" class="btn" data-action="pick-logo" data-azienda-id="' + idAttr + '">'
+                    + (file ? 'Sostituisci' : 'Carica') + '</button>';
+                actionsHtml += '<input type="file" class="loghi-file-input" accept=".png,.jpg,.jpeg,.webp,.svg" data-azienda-id="'
+                    + idAttr + '" hidden>';
+                if (file) {
+                    actionsHtml += '<button type="button" class="icon-btn danger" data-action="delete-logo" data-azienda-id="'
+                        + idAttr + '" title="Elimina">🗑️</button>';
+                }
+            }
+            if (file) {
+                actionsHtml += '<button type="button" class="btn" data-action="download-logo" data-azienda-id="'
+                    + idAttr + '">Scarica</button>';
+            }
+            return ''
+                + '<tr data-azienda-id="' + idAttr + '">'
+                + '<td><strong>' + esc(azienda.fields?.RagioneSociale || '—') + '</strong></td>'
+                + '<td>' + esc(azienda.fields?.PartitaIVA || '—') + '</td>'
+                + '<td>' + previewHtml + '</td>'
+                + '<td><' + D + ' class="actions">' + actionsHtml + '</' + D + '></td>'
+                + '</tr>';
+        }
+
+        async function hydrateLogoPreviews(aziende, byId) {
+            const bucket = CONFIG.storage.loghi;
+            for (const a of aziende) {
+                const file = byId[a.id];
+                if (!file?.name) continue;
+                const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(file.name, 3600);
+                if (error || !data?.signedUrl) continue;
+                const row = document.querySelector('tr[data-azienda-id="' + a.id + '"]');
+                if (!row) continue;
+                const cell = row.querySelector('td:nth-child(3)');
+                if (cell) {
+                    cell.innerHTML = '<img src="' + attrEsc(data.signedUrl) + '" alt="Logo" style="max-height:40px;max-width:120px;object-fit:contain;">';
+                }
+            }
+        }
+
+        async function renderLoghi() {
+            const main = document.getElementById('mainContent');
+            const canManage = canMutateData();
+            await ensureAziendeLoaded();
+
+            main.innerHTML = '<' + D + ' class="loading"><' + D + ' class="spinner"></' + D + '>Caricamento loghi...</' + D + '>';
+            let byId = {};
+            try {
+                byId = await loadLoghiStorageIndex();
+            } catch (error) {
+                main.innerHTML = '<' + D + ' class="card"><' + D + ' class="card-body" style="color:var(--sp-error);">' + esc(error.message) + '</' + D + '></' + D + '>';
+                return;
+            }
+
+            const aziende = STATE.data.aziende || [];
+            const uploaded = aziende.filter(a => !!byId[a.id]).length;
+            const rowsHtml = aziende.length === 0
+                ? '<tr><td colspan="4"><em>Nessuna azienda registrata.</em></td></tr>'
+                : aziende.map(a => renderLogoRow(a, byId[a.id], canManage)).join('');
+
+            main.innerHTML = ''
+                + '<' + D + ' class="page-header"><' + D + '>'
+                + '<h1 class="page-title">Loghi aziendali</h1>'
+                + '<p class="page-subtitle">Bucket <code>loghi</code> — ' + uploaded + '/' + aziende.length + ' caricati (path: <code>AZIENDA_ID.ext</code>)</p>'
+                + '</' + D + '>'
+                + (canManage ? '' : '<span class="badge info">Sola lettura</span>')
+                + '</' + D + '>'
+                + '<' + D + ' class="card"><' + D + ' class="card-body"><p class="hint">'
+                + 'Un logo per azienda, collegato tramite <code>azienda_id</code> e salvato anche in <code>aziende.logo_azienda_url</code>. '
+                + 'Formati: ' + (CONFIG.loghiAllowedExt || []).join(', ') + '. '
+                + (canManage ? 'Editor, RSPP e admin possono caricare o sostituire.' : 'Solo utenti con permesso di modifica possono caricare.')
+                + '</p></' + D + '>'
+                + '<' + D + ' class="card-body" style="padding-top:0;">'
+                + '<table class="data-table" id="loghiTable">'
+                + '<thead><tr><th>Azienda</th><th>P.IVA</th><th>Anteprima</th><th></th></tr></thead>'
+                + '<tbody id="loghiTableBody">' + rowsHtml + '</tbody>'
+                + '</table></' + D + '></' + D + '>';
+
+            if (aziende.length) await hydrateLogoPreviews(aziende, byId);
+        }
+
+        async function uploadLogoAzienda(aziendaId, inputEl) {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const file = inputEl?.files?.[0];
+            if (!file || !aziendaId) return;
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (!(CONFIG.loghiAllowedExt || []).includes(ext)) {
+                showToast('Formato non supportato. Usa: ' + (CONFIG.loghiAllowedExt || []).join(', '), 'warning');
+                inputEl.value = '';
+                return;
+            }
+
+            const path = logoStoragePath(aziendaId, file.name);
+            const bucket = CONFIG.storage.loghi;
+            const existing = STATE.data.loghiStorageByAziendaId?.[aziendaId];
+            if (existing?.name && existing.name !== path) {
+                await supabaseClient.storage.from(bucket).remove([existing.name]);
+            }
+
+            try {
+                const { error: upErr } = await supabaseClient.storage.from(bucket).upload(path, file, {
+                    upsert: true,
+                    contentType: file.type || undefined
+                });
+                if (upErr) throw upErr;
+
+                const { error: dbErr } = await supabaseClient
+                    .from(CONFIG.tables.aziende)
+                    .update({ logo_azienda_url: path })
+                    .eq('id', aziendaId);
+                if (dbErr) throw dbErr;
+
+                showToast('Logo caricato', 'success');
+                await renderLoghi();
+            } catch (error) {
+                console.error(error);
+                showToast('Errore upload logo: ' + error.message, 'error');
+            } finally {
+                inputEl.value = '';
+            }
+        }
+
+        async function deleteLogoAzienda(aziendaId) {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const file = STATE.data.loghiStorageByAziendaId?.[aziendaId];
+            if (!file?.name) {
+                showToast('Nessun logo da eliminare', 'warning');
+                return;
+            }
+            if (!confirm('Eliminare il logo di questa azienda?')) return;
+
+            try {
+                const { error: stErr } = await supabaseClient.storage.from(CONFIG.storage.loghi).remove([file.name]);
+                if (stErr) throw stErr;
+                const { error: dbErr } = await supabaseClient
+                    .from(CONFIG.tables.aziende)
+                    .update({ logo_azienda_url: null })
+                    .eq('id', aziendaId);
+                if (dbErr) throw dbErr;
+                showToast('Logo eliminato', 'success');
+                await renderLoghi();
+            } catch (error) {
+                console.error(error);
+                showToast('Errore eliminazione logo: ' + error.message, 'error');
+            }
+        }
+
+        async function downloadLogoAzienda(aziendaId) {
+            const file = STATE.data.loghiStorageByAziendaId?.[aziendaId];
+            if (!file?.name) {
+                showToast('Logo non presente', 'warning');
+                return;
+            }
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from(CONFIG.storage.loghi)
+                    .createSignedUrl(file.name, 120);
+                if (error) throw error;
+                window.open(data.signedUrl, '_blank', 'noopener');
+            } catch (error) {
+                console.error(error);
+                showToast('Errore download logo: ' + error.message, 'error');
             }
         }
 

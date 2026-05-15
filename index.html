@@ -3572,7 +3572,7 @@
                 + '<td><strong>' + esc(azienda.fields?.RagioneSociale || '—') + '</strong></td>'
                 + '<td>' + esc(azienda.fields?.PartitaIVA || '—') + '</td>'
                 + '<td>' + previewHtml + '</td>'
-                + '<td><' + D + ' class="actions">' + actionsHtml + '</' + D + '></td>'
+                + '<td><div class="actions">' + actionsHtml + '</div></td>'
                 + '</tr>';
         }
 
@@ -3597,12 +3597,12 @@
             const canManage = canMutateData();
             await ensureAziendeLoaded();
 
-            main.innerHTML = '<' + D + ' class="loading"><' + D + ' class="spinner"></' + D + '>Caricamento loghi...</' + D + '>';
+            main.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento loghi...</div>';
             let byId = {};
             try {
                 byId = await loadLoghiStorageIndex();
             } catch (error) {
-                main.innerHTML = '<' + D + ' class="card"><' + D + ' class="card-body" style="color:var(--sp-error);">' + esc(error.message) + '</' + D + '></' + D + '>';
+                main.innerHTML = '<div class="card"><div class="card-body" style="color:var(--sp-error);">' + esc(error.message) + '</div></div>';
                 return;
             }
 
@@ -3613,22 +3613,22 @@
                 : aziende.map(a => renderLogoRow(a, byId[a.id], canManage)).join('');
 
             main.innerHTML = ''
-                + '<' + D + ' class="page-header"><' + D + '>'
+                + '<div class="page-header"><div>'
                 + '<h1 class="page-title">Loghi aziendali</h1>'
                 + '<p class="page-subtitle">Bucket <code>loghi</code> — ' + uploaded + '/' + aziende.length + ' caricati (path: <code>AZIENDA_ID.ext</code>)</p>'
-                + '</' + D + '>'
+                + '</div>'
                 + (canManage ? '' : '<span class="badge info">Sola lettura</span>')
-                + '</' + D + '>'
-                + '<' + D + ' class="card"><' + D + ' class="card-body"><p class="hint">'
+                + '</div>'
+                + '<div class="card"><div class="card-body"><p class="hint">'
                 + 'Un logo per azienda, collegato tramite <code>azienda_id</code> e salvato anche in <code>aziende.logo_azienda_url</code>. '
                 + 'Formati: ' + (CONFIG.loghiAllowedExt || []).join(', ') + '. '
                 + (canManage ? 'Editor, RSPP e admin possono caricare o sostituire.' : 'Solo utenti con permesso di modifica possono caricare.')
-                + '</p></' + D + '>'
-                + '<' + D + ' class="card-body" style="padding-top:0;">'
+                + '</p></div>'
+                + '<div class="card-body" style="padding-top:0;">'
                 + '<table class="data-table" id="loghiTable">'
                 + '<thead><tr><th>Azienda</th><th>P.IVA</th><th>Anteprima</th><th></th></tr></thead>'
                 + '<tbody id="loghiTableBody">' + rowsHtml + '</tbody>'
-                + '</table></' + D + '></' + D + '>';
+                + '</table></div></div>';
 
             if (aziende.length) await hydrateLogoPreviews(aziende, byId);
         }

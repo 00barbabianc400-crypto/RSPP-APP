@@ -1073,6 +1073,7 @@
 
                 await loadCurrentProfile();
                 applyRoleToNavigation();
+                setupModelliEventDelegation();
                 
                 // Carica pagina iniziale
                 if (!isActiveProfile()) {
@@ -3272,13 +3273,87 @@
             if (error) throw error;
             const byCodice = {};
             (data || []).forEach(obj => {
-                if (!obj?.name || obj.id === null) return;
+                if (!obj?.name || obj.name.endsWith('/')) return;
+                if (!obj.name.includes('.')) return;
                 const codice = codiceFromStorageName(obj.name);
                 if (!codice) return;
                 byCodice[codice] = obj;
             });
             STATE.data.modelliStorageByCodice = byCodice;
             return byCodice;
+        }
+
+
+        function attrEsc(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function renderModelloRow(doc, file, canManage) {
+            const codiceAttr = attrEsc(doc.codice);
+            const fileLabel = file
+                ? esc(file.name) + ' (' + formatFileSize(file.metadata?.size ?? file.metadata?.size) + ')'
+                : '<span class="badge warning">Mancante</span>';
+            let actionsHtml = '';
+            if (canManage) {
+                actionsHtml += '<button type="button" class="btn" data-action="pick-modello" data-codice="' + codiceAttr + '">'
+                    + (file ? 'Sostituisci' : 'Carica') + '</button>';
+                actionsHtml += '<input type="file" class="modelli-file-input" accept=".doc,.docx,.dotx,.pdf" data-codice="'
+                    + codiceAttr + '" hidden>';
+                if (file) {
+                    actionsHtml += '<button type="button" class="icon-btn danger" data-action="delete-modello" data-codice="'
+                        + codiceAttr + '" title="Elimina">🗑️</button>';
+                }
+            }
+            if (file) {
+                actionsHtml += '<button type="button" class="btn" data-action="download-modello" data-codice="'
+                    + codiceAttr + '">Scarica</button>';
+            }
+            return ''
+                + '<tr>'
+                + '<td><code>' + esc(doc.codice) + '</code></td>'
+                + '<td>' + esc(doc.nome) + '</td>'
+                + '<td>' + esc(doc.categoria || '—') + '</td>'
+                + '<td>' + fileLabel + '</td>'
+                + '<td><div class="actions">' + actionsHtml + '</div></td>'
+                + '</tr>';
+        }
+
+        let modelliEventsBound = false;
+        function setupModelliEventDelegation() {
+            if (modelliEventsBound) return;
+            modelliEventsBound = true;
+            const main = document.getElementById('mainContent');
+            if (!main) return;
+
+            main.addEventListener('change', (e) => {
+                const input = e.target;
+                if (!input.matches?.('input.modelli-file-input[data-codice]')) return;
+                uploadModelloDocumento(input.dataset.codice, input);
+            });
+
+            main.addEventListener('click', (e) => {
+                const pick = e.target.closest?.('[data-action="pick-modello"]');
+                if (pick) {
+                    e.preventDefault();
+                    pick.closest('tr')?.querySelector('input.modelli-file-input')?.click();
+                    return;
+                }
+                const del = e.target.closest?.('[data-action="delete-modello"]');
+                if (del) {
+                    e.preventDefault();
+                    deleteModelloDocumento(del.dataset.codice);
+                    return;
+                }
+                const dl = e.target.closest?.('[data-action="download-modello"]');
+                if (dl) {
+                    e.preventDefault();
+                    downloadModelloDocumento(dl.dataset.codice);
+                }
+            });
         }
 
         async function renderModelli() {
@@ -3290,78 +3365,40 @@
             try {
                 await loadModelliStorageIndex();
             } catch (error) {
-                main.innerHTML = `<div class="card"><div class="card-body" style="color:var(--sp-error);">${esc(error.message)}</div></div>`;
+                main.innerHTML = '<div class="card"><div class="card-body" style="color:var(--sp-error);">' + esc(error.message) + '</div></div>';
                 return;
             }
 
             const catalog = (STATE.data.documentiCatalogo || []).filter(d => d.attivo !== false);
             const byCodice = STATE.data.modelliStorageByCodice || {};
             const uploaded = catalog.filter(d => !!byCodice[d.codice]).length;
+            const rowsHtml = catalog.length === 0
+                ? '<tr><td colspan="5"><em>Nessun documento in catalogo.</em></td></tr>'
+                : catalog.map(doc => renderModelloRow(doc, byCodice[doc.codice], canManage)).join('');
 
-            main.innerHTML = `
-                <div class="page-header">
-                    <div>
-                        <h1 class="page-title">Modelli documenti</h1>
-                        <p class="page-subtitle">Template DVR/moduli nel bucket <code>modelli</code> — ${uploaded}/${catalog.length} caricati</p>
-                    </div>
-                    ${canManage ? '' : '<span class="badge info">Sola lettura</span>'}
-                </div>
-
-                <div class="card">
-                    <div class="card-body">
-                        <p class="hint">
-                            Ogni riga corrisponde a un documento del catalogo. Il file viene salvato come <code>CODICE.ext</code>
-                            (es. <code>DVR_CORPO_CENTRALE.docx</code>). Formati: ${(CONFIG.modelliAllowedExt || []).join(', ')}.
-                            ${canManage ? 'Carica o sostituisci per aggiornare il modello.' : 'Solo admin e RSPP possono caricare o eliminare modelli.'}
-                        </p>
-                    </div>
-                    <div class="card-body" style="padding-top:0;">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Codice</th>
-                                    <th>Documento</th>
-                                    <th>Categoria</th>
-                                    <th>File</th>
-                                    <th></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${catalog.length === 0 ? `
-                                    <tr><td colspan="5"><em>Nessun documento in catalogo.</em></td></tr>
-                                ` : catalog.map(doc => {
-                                    const file = byCodice[doc.codice];
-                                    const fileLabel = file
-                                        ? `${esc(file.name)} (${formatFileSize(file.metadata?.size)})`
-                                        : '<span class="badge warning">Mancante</span>';
-                                    return `
-                                        <tr>
-                                            <td><code>${esc(doc.codice)}</code></td>
-                                            <td>${esc(doc.nome)}</td>
-                                            <td>${esc(doc.categoria || '—')}</td>
-                                            <td>${fileLabel}</td>
-                                            <td>
-                                                <div class="actions">
-                                                    ${canManage ? `
-                                                        <label class="btn" style="cursor:pointer;margin:0;">
-                                                            ${file ? 'Sostituisci' : 'Carica'}
-                                                            <input type="file" accept=".doc,.docx,.dotx,.pdf" style="display:none;"
-                                                                data-codice="${esc(doc.codice)}"
-                                                                onchange="uploadModelloFromInput(this)">
-                                                        </label>
-                                                        ${file ? `<button type="button" class="icon-btn danger" data-codice="${esc(doc.codice)}" onclick="deleteModelloDocumento(this.dataset.codice)" title="Elimina">🗑️</button>` : ''}
-                                                    ` : ''}
-                                                    ${file ? `<button type="button" class="btn" data-codice="${esc(doc.codice)}" onclick="downloadModelloDocumento(this.dataset.codice)">Scarica</button>` : ''}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    `;
-                                }).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
+            main.innerHTML = ''
+                + '<div class="page-header">'
+                + '<div>'
+                + '<h1 class="page-title">Modelli documenti</h1>'
+                + '<p class="page-subtitle">Template DVR/moduli nel bucket <code>modelli</code> — '
+                + uploaded + '/' + catalog.length + ' caricati</p>'
+                + '</div>'
+                + (canManage ? '' : '<span class="badge info">Sola lettura</span>')
+                + '</div>'
+                + '<div class="card">'
+                + '<div class="card-body"><p class="hint">'
+                + 'Ogni riga corrisponde a un documento del catalogo. File salvato come <code>CODICE.ext</code> '
+                + '(es. <code>DVR_CORPO_CENTRALE.docx</code>). Formati: '
+                + (CONFIG.modelliAllowedExt || []).join(', ') + '. '
+                + (canManage
+                    ? 'Clicca Carica/Sostituisci per aggiornare il modello.'
+                    : 'Solo admin e RSPP possono caricare o eliminare modelli.')
+                + '</p></div>'
+                + '<div class="card-body" style="padding-top:0;">'
+                + '<table class="data-table" id="modelliTable">'
+                + '<thead><tr><th>Codice</th><th>Documento</th><th>Categoria</th><th>File</th><th></th></tr></thead>'
+                + '<tbody id="modelliTableBody">' + rowsHtml + '</tbody>'
+                + '</table></div></div>';
         }
 
         function formatFileSize(bytes) {
@@ -3370,12 +3407,6 @@
             if (n < 1024) return `${n} B`;
             if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
             return `${(n / (1024 * 1024)).toFixed(1)} MB`;
-        }
-
-        function uploadModelloFromInput(inputEl) {
-            const codice = inputEl?.dataset?.codice;
-            if (!codice) return;
-            uploadModelloDocumento(codice, inputEl);
         }
 
         async function uploadModelloDocumento(codice, inputEl) {

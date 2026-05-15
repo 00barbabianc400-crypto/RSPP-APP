@@ -3346,11 +3346,12 @@
                                                         <label class="btn" style="cursor:pointer;margin:0;">
                                                             ${file ? 'Sostituisci' : 'Carica'}
                                                             <input type="file" accept=".doc,.docx,.dotx,.pdf" style="display:none;"
-                                                                onchange="uploadModelloDocumento(${JSON.stringify(doc.codice)}, this)">
+                                                                data-codice="${esc(doc.codice)}"
+                                                                onchange="uploadModelloFromInput(this)">
                                                         </label>
-                                                        ${file ? `<button class="icon-btn danger" onclick="deleteModelloDocumento(${JSON.stringify(doc.codice)})" title="Elimina">🗑️</button>` : ''}
+                                                        ${file ? `<button type="button" class="icon-btn danger" data-codice="${esc(doc.codice)}" onclick="deleteModelloDocumento(this.dataset.codice)" title="Elimina">🗑️</button>` : ''}
                                                     ` : ''}
-                                                    ${file ? `<button class="btn" onclick="downloadModelloDocumento(${JSON.stringify(doc.codice)})">Scarica</button>` : ''}
+                                                    ${file ? `<button type="button" class="btn" data-codice="${esc(doc.codice)}" onclick="downloadModelloDocumento(this.dataset.codice)">Scarica</button>` : ''}
                                                 </div>
                                             </td>
                                         </tr>
@@ -3369,6 +3370,12 @@
             if (n < 1024) return `${n} B`;
             if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
             return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function uploadModelloFromInput(inputEl) {
+            const codice = inputEl?.dataset?.codice;
+            if (!codice) return;
+            uploadModelloDocumento(codice, inputEl);
         }
 
         async function uploadModelloDocumento(codice, inputEl) {

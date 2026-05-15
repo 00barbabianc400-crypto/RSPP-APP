@@ -67,6 +67,22 @@ as $$
   );
 $$;
 
+create or replace function public.app_is_rspp_or_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles p
+    where p.id = auth.uid()
+      and p.is_active = true
+      and p.role in ('admin', 'rspp')
+  );
+$$;
+
 drop policy if exists profiles_self_read on public.profiles;
 create policy profiles_self_read on public.profiles
 for select to authenticated

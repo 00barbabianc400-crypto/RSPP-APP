@@ -735,6 +735,12 @@
                     <span>Admin Utenti</span>
                 </div>
                 
+                <div class="nav-section" data-min-role="rspp">Modelli documenti</div>
+                <div class="nav-item" onclick="navigateTo('modelli')" data-page="modelli" data-min-role="rspp">
+                    <span class="nav-icon">📁</span>
+                    <span>Modelli</span>
+                </div>
+
                 <div class="nav-section" data-role-section="viewer">Output</div>
                 <div class="nav-item" onclick="navigateTo('genera')" data-page="genera" data-min-role="viewer">
                     <span class="nav-icon">📄</span>
@@ -774,6 +780,12 @@
                 documentiCatalogo: 'documenti_catalogo',
                 aziendeDocumenti: 'aziende_documenti'
             },
+            storage: {
+                modelli: 'modelli',
+                loghi: 'loghi',
+                output: 'output'
+            },
+            modelliAllowedExt: ['docx', 'doc', 'dotx', 'pdf'],
             TESTO_TRASCURABILE: 'Rischio non rilevato per il profilo professionale. Le caratteristiche dell\'attivita e dell\'ambiente di lavoro non comportano esposizione a tale tipologia di rischio.'
         };
 
@@ -792,7 +804,8 @@
                 valutazioniRischio: [],
                 rilevamentiAmbientali: [],
                 documentiCatalogo: [],
-                aziendeDocumenti: []
+                aziendeDocumenti: [],
+                modelliStorageByCodice: {}
             }
         };
 
@@ -995,6 +1008,7 @@
             tipi: 'viewer',
             testi: 'viewer',
             genera: 'viewer',
+            modelli: 'rspp',
             admin: 'admin'
         };
 
@@ -1009,6 +1023,10 @@
 
         function canMutateData() {
             return isActiveProfile() && hasRequiredRole('editor');
+        }
+
+        function canManageModelli() {
+            return isActiveProfile() && (STATE.role === 'admin' || STATE.role === 'rspp');
         }
 
         async function loadCurrentProfile() {
@@ -1030,7 +1048,7 @@
         }
 
         function applyRoleToNavigation() {
-            document.querySelectorAll('.nav-item[data-min-role]').forEach(item => {
+            document.querySelectorAll('.nav-item[data-min-role], .nav-section[data-min-role]').forEach(item => {
                 const minRole = item.getAttribute('data-min-role');
                 item.style.display = hasRequiredRole(minRole) ? '' : 'none';
             });
@@ -1106,6 +1124,7 @@
                     case 'tipi': await renderTipiRilevamento(); break;
                     case 'testi': await renderTestiDvr(); break;
                     case 'genera': await renderGeneraDvr(); break;
+                    case 'modelli': await renderModelli(); break;
                     case 'admin': await renderAdminUsers(); break;
                     default: main.innerHTML = '<p>Pagina non trovata</p>';
                 }
@@ -1653,6 +1672,39 @@
             };
         }
 
+        function profiloDedupeKey(p) {
+            const f = p.fields || {};
+            const nome = (f.NomeProfilo || '').trim().toLowerCase();
+            const tipo = (f.TipoProfilo || 'Standard').trim().toLowerCase();
+            const ownerId = f.AziendaProprietariaId || '';
+            // Profili Standard senza azienda proprietaria: seed ripetuto crea duplicati (NULL != NULL in UNIQUE).
+            if (tipo === 'standard' && !ownerId) return `${nome}::${tipo}`;
+            return `${nome}::${tipo}::${ownerId}`;
+        }
+
+        function profiloCanonicalScore(p) {
+            const f = p.fields || {};
+            let score = 0;
+            if (f.Attivo !== false) score += 4;
+            if (f.TipoProfilo === 'Standard') score += 2;
+            return score;
+        }
+
+        function dedupeProfiliRows(profili) {
+            const byKey = new Map();
+            for (const p of profili || []) {
+                if (!(p.fields?.NomeProfilo || '').trim()) continue;
+                const key = profiloDedupeKey(p);
+                const prev = byKey.get(key);
+                if (!prev || profiloCanonicalScore(p) > profiloCanonicalScore(prev)) {
+                    byKey.set(key, p);
+                }
+            }
+            return Array.from(byKey.values()).sort((a, b) =>
+                (a.fields?.NomeProfilo || '').localeCompare(b.fields?.NomeProfilo || '', 'it')
+            );
+        }
+
         function profiloPayloadFromForm(data) {
             return {
                 nome_profilo: data.NomeProfilo,
@@ -1708,7 +1760,7 @@
                 .select('*, azienda_proprietaria:azienda_proprietaria_id(id, ragione_sociale)')
                 .order('nome_profilo', { ascending: true });
             if (profiliError) throw profiliError;
-            STATE.data.profili = (profiliData || []).map(normalizeProfiloRow);
+            STATE.data.profili = dedupeProfiliRows((profiliData || []).map(normalizeProfiloRow));
 
             const { data: assocData, error: assocError } = await supabaseClient
                 .from(CONFIG.tables.aziendeProfili)
@@ -1894,15 +1946,7 @@
 
         function renderAssociazioneForm(canWrite = false) {
             const aziende = STATE.data.aziende || [];
-            const seen = new Set();
-            const profili = (STATE.data.profili || []).filter(p => {
-                const nome = (p.fields?.NomeProfilo || '').trim().toLowerCase();
-                const tipo = (p.fields?.TipoProfilo || '').trim().toLowerCase();
-                const key = `${nome}::${tipo}`;
-                if (!nome || seen.has(key)) return false;
-                seen.add(key);
-                return true;
-            });
+            const profili = (STATE.data.profili || []).filter(p => p.fields?.Attivo !== false);
 
             return `
                 <form id="associazioneForm" onsubmit="associateProfiloAzienda(event)" onchange="updateAssociazioneDuplicateBanner()">
@@ -1932,16 +1976,25 @@
             `;
         }
 
+        function isAssociazioneProfiloGiaPresente(aziendaId, profiloId) {
+            if (!aziendaId || !profiloId) return false;
+            const selected = (STATE.data.profili || []).find(p => p.id === profiloId);
+            const selectedName = (selected?.fields?.NomeProfilo || '').trim().toLowerCase();
+            return (STATE.data.aziendeProfili || []).some(ap => {
+                if (ap.azienda_id !== aziendaId) return false;
+                if (ap.profilo_id === profiloId) return true;
+                if (!selectedName) return false;
+                return (ap.fields?.Profilo || '').trim().toLowerCase() === selectedName;
+            });
+        }
+
         function updateAssociazioneDuplicateBanner() {
             const form = document.getElementById('associazioneForm');
             const banner = document.getElementById('associazioneDuplicateBanner');
             if (!form || !banner) return;
             const aziendaId = form.querySelector('select[name="azienda_id"]')?.value || '';
             const profiloId = form.querySelector('select[name="profilo_id"]')?.value || '';
-            const alreadyLinked = !!aziendaId && !!profiloId && (STATE.data.aziendeProfili || []).some(
-                ap => ap.azienda_id === aziendaId && ap.profilo_id === profiloId
-            );
-            banner.style.display = alreadyLinked ? 'block' : 'none';
+            banner.style.display = isAssociazioneProfiloGiaPresente(aziendaId, profiloId) ? 'block' : 'none';
         }
 
         function renderAssociazioneRow(item) {
@@ -2182,8 +2235,7 @@
                 return;
             }
 
-            const alreadyLinked = (STATE.data.aziendeProfili || []).some(ap => ap.azienda_id === aziendaId && ap.profilo_id === profiloId);
-            if (alreadyLinked) {
+            if (isAssociazioneProfiloGiaPresente(aziendaId, profiloId)) {
                 showToast('Associazione già presente', 'warning');
                 return;
             }
@@ -2247,19 +2299,15 @@
                 .eq('attivo', true)
                 .order('nome_profilo', { ascending: true });
             if (profiliError) throw profiliError;
-            const uniqueProfili = [];
-            const seen = new Set();
-            for (const p of (profiliData || [])) {
-                // Fix chirurgico: evita duplicati in filtro valutazioni dovuti a seed ripetuti.
-                const key = `${p.nome_profilo}::${p.tipo_profilo}`;
-                if (seen.has(key)) continue;
-                seen.add(key);
-                uniqueProfili.push({
-                    id: p.id,
-                    fields: { NomeProfilo: p.nome_profilo, TipoProfilo: p.tipo_profilo, Attivo: p.attivo }
-                });
-            }
-            STATE.data.profili = uniqueProfili;
+            STATE.data.profili = dedupeProfiliRows((profiliData || []).map(p => ({
+                id: p.id,
+                fields: {
+                    NomeProfilo: p.nome_profilo,
+                    TipoProfilo: p.tipo_profilo,
+                    Attivo: p.attivo,
+                    AziendaProprietariaId: null
+                }
+            })));
 
             const { data: associazioniData, error: associazioniError } = await supabaseClient
                 .from(CONFIG.tables.aziendeProfili)
@@ -3200,6 +3248,207 @@
             }
             showToast('Rilevamento eliminato', 'success');
             await renderRilevamenti();
+        }
+
+        function modelloStoragePath(codice, fileName) {
+            const ext = (fileName.split('.').pop() || 'docx').toLowerCase();
+            const allowed = CONFIG.modelliAllowedExt || ['docx', 'doc', 'dotx', 'pdf'];
+            const safeExt = allowed.includes(ext) ? ext : 'docx';
+            return `${codice}.${safeExt}`;
+        }
+
+        function codiceFromStorageName(name) {
+            if (!name) return '';
+            const idx = name.lastIndexOf('.');
+            return (idx > 0 ? name.slice(0, idx) : name).trim();
+        }
+
+        async function loadModelliStorageIndex() {
+            const bucket = CONFIG.storage.modelli;
+            const { data, error } = await supabaseClient.storage.from(bucket).list('', {
+                limit: 1000,
+                sortBy: { column: 'name', order: 'asc' }
+            });
+            if (error) throw error;
+            const byCodice = {};
+            (data || []).forEach(obj => {
+                if (!obj?.name || obj.id === null) return;
+                const codice = codiceFromStorageName(obj.name);
+                if (!codice) return;
+                byCodice[codice] = obj;
+            });
+            STATE.data.modelliStorageByCodice = byCodice;
+            return byCodice;
+        }
+
+        async function renderModelli() {
+            const main = document.getElementById('mainContent');
+            const canManage = canManageModelli();
+            await ensureDocumentiCatalogoLoaded();
+
+            main.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento modelli...</div>';
+            try {
+                await loadModelliStorageIndex();
+            } catch (error) {
+                main.innerHTML = `<div class="card"><div class="card-body" style="color:var(--sp-error);">${esc(error.message)}</div></div>`;
+                return;
+            }
+
+            const catalog = (STATE.data.documentiCatalogo || []).filter(d => d.attivo !== false);
+            const byCodice = STATE.data.modelliStorageByCodice || {};
+            const uploaded = catalog.filter(d => !!byCodice[d.codice]).length;
+
+            main.innerHTML = `
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Modelli documenti</h1>
+                        <p class="page-subtitle">Template DVR/moduli nel bucket <code>modelli</code> — ${uploaded}/${catalog.length} caricati</p>
+                    </div>
+                    ${canManage ? '' : '<span class="badge info">Sola lettura</span>'}
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <p class="hint">
+                            Ogni riga corrisponde a un documento del catalogo. Il file viene salvato come <code>CODICE.ext</code>
+                            (es. <code>DVR_CORPO_CENTRALE.docx</code>). Formati: ${(CONFIG.modelliAllowedExt || []).join(', ')}.
+                            ${canManage ? 'Carica o sostituisci per aggiornare il modello.' : 'Solo admin e RSPP possono caricare o eliminare modelli.'}
+                        </p>
+                    </div>
+                    <div class="card-body" style="padding-top:0;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Codice</th>
+                                    <th>Documento</th>
+                                    <th>Categoria</th>
+                                    <th>File</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${catalog.length === 0 ? `
+                                    <tr><td colspan="5"><em>Nessun documento in catalogo.</em></td></tr>
+                                ` : catalog.map(doc => {
+                                    const file = byCodice[doc.codice];
+                                    const fileLabel = file
+                                        ? `${esc(file.name)} (${formatFileSize(file.metadata?.size)})`
+                                        : '<span class="badge warning">Mancante</span>';
+                                    return `
+                                        <tr>
+                                            <td><code>${esc(doc.codice)}</code></td>
+                                            <td>${esc(doc.nome)}</td>
+                                            <td>${esc(doc.categoria || '—')}</td>
+                                            <td>${fileLabel}</td>
+                                            <td>
+                                                <div class="actions">
+                                                    ${canManage ? `
+                                                        <label class="btn" style="cursor:pointer;margin:0;">
+                                                            ${file ? 'Sostituisci' : 'Carica'}
+                                                            <input type="file" accept=".doc,.docx,.dotx,.pdf" style="display:none;"
+                                                                onchange="uploadModelloDocumento(${JSON.stringify(doc.codice)}, this)">
+                                                        </label>
+                                                        ${file ? `<button class="icon-btn danger" onclick="deleteModelloDocumento(${JSON.stringify(doc.codice)})" title="Elimina">🗑️</button>` : ''}
+                                                    ` : ''}
+                                                    ${file ? `<button class="btn" onclick="downloadModelloDocumento(${JSON.stringify(doc.codice)})">Scarica</button>` : ''}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatFileSize(bytes) {
+            const n = Number(bytes);
+            if (!n || Number.isNaN(n)) return '—';
+            if (n < 1024) return `${n} B`;
+            if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+            return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        async function uploadModelloDocumento(codice, inputEl) {
+            if (!canManageModelli()) {
+                showToast('Permessi insufficienti: solo admin/RSPP', 'warning');
+                return;
+            }
+            const file = inputEl?.files?.[0];
+            if (!file) return;
+            const ext = (file.name.split('.').pop() || '').toLowerCase();
+            if (!(CONFIG.modelliAllowedExt || []).includes(ext)) {
+                showToast('Formato non supportato. Usa: ' + (CONFIG.modelliAllowedExt || []).join(', '), 'warning');
+                inputEl.value = '';
+                return;
+            }
+
+            const path = modelloStoragePath(codice, file.name);
+            const bucket = CONFIG.storage.modelli;
+            const existing = STATE.data.modelliStorageByCodice?.[codice];
+            if (existing?.name && existing.name !== path) {
+                await supabaseClient.storage.from(bucket).remove([existing.name]);
+            }
+
+            try {
+                const { error } = await supabaseClient.storage.from(bucket).upload(path, file, {
+                    upsert: true,
+                    contentType: file.type || undefined
+                });
+                if (error) throw error;
+                showToast('Modello caricato', 'success');
+                await renderModelli();
+            } catch (error) {
+                console.error(error);
+                showToast('Errore upload modello: ' + error.message, 'error');
+            } finally {
+                inputEl.value = '';
+            }
+        }
+
+        async function deleteModelloDocumento(codice) {
+            if (!canManageModelli()) {
+                showToast('Permessi insufficienti: solo admin/RSPP', 'warning');
+                return;
+            }
+            const file = STATE.data.modelliStorageByCodice?.[codice];
+            if (!file?.name) {
+                showToast('Nessun file da eliminare', 'warning');
+                return;
+            }
+            if (!confirm(`Eliminare il modello per ${codice}?`)) return;
+
+            try {
+                const { error } = await supabaseClient.storage
+                    .from(CONFIG.storage.modelli)
+                    .remove([file.name]);
+                if (error) throw error;
+                showToast('Modello eliminato', 'success');
+                await renderModelli();
+            } catch (error) {
+                console.error(error);
+                showToast('Errore eliminazione modello: ' + error.message, 'error');
+            }
+        }
+
+        async function downloadModelloDocumento(codice) {
+            const file = STATE.data.modelliStorageByCodice?.[codice];
+            if (!file?.name) {
+                showToast('Modello non presente', 'warning');
+                return;
+            }
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from(CONFIG.storage.modelli)
+                    .createSignedUrl(file.name, 120);
+                if (error) throw error;
+                window.open(data.signedUrl, '_blank', 'noopener');
+            } catch (error) {
+                console.error(error);
+                showToast('Errore download: ' + error.message, 'error');
+            }
         }
 
         async function renderGeneraDvr() {

@@ -63,6 +63,10 @@ declare
   v_partita_iva text;
   v_existing_count integer;
 begin
+  if not public.app_is_internal_user() then
+    raise exception 'Permessi insufficienti';
+  end if;
+
   if p_azienda_id is null or p_profilo_id is null then
     raise exception 'azienda_id e profilo_id sono obbligatori';
   end if;
@@ -137,6 +141,10 @@ declare
   v_calc record;
   v_result public.valutazioni_rischio;
 begin
+  if not public.app_is_internal_user() then
+    raise exception 'Permessi insufficienti';
+  end if;
+
   if p_stato = 'Trascurabile' then
     update public.valutazioni_rischio
     set stato = p_stato,

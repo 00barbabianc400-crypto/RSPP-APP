@@ -97,7 +97,7 @@ with check (id = auth.uid() or public.app_is_admin_user());
 drop policy if exists catalogo_read_auth on public.catalogo_rischi;
 create policy catalogo_read_auth on public.catalogo_rischi
 for select to authenticated
-using (public.app_can_read());
+using (public.app_is_active_user());
 
 drop policy if exists catalogo_write_internal on public.catalogo_rischi;
 create policy catalogo_write_internal on public.catalogo_rischi
@@ -108,7 +108,7 @@ with check (public.app_is_internal_user());
 drop policy if exists tipi_read_auth on public.tipi_rilevamento;
 create policy tipi_read_auth on public.tipi_rilevamento
 for select to authenticated
-using (public.app_can_read());
+using (public.app_is_active_user());
 
 drop policy if exists tipi_write_internal on public.tipi_rilevamento;
 create policy tipi_write_internal on public.tipi_rilevamento
@@ -185,7 +185,7 @@ with check (public.app_is_internal_user());
 drop policy if exists documenti_catalogo_read_auth on public.documenti_catalogo;
 create policy documenti_catalogo_read_auth on public.documenti_catalogo
 for select to authenticated
-using (public.app_can_read());
+using (public.app_is_active_user());
 
 drop policy if exists documenti_catalogo_write_internal on public.documenti_catalogo;
 create policy documenti_catalogo_write_internal on public.documenti_catalogo
@@ -203,3 +203,38 @@ create policy aziende_documenti_write_internal on public.aziende_documenti
 for all to authenticated
 using (public.app_is_internal_user())
 with check (public.app_is_internal_user());
+
+-- Anti-escalation: solo admin può cambiare role / is_active (anche sul proprio profilo)
+create or replace function public.profiles_guard_sensitive_columns()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.app_is_admin_user() then
+    return new;
+  end if;
+
+  if new.id is distinct from auth.uid() then
+    raise exception 'Permessi insufficienti';
+  end if;
+
+  if new.role is distinct from old.role then
+    raise exception 'Permessi insufficienti: il ruolo può essere modificato solo da un admin';
+  end if;
+
+  if new.is_active is distinct from old.is_active then
+    raise exception 'Permessi insufficienti: lo stato attivo può essere modificato solo da un admin';
+  end if;
+
+  new.email := old.email;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_profiles_guard_sensitive_columns on public.profiles;
+create trigger trg_profiles_guard_sensitive_columns
+before update on public.profiles
+for each row execute function public.profiles_guard_sensitive_columns();

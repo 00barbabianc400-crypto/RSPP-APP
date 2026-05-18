@@ -746,9 +746,9 @@
                 </div>
 
                 <div class="nav-section" data-role-section="viewer">Output</div>
-                <div class="nav-item" onclick="navigateTo('genera')" data-page="genera" data-min-role="viewer">
-                    <span class="nav-icon">📄</span>
-                    <span>Genera DVR</span>
+                <div class="nav-item" onclick="navigateTo('generazione')" data-page="generazione" data-min-role="viewer">
+                    <span class="nav-icon">⚙️</span>
+                    <span>Generazione</span>
                 </div>
             </aside>
             
@@ -1019,7 +1019,7 @@
             rischi: 'viewer',
             tipi: 'viewer',
             testi: 'viewer',
-            genera: 'viewer',
+            generazione: 'viewer',
             modelli: 'rspp',
             loghi: 'editor',
             admin: 'admin'
@@ -1137,7 +1137,7 @@
                     case 'rischi': await renderCatalogoRischi(); break;
                     case 'tipi': await renderTipiRilevamento(); break;
                     case 'testi': await renderTestiDvr(); break;
-                    case 'genera': await renderGeneraDvr(); break;
+                    case 'generazione': await renderGenerazione(); break;
                     case 'modelli': await renderModelli(); break;
                     case 'loghi': await renderLoghi(); break;
                     case 'admin': await renderAdminUsers(); break;
@@ -3390,6 +3390,18 @@
                 if (dlLogo) {
                     e.preventDefault();
                     downloadLogoAzienda(dlLogo.dataset.aziendaId);
+                    return;
+                }
+                const generaDoc = e.target.closest?.('[data-action="genera-doc"]');
+                if (generaDoc) {
+                    e.preventDefault();
+                    openGeneraDocModal(generaDoc.dataset.codice, generaDoc.dataset.aziendaId);
+                    return;
+                }
+                const dlOutput = e.target.closest?.('[data-action="download-output"]');
+                if (dlOutput) {
+                    e.preventDefault();
+                    downloadOutputDocumento(dlOutput.dataset.codice, dlOutput.dataset.aziendaId);
                 }
             });
         }
@@ -3727,6 +3739,212 @@
             } catch (error) {
                 console.error(error);
                 showToast('Errore download logo: ' + error.message, 'error');
+            }
+        }
+
+        async function renderGenerazione() {
+            const main = document.getElementById('mainContent');
+            const canGenerate = canMutateData();
+            await ensureAziendeLoaded();
+
+            main.innerHTML = ''
+                + '<div class="page-header"><div>'
+                + '<h1 class="page-title">Generazione documenti</h1>'
+                + '<p class="page-subtitle">Documenti selezionati per azienda — template dal bucket <code>modelli</code>, output in <code>output/{azienda_id}/</code></p>'
+                + '</div>'
+                + (canGenerate ? '' : '<span class="badge info">Sola lettura</span>')
+                + '</div>'
+                + '<div class="card"><div class="card-body">'
+                + '<div class="form-grid cols-2"><div class="form-field">'
+                + '<label>Azienda</label>'
+                + '<select id="generazioneAziendaSelect">'
+                + '<option value="">— Seleziona azienda —</option>'
+                + (STATE.data.aziende || []).map(a =>
+                    '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>'
+                ).join('')
+                + '</select>'
+                + '</div></div>'
+                + '</div></div>'
+                + '<div id="generazioneDocumentiContainer"></div>';
+
+            document.getElementById('generazioneAziendaSelect')
+                ?.addEventListener('change', loadGenerazioneDocumenti);
+        }
+
+        async function loadGenerazioneDocumenti() {
+            const aziendaId = document.getElementById('generazioneAziendaSelect')?.value;
+            const container = document.getElementById('generazioneDocumentiContainer');
+            if (!container) return;
+            if (!aziendaId) { container.innerHTML = ''; return; }
+
+            const canGenerate = canMutateData();
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento documenti...</div>';
+
+            try {
+                const { data: selezionati, error: selErr } = await supabaseClient
+                    .from(CONFIG.tables.aziendeDocumenti)
+                    .select('*, documento:documento_id(id, codice, nome, categoria, ordine)')
+                    .eq('azienda_id', aziendaId)
+                    .eq('selezionato', true)
+                    .order('created_at', { ascending: true });
+                if (selErr) throw selErr;
+
+                if (!selezionati || selezionati.length === 0) {
+                    container.innerHTML = '<div class="card"><div class="card-body">'
+                        + '<p class="hint">Nessun documento selezionato per questa azienda. '
+                        + 'Apri il modal Anagrafica → azienda e seleziona i documenti da produrre.</p>'
+                        + '</div></div>';
+                    return;
+                }
+
+                // Index modelli bucket
+                const { data: modelliFiles } = await supabaseClient.storage
+                    .from(CONFIG.storage.modelli).list('', { limit: 1000 });
+                const modelliByCode = {};
+                (modelliFiles || []).forEach(f => {
+                    const base = codiceFromStorageName(f.name);
+                    if (base) modelliByCode[base] = f;
+                });
+
+                // Index output bucket per azienda
+                const { data: outputFiles } = await supabaseClient.storage
+                    .from(CONFIG.storage.output).list(aziendaId, { limit: 1000 });
+                const outputByCode = {};
+                (outputFiles || []).forEach(f => {
+                    const base = codiceFromStorageName(f.name);
+                    if (base) outputByCode[base] = f;
+                });
+
+                // Group by category (preserve seed order)
+                const byCategory = {};
+                selezionati
+                    .slice()
+                    .sort((a, b) => (a.documento?.ordine ?? 999) - (b.documento?.ordine ?? 999))
+                    .forEach(s => {
+                        const cat = s.documento?.categoria || 'Altro';
+                        (byCategory[cat] = byCategory[cat] || []).push(s);
+                    });
+
+                let html = '';
+                for (const [cat, docs] of Object.entries(byCategory)) {
+                    html += '<div class="form-section">' + esc(cat) + '</div>'
+                        + '<div class="card"><div class="card-body" style="padding:0;">'
+                        + '<table class="data-table"><thead>'
+                        + '<tr><th>Documento</th><th>Template</th><th>Output</th><th></th></tr>'
+                        + '</thead><tbody>';
+
+                    for (const s of docs) {
+                        const codice = s.documento?.codice || '';
+                        const hasTemplate = !!modelliByCode[codice];
+                        const hasOutput  = !!outputByCode[codice];
+
+                        const templateBadge = hasTemplate
+                            ? '<span class="badge success">Disponibile</span>'
+                            : '<span class="badge warning">Assente</span>';
+                        const outputBadge = hasOutput
+                            ? '<span class="badge info">Generato</span>'
+                            : '<span class="badge">—</span>';
+
+                        let actions = '';
+                        if (canGenerate) {
+                            const disabled = !hasTemplate ? ' disabled title="Carica prima il template in Modelli"' : '';
+                            actions += '<button class="btn btn-primary"'
+                                + ' data-action="genera-doc"'
+                                + ' data-codice="' + attrEsc(codice) + '"'
+                                + ' data-azienda-id="' + attrEsc(aziendaId) + '"'
+                                + disabled + '>Genera</button>';
+                        }
+                        if (hasOutput) {
+                            actions += ' <button class="btn"'
+                                + ' data-action="download-output"'
+                                + ' data-codice="' + attrEsc(codice) + '"'
+                                + ' data-azienda-id="' + attrEsc(aziendaId) + '"'
+                                + '>Scarica</button>';
+                        }
+
+                        html += '<tr>'
+                            + '<td>' + esc(s.documento?.nome || '—') + '</td>'
+                            + '<td>' + templateBadge + '</td>'
+                            + '<td>' + outputBadge + '</td>'
+                            + '<td><div class="actions">' + actions + '</div></td>'
+                            + '</tr>';
+                    }
+
+                    html += '</tbody></table></div></div>';
+                }
+
+                container.innerHTML = html;
+
+            } catch (err) {
+                console.error(err);
+                container.innerHTML = '<div class="card"><div class="card-body" style="color:var(--sp-error);">'
+                    + esc(err.message) + '</div></div>';
+            }
+        }
+
+        async function openGeneraDocModal(codice, aziendaId) {
+            // Recupera dati azienda e profili associati per anteprima
+            const azienda = (STATE.data.aziende || []).find(a => a.id === aziendaId);
+            const { data: profiliAssociati } = await supabaseClient
+                .from(CONFIG.tables.aziendeProfili)
+                .select('*, profilo:profilo_id(nome_profilo)')
+                .eq('azienda_id', aziendaId);
+
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay show';
+            modal.id = 'generaDocModal';
+            modal.innerHTML = '<div class="modal" onclick="event.stopPropagation()">'
+                + '<div class="modal-header">'
+                + '<div class="modal-title">Genera: ' + esc(codice) + '</div>'
+                + '<button class="icon-btn" onclick="closeModal(\'generaDocModal\')">✕</button>'
+                + '</div>'
+                + '<div class="modal-body">'
+                + '<p class="hint" style="margin-bottom:16px;">Dati che verranno usati nella generazione (recuperati automaticamente):</p>'
+                + '<div class="form-grid">'
+                + '<div class="form-section">Azienda</div>'
+                + '<div class="form-field full"><label>Ragione Sociale</label>'
+                + '<input type="text" readonly value="' + attrEsc(azienda?.fields?.RagioneSociale || '') + '"></div>'
+                + '<div class="form-field"><label>P.IVA</label>'
+                + '<input type="text" readonly value="' + attrEsc(azienda?.fields?.PartitaIVA || '') + '"></div>'
+                + '<div class="form-field"><label>RSPP</label>'
+                + '<input type="text" readonly value="' + attrEsc(azienda?.fields?.RSPP || '') + '"></div>'
+                + '<div class="form-field"><label>Datore di Lavoro</label>'
+                + '<input type="text" readonly value="' + attrEsc(azienda?.fields?.DatoreLavoro || '') + '"></div>'
+                + '<div class="form-field"><label>Codice ATECO</label>'
+                + '<input type="text" readonly value="' + attrEsc(azienda?.fields?.CodiceATECO || '') + '"></div>'
+                + '<div class="form-section">Profili associati</div>'
+                + '<div class="form-field full">'
+                + ((profiliAssociati || []).map(p => '<span class="badge info" style="margin:2px;">' + esc(p.profilo?.nome_profilo || '') + '</span>').join('') || '<em>Nessun profilo associato</em>')
+                + '</div>'
+                + '</div>'
+                + '<div class="card" style="margin-top:12px;border-left:3px solid var(--sp-warning);">'
+                + '<div class="card-body"><p class="hint">La generazione DOCX è in sviluppo nel modulo <code>js/generazione/docx/' + esc(codice) + '/</code>.<br>'
+                + 'Il template deve essere caricato nel bucket <code>modelli</code> come <code>' + esc(codice) + '.docx</code>.</p></div>'
+                + '</div>'
+                + '</div>'
+                + '<div class="modal-footer">'
+                + '<button class="btn" onclick="closeModal(\'generaDocModal\')">Chiudi</button>'
+                + '<button class="btn btn-primary" disabled title="Generazione DOCX in sviluppo">Genera documento</button>'
+                + '</div>'
+                + '</div>';
+
+            document.body.appendChild(modal);
+            modal.onclick = () => closeModal('generaDocModal');
+        }
+
+        async function downloadOutputDocumento(codice, aziendaId) {
+            try {
+                const { data: files } = await supabaseClient.storage
+                    .from(CONFIG.storage.output).list(aziendaId, { limit: 1000 });
+                const file = (files || []).find(f => codiceFromStorageName(f.name) === codice);
+                if (!file) { showToast('File non trovato', 'warning'); return; }
+                const { data, error } = await supabaseClient.storage
+                    .from(CONFIG.storage.output)
+                    .createSignedUrl(aziendaId + '/' + file.name, 120);
+                if (error) throw error;
+                window.open(data.signedUrl, '_blank', 'noopener');
+            } catch (err) {
+                showToast('Errore download: ' + err.message, 'error');
             }
         }
 

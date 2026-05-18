@@ -931,7 +931,6 @@
         }
 
         async function ensureDocumentiCatalogoLoaded() {
-            if ((STATE.data.documentiCatalogo || []).length > 0) return;
             const { data, error } = await supabaseClient
                 .from(CONFIG.tables.documentiCatalogo)
                 .select('*')
@@ -939,6 +938,7 @@
                 .order('ordine', { ascending: true });
             if (error) throw error;
             STATE.data.documentiCatalogo = data || [];
+            return STATE.data.documentiCatalogo;
         }
 
         async function loadAziendaDocumentiSelections(aziendaId) {
@@ -952,15 +952,21 @@
         }
 
         async function saveAziendaDocumentiSelections(aziendaId, selectedDocumentIds) {
-            await ensureDocumentiCatalogoLoaded();
-            const catalog = STATE.data.documentiCatalogo || [];
-            if (!aziendaId || catalog.length === 0) return;
+            const catalog = await ensureDocumentiCatalogoLoaded();
+            if (!aziendaId) return;
+            if (!catalog.length) {
+                console.warn('documenti_catalogo vuoto: esegui supabase/seed.sql');
+                showToast('Catalogo documenti non disponibile: selezioni non salvate', 'warning');
+                return;
+            }
 
             const selectedSet = new Set(selectedDocumentIds || []);
+            const userId = STATE.account?.id || null;
             const rows = catalog.map(doc => ({
                 azienda_id: aziendaId,
                 documento_id: doc.id,
-                selezionato: selectedSet.has(doc.id)
+                selezionato: selectedSet.has(doc.id),
+                created_by: userId
             }));
 
             const { error } = await supabaseClient
@@ -1349,7 +1355,7 @@
                         <button class="icon-btn" onclick="closeModal('aziendaModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <form id="aziendaForm" onsubmit="saveAzienda(event, ${itemId})">
+                        <form id="aziendaForm" onsubmit="saveAzienda(event, ${itemId != null ? `'${itemId}'` : 'null'})">
                             <div class="form-grid">
                                 <div class="form-section">Anagrafica</div>
                                 
@@ -2048,7 +2054,7 @@
                         <button class="icon-btn" onclick="closeModal('profiloModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <form id="profiloForm" onsubmit="saveProfilo(event, ${itemId})">
+                        <form id="profiloForm" onsubmit="saveProfilo(event, ${itemId != null ? `'${itemId}'` : 'null'})">
                             <div class="form-grid">
                                 <div class="form-field">
                                     <label>Nome Profilo <span class="required">*</span></label>
@@ -3230,6 +3236,7 @@
             if (itemId) {
                 ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).update(payload).eq('id', itemId));
             } else {
+                payload.created_by = STATE.account?.id || null;
                 ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).insert(payload));
             }
             if (error) {

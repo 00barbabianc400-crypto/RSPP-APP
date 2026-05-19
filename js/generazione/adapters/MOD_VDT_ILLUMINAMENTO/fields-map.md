@@ -24,7 +24,8 @@ La scelta avviene nel wizard di Generazione (checkbox `has_vdt_sistematico`).
 |-------------|----------|------|
 | `{{RAGIONE_SOCIALE}}` | `aziende.ragione_sociale` | Usato in premessa, corpo, conclusioni, footer |
 | `{{SEDE_OPERATIVA}}` | `aziende.sede_operativa` | Indirizzo sede; usato in premessa, conclusioni, footer |
-| `{{LOGO}}` | Storage `loghi/{azienda_id}.ext` → signed URL | Nel footer del documento (tabella COMMITTENTE) |
+| `{%LOGO}` | Storage `loghi/{azienda_id}.png/jpg` → ArrayBuffer (ImageModule) | Paragrafo dedicato nel footer COMMITTENTE — **non** `{{LOGO}}` testuale |
+| `LOGO_PREVIEW_URL` | Signed URL (solo anteprima HTML) | Non va nel template Word |
 | `{{LUOGO}}` | `aziende.sede_operativa` (città estratta) o default `"Roma"` | Riga firma: `{{LUOGO}} lì {{DATA_EMISSIONE}}` |
 
 ### 2.2 Campi automatici da sistema
@@ -159,7 +160,7 @@ Il generatore usa il `rif` come chiave per auto-compilare `{{UNI_EM_REQ}}`, `{{U
 | Placeholder | Paragrafo DOCX | Contesto |
 |-------------|----------------|---------|
 | `{{MODULO_NUMERO}}` | p.1 | `"MODULO {{MODULO_NUMERO}}"` |
-| `{{LOGO}}` | Table footer (riga COMMITTENTE) | Immagine logo azienda |
+| `{%LOGO}` | Table footer (riga COMMITTENTE) | Immagine logo (paragrafo a sé) |
 | `{{RAGIONE_SOCIALE}}` | Table footer col 1 | Nome azienda breve |
 | `{{SEDE_OPERATIVA}}` | Table footer col 1 | Via e città |
 | `{{RAGIONE_SOCIALE}}` | p.49 PREMESSA | `"La {{RAGIONE_SOCIALE}} nell'ambito…"` |

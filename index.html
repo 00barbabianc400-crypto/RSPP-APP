@@ -10,6 +10,7 @@
     <!-- DOCX generation -->
     <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.49.0/build/docxtemplater.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docxtemplater-image-module-free@1.1.1/build/imagemodule.js"></script>
     <!-- Runtime ENV (generated from .env) -->
     <script src="./env.js"></script>
     
@@ -3958,20 +3959,24 @@
                 .eq('id', aziendaId)
                 .single();
 
-            // Signed URL logo se presente
+            // Logo: download binario per DOCX + URL per anteprima HTML
             let logoUrl = null;
-            if (az?.logo_azienda_url) {
-                const storagePath = az.logo_azienda_url.replace(/^loghi\//, '');
-                const { data: urlData } = await supabaseClient.storage
-                    .from(CONFIG.storage.loghi)
-                    .createSignedUrl(storagePath, 3600);
+            let logoBuffer = null;
+            const logoPath = az?.logo_azienda_url || null;
+            if (logoPath) {
+                const storagePath = logoPath.replace(/^loghi\//, '');
+                const [{ data: logoBlob, error: dlLogoErr }, { data: urlData }] = await Promise.all([
+                    supabaseClient.storage.from(CONFIG.storage.loghi).download(storagePath),
+                    supabaseClient.storage.from(CONFIG.storage.loghi).createSignedUrl(storagePath, 3600),
+                ]);
+                if (!dlLogoErr && logoBlob) logoBuffer = await logoBlob.arrayBuffer();
                 logoUrl = urlData?.signedUrl || null;
             }
 
             // Fetch rilevamenti illuminamento per questa azienda
             const { data: rilevamenti } = await supabaseClient
                 .from(CONFIG.tables.rilevamentiAmbientali)
-                .select('*')
+                .select('*, tipo_rilevamento:tipo_rilevamento_id(id, nome_tipo)')
                 .eq('azienda_id', aziendaId)
                 .order('data_rilevamento', { ascending: false });
 
@@ -3985,8 +3990,9 @@
                 rilevamenti || [],
                 {
                     logo_url:      logoUrl,
+                    logo_buffer:   logoBuffer,
+                    logo_path:     logoPath,
                     modulo_numero: moduloNumero,
-                    strumento_luxmetro: adapter.DEFAULT_STRUMENTO,
                 }
             );
 
@@ -4032,15 +4038,21 @@
                     if (e.data.valid) {
                         statusBadge.className = 'badge success';
                         statusBadge.textContent = '✓ Pronto';
+                        statusBadge.title = '';
                         generateBtn.disabled = false;
                     } else {
                         statusBadge.className = 'badge warning';
-                        statusBadge.textContent = 'Campi mancanti (' + (e.data.errors?.length || '?') + ')';
+                        const errList = (e.data.errors || []).join(', ');
+                        statusBadge.textContent = 'Manca: ' + (e.data.errors?.[0] || '?');
+                        statusBadge.title = errList;
                         generateBtn.disabled = true;
                     }
                 }
                 if (e.data.type === 'GENERATE') {
                     triggerGeneration(codice, aziendaId, e.data.data);
+                }
+                if (e.data.type === 'PREVIEW_DOCX') {
+                    renderGenerazionePreviewDocx(codice, e.data.data, iframe);
                 }
             }
             window.addEventListener('message', onIframeMessage);
@@ -4077,7 +4089,25 @@
             try {
                 await loadScriptOnce(base + 'uni-options.js');
             } catch (_) { /* modulo senza catalogo UNI */ }
+            try {
+                await loadScriptOnce(base + 'logo-docx.js');
+            } catch (_) { /* helper logo opzionale */ }
             await loadScriptOnce(base + 'adapter.js');
+        }
+
+        async function renderGenerazionePreviewDocx(codice, wizardData, iframe) {
+            const adapter = window.GEN_ADAPTERS?.[codice];
+            if (!adapter) return;
+            try {
+                const templateName = codice + '.docx';
+                const { data: templateBlob, error: dlErr } = await supabaseClient.storage
+                    .from(CONFIG.storage.modelli).download(templateName);
+                if (dlErr) throw dlErr;
+                const buffer = await adapter.generateDocx(await templateBlob.arrayBuffer(), wizardData);
+                iframe.contentWindow.postMessage({ type: 'PREVIEW_DOCX_BLOB', buffer }, '*', [buffer]);
+            } catch (err) {
+                iframe.contentWindow.postMessage({ type: 'PREVIEW_DOCX_ERROR', message: err.message }, '*');
+            }
         }
 
         async function triggerGeneration(codice, aziendaId, data) {

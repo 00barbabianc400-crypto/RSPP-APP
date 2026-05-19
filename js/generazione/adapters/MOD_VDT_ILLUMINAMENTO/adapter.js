@@ -11,19 +11,57 @@
     return window.UNI_EN_12464_1_OPTIONS || [];
   }
 
-  // ── Default studio ────────────────────────────────────────────────────────
+  // Suggerimento studio (solo placeholder UI, non precompilato automaticamente)
   const DEFAULT_STRUMENTO = 'Delta Ohm modello HD2302.0 / Testo modello 540';
 
+  /** Rilevamenti collegati a tipi illuminamento / VDT / lux */
+  function filterRilevamentiIlluminamento(rilevamenti) {
+    return (rilevamenti || []).filter(r => {
+      const nome = (r.tipo_rilevamento?.nome_tipo || '').toLowerCase();
+      return /illumin|vdt|lux/i.test(nome);
+    });
+  }
+
+  function strumentoDaRilevamenti(rilevamenti) {
+    const filtered = filterRilevamentiIlluminamento(rilevamenti);
+    const found = filtered.map(r => r.strumento).find(s => s && String(s).trim());
+    return found ? String(found).trim() : '';
+  }
+
+  function descrizioneLocaliDaRilevamenti(rilevamenti) {
+    const filtered = filterRilevamentiIlluminamento(rilevamenti);
+    if (!filtered.length) return '';
+    const parti = filtered.map(r => {
+      const zona = (r.zona || '').trim();
+      const desc = (r.descrizione_rilevamento || '').trim();
+      if (zona && desc) return zona + ': ' + desc;
+      return desc || zona;
+    }).filter(Boolean);
+    const uniche = [...new Set(parti)];
+    if (!uniche.length) return '';
+    return 'Gli ambienti esaminati comprendono le seguenti zone di lavoro: ' + uniche.join('; ') + '.';
+  }
+
+  function postazioniDaRilevamenti(rilevamenti) {
+    return filterRilevamentiIlluminamento(rilevamenti).map(r => ({
+      nome: r.zona || r.descrizione_rilevamento || '\u2014',
+      n_finestre: '',
+      oscuramento: '',
+      lux_piano: r.valore_misurato != null ? String(r.valore_misurato) : '',
+      lux_ambiente: '',
+      annotazioni: r.esito === 'Non conforme' ? (r.note || 'Non conforme') : (r.note || ''),
+    }));
+  }
+
   // ── buildData ─────────────────────────────────────────────────────────────
-  // Costruisce il data-object da passare al template Docxtemplater
   function buildData(azienda, rilevamenti, wizardInput) {
     const now = new Date();
     const dataEmissione = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
+    const filtered = filterRilevamentiIlluminamento(rilevamenti);
     const uniSel = getUniOptions().find(o => o.rif === wizardInput?.uni_rif) || null;
     const hasVdt = wizardInput?.has_vdt ?? null;
 
-    // Descrizione ciclo di lavoro
     let descrizioneCicloLavoro = wizardInput?.descrizione_ciclo_lavoro || '';
     if (!descrizioneCicloLavoro && uniSel) {
       if (hasVdt) {
@@ -33,24 +71,16 @@
       }
     }
 
-    // Descrizione locali da rilevamenti o input
     let descrizioneLocali = wizardInput?.descrizione_locali || '';
-    if (!descrizioneLocali && rilevamenti?.length) {
-      const zones = [...new Set(rilevamenti.map(r => r.zona).filter(Boolean))];
-      if (zones.length) {
-        descrizioneLocali = 'Gli ambienti esaminati comprendono le seguenti zone di lavoro: ' + zones.join(', ') + '.';
-      }
-    }
+    if (!descrizioneLocali) descrizioneLocali = descrizioneLocaliDaRilevamenti(rilevamenti);
 
-    // Postazioni dalla tabella rilevamenti (filtrate per tipo illuminamento)
-    const postazioni = (rilevamenti || []).map(r => ({
-      nome: r.zona || r.descrizione_rilevamento || '\u2014',
-      n_finestre: '',
-      oscuramento: '',
-      lux_piano: r.valore_misurato != null ? String(r.valore_misurato) : '',
-      lux_ambiente: '',
-      annotazioni: r.esito === 'Non conforme' ? (r.note || 'Non conforme') : '',
-    }));
+    const postazioni = (wizardInput?.postazioni?.length)
+      ? wizardInput.postazioni
+      : postazioniDaRilevamenti(rilevamenti);
+
+    const strumento = (wizardInput?.strumento_luxmetro && String(wizardInput.strumento_luxmetro).trim())
+      || strumentoDaRilevamenti(rilevamenti)
+      || '';
 
     // Luogo (prima città dall'indirizzo, fallback Roma)
     const luogo = (() => {
@@ -65,12 +95,14 @@
       // ── Campi template ──
       RAGIONE_SOCIALE:        azienda?.ragione_sociale || '',
       SEDE_OPERATIVA:         azienda?.sede_operativa || '',
-      LOGO:                   wizardInput?.logo_url || '',
+      LOGO_PREVIEW_URL:       wizardInput?.logo_url || '',
+      _logo_buffer:           wizardInput?.logo_buffer || null,
+      _logo_path:             wizardInput?.logo_path || '',
       MODULO_NUMERO:          wizardInput?.modulo_numero || '01',
       DATA_EMISSIONE:         dataEmissione,
       LUOGO:                  luogo,
       DESCRIZIONE_CICLO_LAVORO: descrizioneCicloLavoro,
-      STRUMENTO_LUXMETRO:     wizardInput?.strumento_luxmetro || DEFAULT_STRUMENTO,
+      STRUMENTO_LUXMETRO:     strumento,
       DESCRIZIONE_LOCALI:     descrizioneLocali,
       UNI_TABELLA_RIF:        uniSel ? uniSel.rif : '',
       UNI_ATTIVITA:           uniSel?.attivita || '',
@@ -84,6 +116,51 @@
       _has_vdt:     hasVdt,
       _uni_options: getUniOptions(),
       _postazioni:  postazioni,
+      _rilevamenti_illuminamento: filtered,
+    };
+  }
+
+  /** Applica scelte wizard su payload base (per validazione e generazione) */
+  function applyWizard(base, wizard) {
+    if (!base) return {};
+    const w = wizard || {};
+    const uniSel = getUniOptions().find(o => o.rif === w.uni_rif) || null;
+    const hasVdt = w.has_vdt !== undefined && w.has_vdt !== null ? w.has_vdt : base._has_vdt;
+
+    let descrizioneCicloLavoro = w.descrizione_ciclo_lavoro || base.DESCRIZIONE_CICLO_LAVORO || '';
+    if (uniSel && !w.descrizione_ciclo_lavoro) {
+      if (hasVdt) {
+        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${uniSel.attivita}\u201d che si esplica attraverso l\u2019utilizzo di apparecchiature per l\u2019elaborazione dati (videoterminali)`;
+      } else if (hasVdt === false) {
+        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${uniSel.attivita}\u201d`;
+      }
+    }
+
+    const descrizioneLocali = (w.descrizione_locali && String(w.descrizione_locali).trim())
+      || base.DESCRIZIONE_LOCALI || '';
+
+    const strumento = (w.strumento_luxmetro && String(w.strumento_luxmetro).trim())
+      || base.STRUMENTO_LUXMETRO || '';
+
+    const postazioni = (w.postazioni && w.postazioni.length) ? w.postazioni : (base._postazioni || []);
+
+    return {
+      ...base,
+      _logo_buffer: base._logo_buffer || w.logo_buffer || null,
+      _logo_path: base._logo_path || w.logo_path || '',
+      LOGO_PREVIEW_URL: base.LOGO_PREVIEW_URL || w.logo_url || '',
+      DESCRIZIONE_CICLO_LAVORO: descrizioneCicloLavoro,
+      DESCRIZIONE_LOCALI: descrizioneLocali,
+      STRUMENTO_LUXMETRO: strumento,
+      UNI_TABELLA_RIF: uniSel ? uniSel.rif : (base.UNI_TABELLA_RIF || ''),
+      UNI_ATTIVITA: uniSel ? uniSel.attivita : (w.uni_rif ? '' : base.UNI_ATTIVITA || ''),
+      UNI_EM_REQ: uniSel && uniSel.em_req != null ? String(uniSel.em_req) : base.UNI_EM_REQ || '',
+      UNI_EM_MOD: uniSel && uniSel.em_mod != null ? String(uniSel.em_mod) : base.UNI_EM_MOD || '',
+      UNI_UO: uniSel ? uniSel.uo : base.UNI_UO || '',
+      UNI_RA: uniSel && uniSel.ra != null ? String(uniSel.ra) : base.UNI_RA || '',
+      UNI_RUGL: uniSel && uniSel.rugl != null ? String(uniSel.rugl) : base.UNI_RUGL || '',
+      _has_vdt: hasVdt,
+      _postazioni: postazioni,
     };
   }
 
@@ -104,26 +181,49 @@
   }
 
   // ── generateDocx ──────────────────────────────────────────────────────────
-  // Richiede PizZip e Docxtemplater caricati nella pagina (CDN in index.html)
+  // Template logo: {%LOGO} (paragrafo dedicato) + ImageModule
   async function generateDocx(templateArrayBuffer, data) {
     if (!window.PizZip)        throw new Error('PizZip non caricato');
     if (!window.Docxtemplater) throw new Error('Docxtemplater non caricato');
 
-    // Filtra i campi interni prima di passarli al template
+    const logoBuffer = data._logo_buffer || null;
+    const logoPathHint = data._logo_path || '';
+
+    if (logoBuffer && window.GEN_LOGO_DOCX?.isSvgBuffer(logoBuffer, logoPathHint)) {
+      throw new Error('Il logo in formato SVG non è supportato nel Word. Carica PNG o JPEG in Loghi.');
+    }
+
     const templateData = {};
     for (const [k, v] of Object.entries(data)) {
-      if (!k.startsWith('_')) templateData[k] = v;
+      if (k.startsWith('_')) continue;
+      if (k === 'LOGO_PREVIEW_URL') continue;
+      templateData[k] = v;
+    }
+
+    const modules = [];
+    if (logoBuffer && window.GEN_LOGO_DOCX?.createLogoImageModule) {
+      const imageModule = await window.GEN_LOGO_DOCX.createLogoImageModule(logoBuffer);
+      if (imageModule) {
+        modules.push(imageModule);
+        templateData.LOGO = logoBuffer;
+      }
     }
 
     const zip = new window.PizZip(templateArrayBuffer);
     const doc = new window.Docxtemplater(zip, {
+      modules,
       paragraphLoop: true,
       linebreaks:    true,
     });
-    doc.setData(templateData);
 
     try {
-      doc.render();
+      if (typeof doc.resolveData === 'function') {
+        await doc.resolveData(templateData);
+        doc.render();
+      } else {
+        doc.setData(templateData);
+        doc.render();
+      }
     } catch (err) {
       const msg = err.properties?.errors?.map(e => e.message).join('; ') || err.message;
       throw new Error('Errore rendering template: ' + msg);
@@ -141,6 +241,8 @@
     get UNI_OPTIONS() { return getUniOptions(); },
     DEFAULT_STRUMENTO,
     buildData,
+    applyWizard,
+    filterRilevamentiIlluminamento,
     validate,
     generateDocx,
   };

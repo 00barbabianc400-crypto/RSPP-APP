@@ -33,6 +33,42 @@
     return window.Docxtemplater || window.docxtemplater || null;
   }
 
+  /**
+   * Word (anche da bucket modelli) spezza spesso i tag tra più <w:t>.
+   * Unisce il testo rimuovendo markup OOXML dentro {{…}} e {%…}.
+   */
+  function fixSplitPlaceholdersInXml(xml) {
+    function mergeDelimited(text, open, close) {
+      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(
+        esc(open) + '((?:(?!' + esc(open) + '|' + esc(close) + ').)*?)' + esc(close),
+        'gs'
+      );
+      return text.replace(re, (_, inner) => open + inner.replace(/<[^>]+>/g, '') + close);
+    }
+    let out = mergeDelimited(xml, '{{', '}}');
+    out = mergeDelimited(out, '{%', '%}');
+    out = out.replace(/\{\{LOGO\}\}/g, '{%LOGO}');
+    return out;
+  }
+
+  function repairDocxTemplateZip(zip) {
+    Object.keys(zip.files || {}).forEach((path) => {
+      if (!/^word\/.*\.xml$/i.test(path)) return;
+      const file = zip.file(path);
+      if (!file || file.dir) return;
+      let xml;
+      try {
+        xml = file.asText();
+      } catch (_) {
+        return;
+      }
+      const fixed = fixSplitPlaceholdersInXml(xml);
+      if (fixed !== xml) zip.file(path, fixed);
+    });
+    return zip;
+  }
+
   function descrizioneLocaliDaRilevamenti(rilevamenti) {
     const filtered = filterRilevamentiIlluminamento(rilevamenti);
     if (!filtered.length) return '';
@@ -215,7 +251,7 @@
       }
     }
 
-    const zip = new window.PizZip(templateArrayBuffer);
+    const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer));
     const doc = new DocxtemplaterCtor(zip, {
       modules,
       paragraphLoop: true,
@@ -231,7 +267,15 @@
         doc.render();
       }
     } catch (err) {
-      const msg = err.properties?.errors?.map(e => e.message).join('; ') || err.message;
+      const parts = (err.properties?.errors || []).map((e) => {
+        const f = e.properties?.file || '';
+        const tag = e.properties?.xtag || e.properties?.context || '';
+        return (f ? f + ' — ' : '') + e.message + (tag ? ' [' + tag + ']' : '');
+      });
+      let msg = parts.length ? parts.join('; ') : err.message;
+      if ((err.properties?.errors || []).some((e) => /duplicate_(open|close)_tag/.test(e.properties?.id || ''))) {
+        msg += ' (placeholder Word spezzati: nel template riscrivi ogni tag in un colpo solo, es. {{RAGIONE_SOCIALE}})';
+      }
       throw new Error('Errore rendering template: ' + msg);
     }
 

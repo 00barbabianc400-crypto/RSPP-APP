@@ -4014,7 +4014,7 @@
                 + '</div>'
                 + '<div style="height:700px;overflow:hidden;">'
                 + '<iframe id="gen-iframe-' + attrEsc(codice) + '"'
-                + ' src="js/generazione/adapters/' + attrEsc(codice) + '/preview.html?v=20260520c"'
+                + ' src="js/generazione/adapters/' + attrEsc(codice) + '/preview.html?v=20260520e"'
                 + ' style="width:100%;height:100%;border:none;"'
                 + ' title="Anteprima documento"></iframe>'
                 + '</div>'
@@ -4093,12 +4093,12 @@
                 await loadScriptOnce(base + 'uni-options.js');
             } catch (_) { /* modulo senza catalogo UNI */ }
             try {
-                await loadScriptOnce(base + 'vdt-variants.js');
+                await loadScriptOnce(base + 'vdt-texts.js');
             } catch (_) { /* opzionale */ }
             try {
-                await loadScriptOnce(base + 'logo-docx.js?v=20260520c');
+                await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
             } catch (_) { /* helper logo opzionale */ }
-            await loadScriptOnce(base + 'adapter.js?v=20260520c');
+            await loadScriptOnce(base + 'adapter.js?v=20260520d');
         }
 
         async function downloadModelloTemplate(codice) {

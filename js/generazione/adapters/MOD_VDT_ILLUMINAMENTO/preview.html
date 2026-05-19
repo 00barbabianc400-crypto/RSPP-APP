@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Modulo Illuminamento</title>
 <script src="uni-options.js"></script>
-<script src="vdt-variants.js"></script>
-<script src="adapter.js?v=20260520c"></script>
+<script src="vdt-texts.js"></script>
+<script src="adapter.js?v=20260520e"></script>
 <!-- docx-preview richiede JSZip globale (loadAsync) -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
@@ -236,6 +236,46 @@
   }
   .uni-table-caption { font-size: 9pt; color: #666; margin-top: 4px; }
 
+  .vdt-mode-banner {
+    margin: 12px 0 16px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 10.5pt;
+    font-weight: 600;
+    text-align: center;
+  }
+  .vdt-mode-banner.unknown { background: #fde8e8; color: #922b21; border: 1px dashed #e74c3c; }
+  .vdt-mode-banner.vdt-on { background: #fef9e7; color: #7d6608; border-left: 4px solid #f1c40f; }
+  .vdt-mode-banner.vdt-off { background: #eafaf1; color: #1e8449; border-left: 4px solid #27ae60; }
+  .vdt-group-title {
+    font-size: 10pt;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 14px 0 6px;
+    padding-bottom: 4px;
+    border-bottom: 2px solid #3498db;
+  }
+  .vdt-variant-card .vdt-active-scroll {
+    max-height: 140px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    line-height: 1.45;
+  }
+  .vdt-variant-card.na-role .vdt-active {
+    background: #f4f6f7;
+    border-left-color: #bbb;
+    color: #888;
+    font-style: italic;
+  }
+  .vdt-inline-strip {
+    margin: 8px 0;
+    padding: 8px 10px;
+    background: #f8f9fa;
+    border-left: 3px solid #95a5a6;
+    font-size: 9.5pt;
+  }
+  .vdt-inline-strip strong { display: block; font-size: 9pt; color: #555; margin-bottom: 4px; }
+
   /* ── Footer table ── */
   .footer-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 16px; }
   .footer-table td { border: 1px solid #888; padding: 4px 8px; vertical-align: top; }
@@ -284,19 +324,8 @@
 
   <hr style="border:none; border-top:2px solid #333; margin:16px 0;">
 
-  <!-- Premessa -->
-  <h2 class="doc-section">1. Premessa</h2>
-  <p id="premessaPara">
-    La <span id="pRagSoc" class="field-auto">—</span>
-    nell'ambito degli accertamenti previsti ai fini della valutazione del rischio, ha programmato un intervento
-    per verificare i principali rischi igienistico-occupazionali presso la propria sede di
-    <span id="pSede" class="field-auto">—</span>.
-    Sono state condotte <span id="pErgonomiaIndagini" class="field-missing">indagini su ergonomia e illuminamento (seleziona VDT)</span>.
-  </p>
-  <p id="pAssenzaVdtBlock" style="display:none; margin-top:8px; padding:8px 10px; background:#eafaf1; border-left:3px solid #27ae60; font-size:10pt;"></p>
-
-  <!-- Selezione VDT -->
-  <h3 class="doc-sub">Tipologia lavoratori</h3>
+  <!-- Scelta VDT (prima di premessa e testi variabili) -->
+  <h2 class="doc-section">Tipologia lavoratori</h2>
   <p>
     Presenza di lavoratori VDT sistematici (≥ 20 h/sett.):&nbsp;
     <span class="ctrl-wrap">
@@ -307,6 +336,24 @@
     </span>
     &nbsp;<span id="vdtStatus" class="field-missing">da selezionare</span>
   </p>
+  <div id="vdtModeBanner" class="vdt-mode-banner unknown">Seleziona VDT o NON VDT per aggiornare tutti i testi del documento.</div>
+
+  <!-- Premessa -->
+  <h2 class="doc-section">1. Premessa</h2>
+  <p id="premessaPara">
+    La <span id="pRagSoc" class="field-auto">—</span>
+    nell'ambito degli accertamenti previsti ai fini della valutazione del rischio, ha programmato un intervento
+    per verificare i principali rischi igienistico-occupazionali presso la propria sede di
+    <span id="pSede" class="field-auto">—</span>.
+    A tale scopo sono state condotte <span id="pErgonomiaIndagini" class="field-missing">…</span>
+    (oggetto della presente relazione).
+  </p>
+  <p id="pAssenzaVdtBlock" style="display:none; margin-top:8px; padding:8px 10px; background:#eafaf1; border-left:3px solid #27ae60; font-size:10pt;"></p>
+
+  <div class="vdt-inline-strip" id="stripCap2">
+    <strong>Cap. 2 — titolo</strong>
+    <span id="pCap2Title" class="field-missing">—</span>
+  </div>
 
   <!-- Sezione UNI 3.2.2 -->
   <h2 class="doc-section">3.2.2 Valori di riferimento UNI EN 12464-1:2021</h2>
@@ -342,14 +389,19 @@
   <!-- Testi variabili VDT / NON VDT -->
   <h2 class="doc-section">Testi variabili (VDT / NON VDT)</h2>
   <p class="hint-str" style="margin-bottom:8px;">
-    In base a <strong>Sì — VDT</strong> o <strong>No — NON VDT</strong> cambiano titoli, premessa, cap. 2 e conclusioni nel Word.
-    Il riquadro verde è il testo attivo; in grigio l’alternativa non usata.
-    (La scelta VDT va fatta <em>sopra</em>, in «Tipologia lavoratori».)
+    Tutti i placeholder <code>{{…}}</code> del Word che dipendono da VDT/NON VDT.
+    <strong>Verde</strong> = testo nel DOCX; <strong>grigio</strong> = variante non usata; <em>(vuoto)</em> = non previsto per il ruolo scelto.
   </p>
+  <p id="vdtFieldStats" class="hint-str" style="margin-bottom:10px;"></p>
   <div id="vdtVariantsPanel"></div>
 
   <!-- Sezione 3.5.2 Tabella misure -->
   <h2 class="doc-section" id="h352Title">3.5.2 Risultati misure postazioni</h2>
+  <p id="pIntro352" class="vdt-inline-strip field-missing" style="margin-bottom:10px;"><strong>Intro tabella</strong> — seleziona VDT</p>
+  <div class="vdt-inline-strip" id="stripBullets" style="margin-bottom:10px;">
+    <strong>Elenco non conformità (estratti Word)</strong>
+    <ul id="pBulletsList" style="margin:4px 0 0 18px;font-size:9.5pt;"></ul>
+  </div>
   <p id="pStrumento">
     Strumento (sez. 3.4 — da rilevamento o inserimento manuale):&nbsp;
     <input id="inStrumento" class="inline-input" type="text" style="min-width:280px;"
@@ -375,9 +427,16 @@
     + Aggiungi postazione
   </button>
 
-  <!-- Conclusioni brevi -->
+  <!-- Conclusioni -->
   <h2 class="doc-section">4. Conclusioni</h2>
-  <p id="pConclusioni" class="field-missing">Seleziona VDT / NON VDT per vedere il testo delle conclusioni.</p>
+  <div id="pConclusioniWrap">
+    <p id="pConclP1" class="field-missing">Seleziona VDT / NON VDT.</p>
+    <p id="pConclMonitor" style="display:none;"></p>
+    <p id="pConclRegistro" style="display:none;"></p>
+    <p id="pConclResp" style="display:none;"></p>
+    <p id="pConclFinale" style="display:none;"></p>
+    <p id="pConclNotaVdt" style="display:none;"></p>
+  </div>
 
   <!-- Footer tabella -->
   <hr style="border:none; border-top:1px solid #888; margin:20px 0 12px;">
@@ -488,6 +547,7 @@
 
   function sendUpdate() {
     const merged = buildMerged();
+    if (WIZARD.has_vdt != null) refreshVdtDocSections();
     const errors = ADAPTER ? ADAPTER.validate(merged) : [];
     window.parent.postMessage({
       type: 'DATA_UPDATE',
@@ -586,7 +646,6 @@
     sp.className = 'field-filled';
     sp.textContent = val ? 'Sì — presenza VDT sistematici' : 'No — NON VDT (< 20 h/sett.)';
     sp.style.removeProperty('display');
-    refreshVdtDocSections();
     updateCicloText();
     sendUpdate();
   };
@@ -694,95 +753,189 @@
   }
 
   function refreshVdtDocSections() {
-    const vdt = WIZARD.has_vdt === true;
-    const non = WIZARD.has_vdt === false;
     const unknown = WIZARD.has_vdt == null;
+    const isVdt = WIZARD.has_vdt === true;
+    const merged = unknown ? {} : buildMerged();
 
-    const titolo = variantById('titolo_modulo');
-    if (titolo) {
-      document.getElementById('docSubtitle').textContent = unknown
-        ? '—'
-        : (vdt ? titolo.vdt : titolo.nonVdt);
+    const banner = document.getElementById('vdtModeBanner');
+    if (banner) {
+      if (unknown) {
+        banner.className = 'vdt-mode-banner unknown';
+        banner.textContent = 'Seleziona VDT o NON VDT per aggiornare tutti i testi del documento.';
+      } else if (isVdt) {
+        banner.className = 'vdt-mode-banner vdt-on';
+        banner.textContent = 'Modalità VDT — lavoratori con uso sistematico del videoterminale (≥ 20 h/sett.)';
+      } else {
+        banner.className = 'vdt-mode-banner vdt-off';
+        banner.textContent = 'Modalità NON VDT — nessun gruppo omogeneo di videoterminalisti';
+      }
     }
 
-    const erg = variantById('premessa_ergonomia');
+    document.getElementById('docSubtitle').textContent = unknown
+      ? '—'
+      : (merged.TITOLO_MODULO || '—');
+
     const ergEl = document.getElementById('pErgonomiaIndagini');
-    if (erg && ergEl) {
+    if (ergEl) {
       if (unknown) {
         ergEl.className = 'field-missing';
         ergEl.textContent = 'indagini su ergonomia e illuminamento (seleziona VDT sopra)';
       } else {
         ergEl.className = 'field-filled';
-        ergEl.textContent = vdt ? erg.vdt : erg.nonVdt;
+        ergEl.textContent = merged.PREMESSA_INDAGINI || '—';
       }
     }
 
-    const assenza = variantById('premessa_nota_assenza');
     const assenzaEl = document.getElementById('pAssenzaVdtBlock');
-    if (assenzaEl && assenza) {
-      if (non && assenza.nonVdt && assenza.nonVdt.indexOf('non aggiunta') === -1) {
+    if (assenzaEl) {
+      const extra = [merged.PREMESSA_NOTA_ASSENZA, merged.PREMESSA_PERTANTO].filter(Boolean).join('\n\n');
+      if (extra) {
         assenzaEl.style.display = 'block';
-        assenzaEl.textContent = assenza.nonVdt;
+        assenzaEl.textContent = extra;
       } else {
         assenzaEl.style.display = 'none';
         assenzaEl.textContent = '';
       }
     }
 
-    const s352 = variantById('misure_352');
+    setInlinePreview('pCap2Title', unknown ? null : (merged.TITOLO_CAP2 || '—'), unknown);
+
     const h352 = document.getElementById('h352Title');
-    if (h352 && s352) {
+    if (h352) {
       h352.textContent = unknown
         ? '3.5.2 Risultati misure postazioni'
-        : ('3.5.2 ' + (vdt ? s352.vdt : s352.nonVdt));
+        : ('3.5.2 ' + (merged.TITOLO_352 || 'Risultati misure postazioni'));
     }
 
-    const concl = variantById('conclusioni');
-    const pConcl = document.getElementById('pConclusioni');
-    if (pConcl && concl) {
+    const intro352 = document.getElementById('pIntro352');
+    if (intro352) {
       if (unknown) {
-        pConcl.className = 'field-missing';
-        pConcl.textContent = 'Seleziona VDT / NON VDT per vedere il testo delle conclusioni.';
+        intro352.className = 'vdt-inline-strip field-missing';
+        intro352.innerHTML = '<strong>Intro tabella</strong> — seleziona VDT';
       } else {
-        pConcl.className = 'field-filled';
-        let txt = vdt ? concl.vdt : concl.nonVdt;
-        if (DATA) {
-          txt = txt
-            .replace(/sulle postazioni al VDT/g, 'sulle postazioni della sede di ' + (DATA.SEDE_OPERATIVA || '…'))
-            .replace(/sulle postazioni di lavoro/g, 'sulle postazioni della sede di ' + (DATA.SEDE_OPERATIVA || '…'));
-        }
-        pConcl.textContent = txt;
+        intro352.className = 'vdt-inline-strip field-filled';
+        intro352.innerHTML = '<strong>Intro tabella</strong><br>' + esc(merged.INTRO_352 || '—');
       }
     }
 
-    renderVdtPanel();
+    const bulletsEl = document.getElementById('pBulletsList');
+    if (bulletsEl) {
+      if (unknown) {
+        bulletsEl.innerHTML = '<li class="field-missing">seleziona VDT</li>';
+      } else {
+        const items = [merged.BULLET_RAPPORTI_LUX, merged.BULLET_RIFLESSI].filter(Boolean);
+        bulletsEl.innerHTML = items.length
+          ? items.map(t => '<li>' + esc(t) + '</li>').join('')
+          : '<li class="field-missing">—</li>';
+      }
+    }
+
+    if (unknown) {
+      ['pConclMonitor', 'pConclRegistro', 'pConclResp', 'pConclFinale', 'pConclNotaVdt'].forEach(id => showConclPara(id, null, false));
+      const p1 = document.getElementById('pConclP1');
+      if (p1) {
+        p1.style.display = 'block';
+        p1.className = 'field-missing';
+        p1.textContent = 'Seleziona VDT / NON VDT per vedere le conclusioni.';
+      }
+    } else {
+      showConclPara('pConclP1', merged.CONCLUSIONI_P1, true);
+      showConclPara('pConclMonitor', merged.CONCLUSIONI_MONITOR, true);
+      showConclPara('pConclRegistro', merged.CONCLUSIONI_REGISTRO_MANUTENZIONE, true);
+      showConclPara('pConclResp', merged.CONCLUSIONI_RESPONSABILE, true);
+      showConclPara('pConclFinale', merged.CONCLUSIONI_ILLUMINAMENTO_FINALE, true);
+      showConclPara('pConclNotaVdt', merged.CONCLUSIONI_NOTA_VDT, true);
+    }
+
+    renderVdtPanel(merged);
   }
 
-  function renderVdtPanel() {
+  function setInlinePreview(id, text, missing) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (missing || !text) {
+      el.className = 'field-missing';
+      el.textContent = '—';
+    } else {
+      el.className = 'field-filled';
+      el.textContent = text;
+    }
+  }
+
+  function showConclPara(id, text, allowShow) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const t = (text || '').trim();
+    if (!allowShow || !t) {
+      el.style.display = 'none';
+      el.textContent = '';
+      return;
+    }
+    el.style.display = 'block';
+    el.className = 'field-filled';
+    el.textContent = t;
+  }
+
+  function renderVdtPanel(merged) {
     const host = document.getElementById('vdtVariantsPanel');
+    const statsEl = document.getElementById('vdtFieldStats');
     if (!host) return;
     const vdt = WIZARD.has_vdt;
-    const variants = getVdtVariants();
+    const blocks = (ADAPTER?.getVdtTextBlocks) ? ADAPTER.getVdtTextBlocks() : [];
+    const m = merged || buildMerged();
     if (vdt == null) {
       host.innerHTML = '<p class="field-missing" style="padding:10px;">Seleziona prima «Sì — VDT» o «No — NON VDT» in Tipologia lavoratori.</p>';
+      if (statsEl) statsEl.textContent = '';
       return;
     }
     const isVdt = vdt === true;
-    host.innerHTML = variants.map(v => {
-      if (v.onlyNonVdt && isVdt) {
-        return '<div class="vdt-variant-card skipped"><div class="vdt-card-head">'
-          + esc(v.label) + '<span class="vdt-sec">' + esc(v.sezione) + '</span></div>'
-          + '<div class="vdt-active" style="background:#f4f6f7;border-color:#bbb;">Non applicabile (solo versione NON VDT)</div></div>';
-      }
-      if (v.onlyNonVdt && !isVdt && (!v.nonVdt || v.nonVdt.indexOf('non aggiunta') !== -1)) return '';
-      const active = isVdt ? v.vdt : v.nonVdt;
-      const alt = isVdt ? v.nonVdt : v.vdt;
-      return '<div class="vdt-variant-card"><div class="vdt-card-head">'
-        + esc(v.label) + '<span class="vdt-sec">' + esc(v.sezione) + '</span></div>'
-        + '<div class="vdt-active">' + esc(active) + '</div>'
-        + (alt ? '<div class="vdt-alt">' + esc(alt) + '</div>' : '')
-        + '</div>';
-    }).join('');
+    let activeCount = 0;
+    let skippedRole = 0;
+    const bySec = {};
+    blocks.forEach((b) => {
+      const sec = b.sezione || 'Altro';
+      if (!bySec[sec]) bySec[sec] = [];
+      bySec[sec].push(b);
+    });
+    const cards = [];
+    Object.keys(bySec).forEach((sec) => {
+      cards.push('<h3 class="vdt-group-title">' + esc(sec) + '</h3>');
+      bySec[sec].forEach((b) => {
+        const ph = b.placeholder || '';
+        const skipped = (b.onlyNonVdt && isVdt) || (b.onlyVdt && !isVdt);
+        if (skipped) {
+          skippedRole++;
+          cards.push(
+            '<div class="vdt-variant-card na-role"><div class="vdt-card-head">'
+            + esc(b.label) + (ph ? ' <code>{{' + esc(ph) + '}}</code>' : '')
+            + '</div><div class="vdt-active">(vuoto nel Word — non previsto per '
+            + (isVdt ? 'VDT' : 'NON VDT') + ')</div></div>'
+          );
+          return;
+        }
+        const active = ph ? (m[ph] ?? '') : '';
+        const altRaw = isVdt ? b.nonVdt : b.vdt;
+        const alt = altRaw ? String(altRaw) : '';
+        if (active) activeCount++;
+        const sameAlt = alt && active && alt === active;
+        cards.push(
+          '<div class="vdt-variant-card"><div class="vdt-card-head">'
+          + esc(b.label) + (ph ? ' <code>{{' + esc(ph) + '}}</code>' : '')
+          + '</div>'
+          + '<div class="vdt-active vdt-active-scroll">' + esc(active || '(vuoto)') + '</div>'
+          + (!sameAlt && alt
+            ? '<div class="vdt-alt vdt-active-scroll"><span class="hint-str">Alternativa:</span> ' + esc(alt) + '</div>'
+            : '')
+          + '</div>'
+        );
+      });
+    });
+    host.innerHTML = cards.join('');
+    if (statsEl) {
+      statsEl.textContent = activeCount + ' campi con testo nel DOCX · '
+        + skippedRole + ' non applicabili per questo ruolo · '
+        + (blocks.length - activeCount - skippedRole) + ' altri (vuoti o uguali)';
+    }
   }
 
   // ── Tabella UNI (tutte le righe della macro-tabella) ─────────────────────

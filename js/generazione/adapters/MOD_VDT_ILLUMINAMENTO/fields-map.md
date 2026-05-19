@@ -1,18 +1,12 @@
 # MOD_VDT_ILLUMINAMENTO — Fields Map
 
-## 1. Logica di selezione template
+## 1. Template unico + ruolo VDT
 
-```
-La sezione 3 MISURA è identica in entrambi i template.
-La sezione 2 ILLUMINAMENTO cambia in base al flag VDT.
-```
+Un solo file Word: **`Modulo Illuminamento VDT 2022.docx`** → bucket `MOD_VDT_ILLUMINAMENTO.docx`.
 
-| Condizione | Template da usare | Nome file |
-|------------|-------------------|-----------|
-| Lavoratori VDT **≥ 20 h/sett.** | Versione VDT | `Modulo Illuminamento VDT 2022.docx` |
-| Nessun VDT o VDT **< 20 h/sett.** | Versione NON VDT | `Modulo Illuminamento attività NON VDT 2022.docx` |
+La scelta **Sì VDT / No NON VDT** nel wizard (`has_vdt`) non cambia file, ma compila placeholder diversi (testi in `vdt-texts.js` → `adapter.buildVdtPlaceholderFields`).
 
-La scelta avviene nel wizard di Generazione (checkbox `has_vdt_sistematico`).
+Script per inserire i tag nel `.docx`: `scripts/insert_vdt_placeholders.py` (testo estratto via MCP Word dal template Desktop).
 
 ---
 
@@ -80,6 +74,29 @@ Dati in `adapter.js` → array `POSTAZIONI` (da wizard `postazioni` o rilevament
 | `lux_piano` | `LUX_PIANO` (con suffisso ` lx` se assente) |
 | `lux_ambiente` | `LUX_CENTRO` |
 | `annotazioni` | `ANNOTAZIONI` |
+
+### 2.6 Placeholder VDT / NON VDT (template unico)
+
+| Placeholder | Sezione |
+|-------------|---------|
+| `{{TITOLO_MODULO}}` | Copertina |
+| `{{TITOLO_CAP2}}` | Cap. 2 titolo |
+| `{{PREMESSA_INDAGINI}}` | Premessa (frase indagini) |
+| `{{PREMESSA_NOTA_ASSENZA}}` | Premessa nota assenza VDT (solo NON VDT) |
+| `{{PREMESSA_PERTANTO}}` | Premessa paragrafo Pertanto (solo NON VDT) |
+| `{{CAP2_INTRO}}` | §2.1 Introduzione |
+| `{{CAP2_PONTE_NORMATIVO}}` | §2.1 Ponte norma UNI (solo VDT) |
+| `{{ERGONOMIA_23_INTRO}}` | §2.3 intro (solo NON VDT) |
+| `{{TITOLO_SEZ_24}}` | §2.4 titolo |
+| `{{SEZ_24_NOTA_FINALE}}` | §2.4 nota finale (solo NON VDT) |
+| `{{MISURA_PREMESSA_VDT}}` | §3.1 frammento |
+| `{{METODICHE_INDIRIZZO_POSTAZIONI}}` | §3.3 |
+| `{{TESTO_LAMPADE_ILLUMINAZIONE}}` | §3.5.1 lampade |
+| `{{TITOLO_352}}` / `{{INTRO_352}}` | §3.5.2 |
+| `{{BULLET_RAPPORTI_LUX}}` / `{{BULLET_RIFLESSI}}` | §3.5.2 elenco |
+| `{{CONCLUSIONI_P1}}` … `{{CONCLUSIONI_ILLUMINAMENTO_FINALE}}` | §4 |
+
+Catalogo completo testi: `vdt-texts.js`.
 
 ---
 

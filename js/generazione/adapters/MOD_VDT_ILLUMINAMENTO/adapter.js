@@ -112,8 +112,54 @@
     };
   }
 
+  function getVdtTextBlocks() {
+    return window.VDT_TEXT_BLOCKS || [];
+  }
+
   function getVdtVariants() {
-    return window.VDT_VARIANTS || [];
+    return window.VDT_VARIANTS || getVdtTextBlocks().map((b) => ({
+      id: b.id,
+      label: b.label,
+      sezione: b.sezione,
+      vdt: b.onlyNonVdt ? '(non applicabile)' : (b.vdt || '(vuoto)'),
+      nonVdt: b.onlyVdt ? '(non applicabile)' : (b.nonVdt || '(vuoto)'),
+      onlyNonVdt: !!b.onlyNonVdt,
+      onlyVdt: !!b.onlyVdt,
+      placeholder: b.placeholder,
+    }));
+  }
+
+  function interpolateVdtText(text, ctx) {
+    if (!text) return '';
+    return String(text)
+      .replace(/\{\{RAGIONE_SOCIALE\}\}/g, ctx.ragioneSociale || '')
+      .replace(/\{\{SEDE_OPERATIVA\}\}/g, ctx.sedeOperativa || '');
+  }
+
+  /** Campi {{…}} variabili VDT/NON VDT per template unico */
+  function buildVdtPlaceholderFields(hasVdt, ctx, overrides) {
+    if (hasVdt === null || hasVdt === undefined) return {};
+    const out = {};
+    const ovr = overrides || {};
+    for (const block of getVdtTextBlocks()) {
+      const key = block.placeholder;
+      if (!key) continue;
+      if (ovr[key] !== undefined && ovr[key] !== null) {
+        out[key] = String(ovr[key]);
+        continue;
+      }
+      if (hasVdt && block.onlyNonVdt) {
+        out[key] = '';
+        continue;
+      }
+      if (hasVdt === false && block.onlyVdt) {
+        out[key] = '';
+        continue;
+      }
+      const raw = hasVdt ? block.vdt : block.nonVdt;
+      out[key] = interpolateVdtText(raw, ctx);
+    }
+    return out;
   }
 
   // Suggerimento studio (solo placeholder UI, non precompilato automaticamente)
@@ -445,6 +491,11 @@
     const filtered = filterRilevamentiIlluminamento(rilevamenti);
     const hasVdt = wizardInput?.has_vdt ?? null;
     const uniFields = uniFieldsFromWizard(wizardInput, hasVdt);
+    const vdtCtx = {
+      ragioneSociale: azienda?.ragione_sociale || '',
+      sedeOperativa: azienda?.sede_operativa || '',
+    };
+    const vdtFields = buildVdtPlaceholderFields(hasVdt, vdtCtx, wizardInput?.vdt_text_overrides);
 
     let descrizioneLocali = wizardInput?.descrizione_locali || '';
     if (!descrizioneLocali) descrizioneLocali = descrizioneLocaliDaRilevamenti(rilevamenti);
@@ -487,6 +538,7 @@
       UNI_RA:                 uniFields.UNI_RA,
       UNI_RUGL:               uniFields.UNI_RUGL,
       POSTAZIONI:             postazioniToTemplateRows(postazioni),
+      ...vdtFields,
 
       // ── Metadati interni (prefisso _ = non entrano nel template) ──
       _has_vdt:     hasVdt,
@@ -515,6 +567,16 @@
 
     const postazioni = (w.postazioni && w.postazioni.length) ? w.postazioni : (base._postazioni || []);
 
+    const vdtCtx = {
+      ragioneSociale: base.RAGIONE_SOCIALE || '',
+      sedeOperativa: base.SEDE_OPERATIVA || '',
+    };
+    const vdtFields = buildVdtPlaceholderFields(
+      hasVdt,
+      vdtCtx,
+      w.vdt_text_overrides || base._vdt_text_overrides
+    );
+
     return {
       ...base,
       _logo_buffer: base._logo_buffer || w.logo_buffer || null,
@@ -531,8 +593,10 @@
       UNI_RA: uniFields.UNI_RA || base.UNI_RA || '',
       UNI_RUGL: uniFields.UNI_RUGL || base.UNI_RUGL || '',
       POSTAZIONI: postazioniToTemplateRows(postazioni),
+      ...vdtFields,
       _has_vdt: hasVdt,
       _postazioni: postazioni,
+      _vdt_text_overrides: w.vdt_text_overrides || base._vdt_text_overrides || null,
     };
   }
 
@@ -623,6 +687,8 @@
     getUniTableGroups,
     resolveUniFromWizard,
     getVdtVariants,
+    getVdtTextBlocks,
+    buildVdtPlaceholderFields,
     get UNI_OPTIONS() { return getUniOptions(); },
     DEFAULT_STRUMENTO,
     buildData,

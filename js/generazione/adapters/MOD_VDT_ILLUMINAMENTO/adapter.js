@@ -78,13 +78,13 @@
 
   function mergeWtInBlock(block) {
     const texts = [];
-    const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
     let m;
     while ((m = re.exec(block)) !== null) texts.push(m[1]);
     const joined = texts.join('');
     if (!needsWtMerge(texts, joined)) return block;
     let idx = 0;
-    return block.replace(/<w:t([^>]*)>([^<]*)<\/w:t>/g, (_full, attrs) => {
+    return block.replace(/<w:t(\s[^>]*)?>([^<]*)<\/w:t>/g, (_full, attrs) => {
       if (idx === 0) {
         idx += 1;
         return '<w:t' + attrs + '>' + joined + '</w:t>';
@@ -112,11 +112,11 @@
     do {
       prev = out;
       out = out.replace(
-        /(<w:t[^>]*>)(\{\{[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t[^>]*>)([A-Z0-9_]*\}\})(<\/w:t>)/g,
+        /(<w:t(?:\s[^>]*)?>)(\{\{[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t(?:\s[^>]*)?>)([A-Z0-9_]*\}\})(<\/w:t>)/g,
         (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2
       );
       out = out.replace(
-        /(<w:t[^>]*>)(\{%[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t[^>]*>)([A-Z0-9_]*%\})(<\/w:t>)/g,
+        /(<w:t(?:\s[^>]*)?>)(\{%[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t(?:\s[^>]*)?>)([A-Z0-9_]*%\})(<\/w:t>)/g,
         (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2
       );
     } while (out !== prev);
@@ -141,7 +141,7 @@
 
   function findBrokenPlaceholderRunsInXml(xml, filePath) {
     const issues = [];
-    const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
     let m;
     while ((m = re.exec(xml)) !== null) {
       const t = m[1];
@@ -204,8 +204,7 @@
 
   function fixSplitPlaceholdersInXml(xml) {
     let out = reuniteSplitDelimiters(xml);
-    out = mergeDelimitedPlaceholders(out, '{{', '}}');
-    out = mergeDelimitedPlaceholders(out, '{%', '%}');
+    // Non usare mergeDelimitedPlaceholders su tutto il file: può cancellare </w:p> tra {{ e }}
     out = mergeAdjacentSplitPlaceholderRuns(out);
     out = consolidatePlaceholderParagraphs(out);
     out = mergeAdjacentSplitPlaceholderRuns(out);

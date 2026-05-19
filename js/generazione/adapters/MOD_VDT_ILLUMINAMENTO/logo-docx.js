@@ -118,8 +118,9 @@
       (p) => /^word\/(document|footer\d*|header\d*)\.xml$/i.test(p) && zip.file(p)
     );
 
+    // Non attraversare </w:r> intermedi; solo il run con <w:t>{%LOGO}</w:t>
     const runWithLogo =
-      /<w:r[^>]*>(?:(?!<\/w:r>)[\s\S])*?\{%LOGO\}(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/;
+      /<w:r(?:\s[^>]*)?>(?:(?!<\/w:r>)[\s\S])*?<w:t(?:\s[^>]*)?>\{%LOGO\}<\/w:t>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/;
     const drawingRun =
       '<w:r><w:rPr/><w:drawing>' + getImageDrawingXml(rId, sizeEmus) + '</w:drawing></w:r>';
 

@@ -84,13 +84,14 @@
     const joined = texts.join('');
     if (!needsWtMerge(texts, joined)) return block;
     let idx = 0;
-    return block.replace(/<w:t(\s[^>]*)?>([^<]*)<\/w:t>/g, (_full, attrs) => {
+    return block.replace(/<w:t(\s[^>]*)?>([^<]*)<\/w:t>/g, (_full, attrs, _text) => {
+      const a = attrs || '';
       if (idx === 0) {
         idx += 1;
-        return '<w:t' + attrs + '>' + joined + '</w:t>';
+        return '<w:t' + a + '>' + joined + '</w:t>';
       }
       idx += 1;
-      return '<w:t' + attrs + '></w:t>';
+      return '<w:t' + a + '></w:t>';
     });
   }
 
@@ -210,6 +211,24 @@
     out = mergeAdjacentSplitPlaceholderRuns(out);
     out = out.replace(/\{\{LOGO\}\}/g, '{%LOGO}');
     return out;
+  }
+
+  function assertValidWordXml(zip, label) {
+    const path = 'word/document.xml';
+    const file = zip.file(path);
+    if (!file) return;
+    const xml = file.asText();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xml, 'application/xml');
+    const errNode = doc.getElementsByTagName('parsererror')[0];
+    if (errNode) {
+      const detail = (errNode.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 160);
+      throw new Error(
+        (label ? label + ': ' : '') +
+          'XML Word non valido in document.xml' +
+          (detail ? ' (' + detail + ')' : '')
+      );
+    }
   }
 
   function formatDocxtemplaterErrors(err) {
@@ -470,6 +489,8 @@
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);
     }
+
+    assertValidWordXml(outZip, 'Dopo generazione');
 
     return outZip.generate({ type: 'arraybuffer', compression: 'DEFLATE' });
   }

@@ -128,6 +128,17 @@
     docPaths.forEach((docPath) => {
       let docXml = zip.file(docPath).asText();
       if (docXml.indexOf('{%LOGO}') === -1) return;
+      const m = docXml.match(runWithLogo);
+      if (!m) {
+        console.warn('[GEN_LOGO_DOCX] {%LOGO} presente ma run non sostituibile in', docPath);
+        return;
+      }
+      if (m[0].length > 800) {
+        console.warn('[GEN_LOGO_DOCX] match troppo lungo, skip logo in', docPath, m[0].length);
+        docXml = docXml.replace(/\{%LOGO\}/g, '');
+        zip.file(docPath, docXml);
+        return;
+      }
       docXml = docXml.replace(runWithLogo, drawingRun);
       docXml = docXml.replace(/\{%LOGO\}/g, '');
       zip.file(docPath, docXml);

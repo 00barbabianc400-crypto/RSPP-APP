@@ -59,10 +59,43 @@
     return text.replace(re, (_, inner) => open + inner.replace(/<[^>]+>/g, '') + close);
   }
 
+  function isPartialPlaceholderRun(text) {
+    return (
+      /^\{\{[A-Z0-9_]*$/.test(text) ||
+      /^[A-Z0-9_]*\}\}$/.test(text) ||
+      text === '{' || text === '%' ||
+      /^LOGO\}$/.test(text) ||
+      /^\{%[A-Z0-9_]*$/.test(text)
+    );
+  }
+
+  /** Docxtemplater legge ogni <w:t> a sé: se il tag è spezzato, mette tutto nel primo run. */
+  function consolidatePlaceholderParagraphs(xml) {
+    return xml.replace(/<w:p[\s\S]*?<\/w:p>/g, (para) => {
+      const texts = [];
+      const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+      let m;
+      while ((m = re.exec(para)) !== null) texts.push(m[1]);
+      if (texts.length < 2 || !texts.some(isPartialPlaceholderRun)) return para;
+      const joined = texts.join('');
+      if (!/\{\{|\{%/.test(joined)) return para;
+      let idx = 0;
+      return para.replace(/<w:t([^>]*)>([^<]*)<\/w:t>/g, (_full, attrs) => {
+        if (idx === 0) {
+          idx += 1;
+          return '<w:t' + attrs + '>' + joined + '</w:t>';
+        }
+        idx += 1;
+        return '<w:t' + attrs + '></w:t>';
+      });
+    });
+  }
+
   function fixSplitPlaceholdersInXml(xml) {
     let out = reuniteSplitDelimiters(xml);
     out = mergeDelimitedPlaceholders(out, '{{', '}}');
     out = mergeDelimitedPlaceholders(out, '{%', '%}');
+    out = consolidatePlaceholderParagraphs(out);
     out = out.replace(/\{\{LOGO\}\}/g, '{%LOGO}');
     return out;
   }

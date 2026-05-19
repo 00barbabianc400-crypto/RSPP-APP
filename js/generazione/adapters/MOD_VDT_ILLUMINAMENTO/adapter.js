@@ -99,19 +99,26 @@
     return out;
   }
 
+  /** Vero solo se il run è un frammento (es. {{RAGI | IALE}}), non testo+tag intero. */
+  function isBrokenPlaceholderRun(t) {
+    if (t === '{' || t === '%' || /^LOGO\}$/.test(t)) return true;
+    const hasOpen = /\{\{/.test(t) || /\{%/.test(t);
+    const hasClose = /\}\}/.test(t) || /%\}/.test(t);
+    if (hasOpen && !hasClose) return true;
+    if (hasClose && !hasOpen) return true;
+    return false;
+  }
+
   function findBrokenPlaceholderRunsInXml(xml, filePath) {
     const issues = [];
     const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
     let m;
     while ((m = re.exec(xml)) !== null) {
       const t = m[1];
-      if (/^\{\{/.test(t) && !/\}\}$/.test(t)) {
-        issues.push({ file: filePath, kind: 'open', text: t });
-      } else if (/\}\}$/.test(t) && !/^\{\{/.test(t) && !/^\{%/.test(t)) {
-        issues.push({ file: filePath, kind: 'close', text: t });
-      } else if (t === '{' || t === '%' || /^LOGO\}$/.test(t)) {
-        issues.push({ file: filePath, kind: 'fragment', text: t });
-      }
+      if (!/\{\{|\{%|\}\}|%\}/.test(t)) continue;
+      if (!isBrokenPlaceholderRun(t)) continue;
+      const openOnly = (/\{\{/.test(t) || /\{%/.test(t)) && !/\}\}/.test(t) && !/%\}/.test(t);
+      issues.push({ file: filePath, kind: openOnly ? 'open' : 'close', text: t });
     }
     return issues;
   }

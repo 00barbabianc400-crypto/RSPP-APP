@@ -99,11 +99,17 @@
     return out;
   }
 
+  /** Tag immagine Docxtemplater completo in un solo run (es. {%LOGO}). */
+  function isCompleteImagePlaceholderRun(t) {
+    return /^\{%[A-Za-z0-9_]+\}$/.test(t);
+  }
+
   /** Vero solo se il run è un frammento (es. {{RAGI | IALE}}), non testo+tag intero. */
   function isBrokenPlaceholderRun(t) {
+    if (isCompleteImagePlaceholderRun(t)) return false;
     if (t === '{' || t === '%' || /^LOGO\}$/.test(t)) return true;
     const hasOpen = /\{\{/.test(t) || /\{%/.test(t);
-    const hasClose = /\}\}/.test(t) || /%\}/.test(t);
+    const hasClose = /\}\}/.test(t);
     if (hasOpen && !hasClose) return true;
     if (hasClose && !hasOpen) return true;
     return false;

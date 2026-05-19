@@ -7,6 +7,9 @@
     
     <!-- Supabase JS -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- DOCX generation -->
+    <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.49.0/build/docxtemplater.js"></script>
     <!-- Runtime ENV (generated from .env) -->
     <script src="./env.js"></script>
     
@@ -3395,7 +3398,7 @@
                 const generaDoc = e.target.closest?.('[data-action="genera-doc"]');
                 if (generaDoc) {
                     e.preventDefault();
-                    openGeneraDocModal(generaDoc.dataset.codice, generaDoc.dataset.aziendaId);
+                    openGeneraDocPreview(generaDoc.dataset.codice, generaDoc.dataset.aziendaId);
                     return;
                 }
                 const dlOutput = e.target.closest?.('[data-action="download-output"]');
@@ -3930,6 +3933,208 @@
 
             document.body.appendChild(modal);
             modal.onclick = () => closeModal('generaDocModal');
+        }
+
+        // ─── GENERAZIONE DOCX — preview inline + iframe ───────────────────────────
+
+        async function openGeneraDocPreview(codice, aziendaId) {
+            // Carica adapter se non ancora presente
+            await loadAdapter(codice);
+
+            const adapter = window.GEN_ADAPTERS?.[codice];
+            if (!adapter) {
+                showToast('Adapter non trovato per ' + codice, 'error');
+                return;
+            }
+
+            // Rimuovi eventuale panel precedente per questa azienda/codice
+            const existingPanel = document.getElementById('gen-preview-' + codice);
+            if (existingPanel) { existingPanel.remove(); return; }
+
+            // Fetch dati azienda freschi (include logo_azienda_url)
+            const { data: az } = await supabaseClient
+                .from(CONFIG.tables.aziende)
+                .select('*, logo_azienda_url')
+                .eq('id', aziendaId)
+                .single();
+
+            // Signed URL logo se presente
+            let logoUrl = null;
+            if (az?.logo_azienda_url) {
+                const storagePath = az.logo_azienda_url.replace(/^loghi\//, '');
+                const { data: urlData } = await supabaseClient.storage
+                    .from(CONFIG.storage.loghi)
+                    .createSignedUrl(storagePath, 3600);
+                logoUrl = urlData?.signedUrl || null;
+            }
+
+            // Fetch rilevamenti illuminamento per questa azienda
+            const { data: rilevamenti } = await supabaseClient
+                .from(CONFIG.tables.rilevamentiAmbientali)
+                .select('*')
+                .eq('azienda_id', aziendaId)
+                .order('data_rilevamento', { ascending: false });
+
+            // Recupera numero modulo dal catalogo
+            const catalogoItem = (STATE.data?.catalogoDocumenti || []).find(d => d.codice === codice);
+            const moduloNumero = catalogoItem?.ordine != null ? String(catalogoItem.ordine).padStart(2, '0') : '01';
+
+            // Costruisci data iniziale
+            const initialData = adapter.buildData(
+                az,
+                rilevamenti || [],
+                {
+                    logo_url:      logoUrl,
+                    modulo_numero: moduloNumero,
+                    strumento_luxmetro: adapter.DEFAULT_STRUMENTO,
+                }
+            );
+
+            // Crea panel espandibile sotto il container
+            const container = document.getElementById('generazioneDocumentiContainer');
+            const panel = document.createElement('div');
+            panel.id = 'gen-preview-' + codice;
+            panel.style.cssText = 'margin-top:16px;';
+            panel.innerHTML = ''
+                + '<div class="card" style="overflow:hidden;">'
+                + '<div class="card-header" style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--sp-bg-secondary,#1e1e1e);border-bottom:1px solid var(--sp-border,#333);">'
+                + '<strong style="flex:1;font-size:14px;">📄 Anteprima generazione: ' + esc(codice) + '</strong>'
+                + '<span id="gen-status-' + attrEsc(codice) + '" class="badge warning">In compilazione…</span>'
+                + '<button class="btn btn-primary" id="gen-btn-' + attrEsc(codice) + '" disabled>Genera DOCX</button>'
+                + '<button class="btn" onclick="document.getElementById(\'gen-preview-' + attrEsc(codice) + '\')?.remove()">✕ Chiudi</button>'
+                + '</div>'
+                + '<div style="height:700px;overflow:hidden;">'
+                + '<iframe id="gen-iframe-' + attrEsc(codice) + '"'
+                + ' src="js/generazione/adapters/' + attrEsc(codice) + '/preview.html"'
+                + ' style="width:100%;height:100%;border:none;"'
+                + ' title="Anteprima documento"></iframe>'
+                + '</div>'
+                + '</div>';
+            container.appendChild(panel);
+            panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Wiring iframe
+            const iframe = panel.querySelector('iframe');
+            const generateBtn = panel.querySelector('#gen-btn-' + codice);
+            const statusBadge = panel.querySelector('#gen-status-' + codice);
+            let currentData = initialData;
+
+            // Listener messaggi dall'iframe
+            function onIframeMessage(e) {
+                if (!e.data || typeof e.data !== 'object') return;
+                if (e.source !== iframe.contentWindow) return;
+
+                if (e.data.type === 'IFRAME_READY') {
+                    iframe.contentWindow.postMessage({ type: 'SET_DATA', data: initialData }, '*');
+                }
+                if (e.data.type === 'DATA_UPDATE') {
+                    currentData = e.data.data;
+                    if (e.data.valid) {
+                        statusBadge.className = 'badge success';
+                        statusBadge.textContent = '✓ Pronto';
+                        generateBtn.disabled = false;
+                    } else {
+                        statusBadge.className = 'badge warning';
+                        statusBadge.textContent = 'Campi mancanti (' + (e.data.errors?.length || '?') + ')';
+                        generateBtn.disabled = true;
+                    }
+                }
+                if (e.data.type === 'GENERATE') {
+                    triggerGeneration(codice, aziendaId, e.data.data);
+                }
+            }
+            window.addEventListener('message', onIframeMessage);
+
+            // Genera DOCX dal pulsante del panel padre
+            generateBtn.addEventListener('click', () => {
+                triggerGeneration(codice, aziendaId, currentData);
+            });
+
+            // Cleanup quando il panel viene rimosso
+            const observer = new MutationObserver(() => {
+                if (!document.getElementById(panel.id)) {
+                    window.removeEventListener('message', onIframeMessage);
+                    observer.disconnect();
+                }
+            });
+            observer.observe(container, { childList: true });
+        }
+
+        function loadScriptOnce(src) {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector('script[src="' + src + '"]')) { resolve(); return; }
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = resolve;
+                s.onerror = () => reject(new Error('Script non trovato: ' + src));
+                document.head.appendChild(s);
+            });
+        }
+
+        async function loadAdapter(codice) {
+            if (window.GEN_ADAPTERS?.[codice]) return;
+            const base = 'js/generazione/adapters/' + codice + '/';
+            try {
+                await loadScriptOnce(base + 'uni-options.js');
+            } catch (_) { /* modulo senza catalogo UNI */ }
+            await loadScriptOnce(base + 'adapter.js');
+        }
+
+        async function triggerGeneration(codice, aziendaId, data) {
+            const adapter = window.GEN_ADAPTERS?.[codice];
+            if (!adapter) { showToast('Adapter non caricato', 'error'); return; }
+
+            const errors = adapter.validate(data);
+            if (errors.length) {
+                showToast('Campi mancanti: ' + errors[0], 'warning');
+                return;
+            }
+
+            showToast('Generazione in corso…', 'info');
+
+            try {
+                // Scarica template dal bucket modelli
+                const templateName = codice + '.docx';
+                const { data: templateBlob, error: dlErr } = await supabaseClient.storage
+                    .from(CONFIG.storage.modelli).download(templateName);
+                if (dlErr) throw dlErr;
+
+                const templateBuffer = await templateBlob.arrayBuffer();
+
+                // Genera DOCX
+                const outputBuffer = await adapter.generateDocx(templateBuffer, data);
+
+                // Nome file output
+                const dataStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+                const outputFileName = codice + '_' + dataStr + '.docx';
+
+                // Upload al bucket output
+                const outputPath = aziendaId + '/' + outputFileName;
+                const { error: upErr } = await supabaseClient.storage
+                    .from(CONFIG.storage.output)
+                    .upload(outputPath, outputBuffer, {
+                        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        upsert: true,
+                    });
+                if (upErr) throw upErr;
+
+                // Download locale
+                const blob = new Blob([outputBuffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = outputFileName;
+                document.body.appendChild(a); a.click();
+                setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+
+                showToast('Documento generato e salvato: ' + outputFileName, 'success');
+
+                // Ricarica la lista documenti per aggiornare lo stato output
+                await loadGenerazioneDocumenti();
+
+            } catch (err) {
+                console.error(err);
+                showToast('Errore generazione: ' + err.message, 'error');
+            }
         }
 
         async function downloadOutputDocumento(codice, aziendaId) {

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Modulo Illuminamento</title>
+<script src="uni-options.js"></script>
+<script src="adapter.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #e8e8e8;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11pt;
+    color: #1a1a1a;
+  }
+
+  /* ── Toolbar ── */
+  #toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: #2a2a2a;
+    color: #fff;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge {
+    background: #e74c3c;
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; }
+  #toolbar .ok-badge {
+    background: #27ae60;
+    color: #fff;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    display: none;
+  }
+  #toolbar .ok-badge.visible { display: inline-block; }
+  #toolbar button {
+    background: #3498db;
+    color: #fff;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar button:not(:disabled):hover { background: #2980b9; }
+
+  /* ── Page ── */
+  .page-wrap {
+    max-width: 820px;
+    margin: 20px auto;
+    padding-bottom: 40px;
+  }
+  .page {
+    background: #fff;
+    padding: 2.5cm 2.5cm 2.5cm 3cm;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  /* ── Typography ── */
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 4px; }
+  h2.doc-section { font-size: 13pt; font-weight: bold; text-transform: uppercase; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  h3.doc-sub { font-size: 11pt; font-weight: bold; margin: 12px 0 6px; }
+  p { margin-bottom: 8px; line-height: 1.5; text-align: justify; }
+  ul { margin: 4px 0 8px 20px; }
+  ul li { line-height: 1.6; }
+
+  /* ── Field states ── */
+  .field-auto {
+    color: #1a5276;
+    font-weight: 600;
+    background: #eaf4fb;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+  .field-missing {
+    color: #922b21;
+    background: #fde8e8;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px dashed #e74c3c;
+    font-style: italic;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .field-missing::before { content: '⚠ '; font-style: normal; }
+  .field-filled {
+    color: #1e8449;
+    font-weight: 600;
+    background: #eafaf1;
+    padding: 1px 4px;
+    border-radius: 3px;
+  }
+
+  /* ── Inline controls ── */
+  .ctrl-wrap { display: inline-block; vertical-align: middle; }
+  select.inline-select, input.inline-input {
+    font-family: inherit;
+    font-size: 10.5pt;
+    border: 1px solid #3498db;
+    border-radius: 3px;
+    padding: 2px 6px;
+    background: #eaf4fb;
+    color: #1a5276;
+    outline: none;
+    cursor: pointer;
+    max-width: 340px;
+  }
+  select.inline-select:focus, input.inline-input:focus {
+    border-color: #2980b9;
+    box-shadow: 0 0 0 2px rgba(52,152,219,.2);
+  }
+  textarea.inline-ta {
+    font-family: inherit;
+    font-size: 10.5pt;
+    border: 1px solid #3498db;
+    border-radius: 3px;
+    padding: 4px 8px;
+    background: #eaf4fb;
+    color: #1a5276;
+    outline: none;
+    width: 100%;
+    min-height: 70px;
+    resize: vertical;
+    margin-top: 4px;
+  }
+  textarea.inline-ta:focus { border-color: #2980b9; box-shadow: 0 0 0 2px rgba(52,152,219,.2); }
+  .toggle-group { display: inline-flex; border: 1px solid #3498db; border-radius: 4px; overflow: hidden; }
+  .toggle-btn {
+    border: none;
+    padding: 4px 14px;
+    font-size: 10.5pt;
+    font-family: inherit;
+    cursor: pointer;
+    background: #eaf4fb;
+    color: #1a5276;
+    transition: background .15s;
+  }
+  .toggle-btn.active { background: #3498db; color: #fff; font-weight: 700; }
+  .toggle-btn:hover:not(.active) { background: #d6eaf8; }
+
+  /* ── UNI table ── */
+  .uni-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 10pt; }
+  .uni-table th { background: #2c3e50; color: #fff; padding: 5px 8px; text-align: center; }
+  .uni-table td { border: 1px solid #bbb; padding: 4px 8px; text-align: center; }
+  .uni-table tr.highlight { background: #d5f5e3; font-weight: 700; }
+  .uni-table tr:not(.highlight):hover { background: #f4f6f7; }
+
+  /* ── Measurement table ── */
+  .meas-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8px; }
+  .meas-table th { background: #2c3e50; color: #fff; padding: 4px 6px; text-align: center; font-size: 9pt; }
+  .meas-table td { border: 1px solid #bbb; padding: 3px 5px; }
+  .meas-table td input { width: 100%; border: none; background: transparent; font-size: 9pt; text-align: center; }
+  .meas-table td input:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .meas-table tbody tr:nth-child(even) { background: #f8f9fa; }
+
+  /* ── Footer table ── */
+  .footer-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 16px; }
+  .footer-table td { border: 1px solid #888; padding: 4px 8px; vertical-align: top; }
+  .footer-table .ft-label { font-weight: 700; background: #ecf0f1; width: 90px; }
+
+  /* ── VDT alert ── */
+  .vdt-alert {
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 10pt;
+    margin-top: 6px;
+    display: none;
+  }
+  .vdt-alert.vdt { background: #fef9e7; border-left: 3px solid #f1c40f; display: block; }
+  .vdt-alert.no-vdt { background: #eafaf1; border-left: 3px solid #27ae60; display: block; }
+</style>
+</head>
+<body>
+
+<!-- ── Toolbar ───────────────────────────────────────────────────────── -->
+<div id="toolbar">
+  <div class="title">📄 Anteprima — Modulo Illuminamento</div>
+  <span id="stopBadge" class="stop-badge">● Campi obbligatori mancanti</span>
+  <span id="okBadge"   class="ok-badge">✓ Pronto per generare</span>
+  <button id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<!-- ── Document ─────────────────────────────────────────────────────── -->
+<div class="page-wrap">
+<div class="page" id="docPage">
+
+  <!-- Cover -->
+  <p style="text-align:center; font-size:9pt; color:#666;">DOCUMENTO DI VALUTAZIONE DEI RISCHI</p>
+  <h1 class="doc-title" id="modTitle">MODULO —</h1>
+  <p style="text-align:center; font-size:10pt;">
+    <strong id="docSubtitle">—</strong>
+  </p>
+  <p style="text-align:center; font-size:9pt; color:#555;">ai sensi del D.Lgs. n°81/08 e s.m.i.</p>
+
+  <hr style="border:none; border-top:2px solid #333; margin:16px 0;">
+
+  <!-- Premessa -->
+  <h2 class="doc-section">1. Premessa</h2>
+  <p id="premessaPara">
+    La <span id="pRagSoc" class="field-auto">—</span>
+    nell'ambito degli accertamenti previsti ai fini della valutazione del rischio, ha programmato un intervento
+    per verificare i principali rischi igienistico-occupazionali presso la propria sede di
+    <span id="pSede" class="field-auto">—</span>.
+    Sono state condotte indagini sull'ergonomia delle postazioni
+    <span id="pVdtNote" class="vdt-alert"></span>
+    e sui livelli di illuminamento dei luoghi di lavoro.
+  </p>
+
+  <!-- Selezione VDT -->
+  <h3 class="doc-sub">Tipologia lavoratori</h3>
+  <p>
+    Presenza di lavoratori VDT sistematici (≥ 20 h/sett.):&nbsp;
+    <span class="ctrl-wrap">
+      <span class="toggle-group">
+        <button class="toggle-btn" id="btnVdtSi"  onclick="setVdt(true)">Sì — VDT</button>
+        <button class="toggle-btn" id="btnVdtNo"  onclick="setVdt(false)">No — NON VDT</button>
+      </span>
+    </span>
+    &nbsp;<span id="vdtStatus" class="field-missing">da selezionare</span>
+  </p>
+
+  <!-- Sezione UNI 3.2.2 -->
+  <h2 class="doc-section">3.2.2 Valori di riferimento UNI EN 12464-1:2021</h2>
+  <p>
+    Il ciclo di lavoro considerato comprende
+    <span id="pCiclo" class="field-missing">seleziona l'attività UNI</span>.
+  </p>
+  <p>
+    Attività UNI di riferimento:&nbsp;
+    <span class="ctrl-wrap">
+      <select id="uniSelect" class="inline-select" onchange="setUni(this.value)">
+        <option value="">— Seleziona attività —</option>
+      </select>
+    </span>
+  </p>
+
+  <div id="uniTableWrap">
+    <!-- populated by setUni() -->
+  </div>
+
+  <!-- Sezione 3.5.1 -->
+  <h2 class="doc-section">3.5.1 Caratteristiche generali dei locali</h2>
+  <p id="descLocaliPara">
+    <span id="pDescLocali" class="field-missing">descrizione locali da rilevamenti o inserimento manuale</span>
+  </p>
+  <div style="margin-top:6px;">
+    <label style="font-size:9.5pt; color:#555;">Modifica descrizione locali:</label>
+    <textarea id="taDescLocali" class="inline-ta"
+      placeholder="Es: Gli uffici oggetto della presente indagine sono caratterizzati da stanze di dimensioni medio piccole, dotate di superfici vetrate..."
+      oninput="setDescLocali(this.value)"></textarea>
+  </div>
+
+  <!-- Sezione 3.5.2 Tabella misure -->
+  <h2 class="doc-section">3.5.2 Risultati misure postazioni</h2>
+  <p id="pStrumento">
+    Strumento:&nbsp;
+    <input id="inStrumento" class="inline-input" type="text" style="min-width:280px;"
+      oninput="setStrumento(this.value)"
+      placeholder="Es: Delta Ohm modello HD2302.0 / Testo modello 540">
+  </p>
+  <table class="meas-table" id="measTable">
+    <thead>
+      <tr>
+        <th>Postazione</th>
+        <th>N° finestre</th>
+        <th>Oscuramento</th>
+        <th>Lux piano lavoro</th>
+        <th>Lux centro ambiente</th>
+        <th>Annotazioni</th>
+      </tr>
+    </thead>
+    <tbody id="measBody">
+      <tr><td colspan="6" style="text-align:center;color:#888;padding:10px;">In attesa dei dati…</td></tr>
+    </tbody>
+  </table>
+  <button onclick="addPostazioneRow()" style="margin-top:6px;font-size:9.5pt;padding:3px 10px;cursor:pointer;border:1px solid #3498db;border-radius:3px;background:#eaf4fb;color:#1a5276;">
+    + Aggiungi postazione
+  </button>
+
+  <!-- Conclusioni brevi -->
+  <h2 class="doc-section">4. Conclusioni</h2>
+  <p>
+    Dall'analisi condotta sulle postazioni della sede di
+    <span id="pSedeConcl" class="field-auto">—</span>
+    della <span id="pRagSocConcl" class="field-auto">—</span>
+    è emerso che all'interno degli uffici il livello di illuminamento risulta conforme alla normativa.
+  </p>
+
+  <!-- Footer tabella -->
+  <hr style="border:none; border-top:1px solid #888; margin:20px 0 12px;">
+  <table class="footer-table">
+    <tr>
+      <td class="ft-label">COMMITTENTE</td>
+      <td>
+        <div id="ftLogo" style="margin-bottom:4px;min-height:30px;"></div>
+        <strong id="ftRag">—</strong><br>
+        <span id="ftSede" style="font-size:9pt;color:#555;">—</span>
+      </td>
+    </tr>
+    <tr>
+      <td class="ft-label">EMISSIONE</td>
+      <td><strong id="ftData">—</strong></td>
+    </tr>
+    <tr>
+      <td class="ft-label">ALLEGATI</td>
+      <td>Identificazione planimetrica delle postazioni di lavoro</td>
+    </tr>
+  </table>
+
+  <p style="margin-top:16px; font-size:9.5pt;">
+    <span id="pLuogo" class="field-auto">—</span> lì <span id="pDataFirma" class="field-auto">—</span>
+  </p>
+
+</div><!-- /page -->
+</div><!-- /page-wrap -->
+
+<script>
+(function () {
+  'use strict';
+
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_VDT_ILLUMINAMENTO'];
+
+  // ── Stato locale ──────────────────────────────────────────────────────────
+  let DATA = null;       // oggetto dati ricevuto dal parent
+  let WIZARD = {
+    has_vdt:              null,
+    uni_rif:              null,
+    strumento_luxmetro:   '',
+    descrizione_locali:   '',
+    postazioni:           [],
+  };
+
+  // ── Comunicazione parent ──────────────────────────────────────────────────
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+  });
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : [];
+    window.parent.postMessage({
+      type: 'DATA_UPDATE',
+      data: merged,
+      valid: errors.length === 0,
+      errors,
+    }, '*');
+    updateBadges(errors);
+  }
+
+  function buildMerged() {
+    if (!DATA) return { ...WIZARD };
+    return {
+      ...DATA,
+      has_vdt:              WIZARD.has_vdt,
+      uni_rif:              WIZARD.uni_rif,
+      strumento_luxmetro:   WIZARD.strumento_luxmetro || DATA.STRUMENTO_LUXMETRO || '',
+      descrizione_locali:   WIZARD.descrizione_locali || DATA.DESCRIZIONE_LOCALI || '',
+      postazioni:           WIZARD.postazioni.length ? WIZARD.postazioni : (DATA._postazioni || []),
+      logo_url:             DATA.LOGO || '',
+      modulo_numero:        DATA.MODULO_NUMERO || '01',
+    };
+  }
+
+  function updateBadges(errors) {
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) {
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+  }
+
+  // ── Init da dati ──────────────────────────────────────────────────────────
+  function initFromData() {
+    if (!DATA) return;
+
+    // Compila dropdown UNI (331 voci, raggruppate per tabella)
+    populateUniSelect();
+
+    // Auto-fill campi DB
+    setText('pRagSoc',       DATA.RAGIONE_SOCIALE,  'auto');
+    setText('pSede',         DATA.SEDE_OPERATIVA,   'auto');
+    setText('pSedeConcl',    DATA.SEDE_OPERATIVA,   'auto');
+    setText('pRagSocConcl',  DATA.RAGIONE_SOCIALE,  'auto');
+    setText('ftRag',         DATA.RAGIONE_SOCIALE,  null);
+    setText('ftSede',        DATA.SEDE_OPERATIVA,   null);
+    setText('ftData',        DATA.DATA_EMISSIONE,   null);
+    setText('pLuogo',        DATA.LUOGO,            'auto');
+    setText('pDataFirma',    DATA.DATA_EMISSIONE,   'auto');
+
+    // Modulo e sottotitolo
+    document.getElementById('modTitle').textContent = 'MODULO ' + (DATA.MODULO_NUMERO || '—');
+    document.getElementById('docSubtitle').textContent = DATA._has_vdt
+      ? 'Analisi delle postazioni munite di videoterminale e dei livelli di illuminamento'
+      : 'Analisi dei livelli di illuminamento';
+
+    // Logo
+    if (DATA.LOGO) {
+      document.getElementById('ftLogo').innerHTML =
+        '<img src="' + escAttr(DATA.LOGO) + '" style="max-height:36px;max-width:120px;" alt="Logo">';
+    }
+
+    // Strumento default
+    const strDef = DATA.STRUMENTO_LUXMETRO || (ADAPTER ? ADAPTER.DEFAULT_STRUMENTO : '');
+    document.getElementById('inStrumento').value = WIZARD.strumento_luxmetro || strDef;
+    WIZARD.strumento_luxmetro = WIZARD.strumento_luxmetro || strDef;
+
+    // Descrizione locali da DATA (rilevamenti pre-caricati)
+    if (DATA.DESCRIZIONE_LOCALI && !WIZARD.descrizione_locali) {
+      WIZARD.descrizione_locali = DATA.DESCRIZIONE_LOCALI;
+      document.getElementById('taDescLocali').value = DATA.DESCRIZIONE_LOCALI;
+      setText('pDescLocali', DATA.DESCRIZIONE_LOCALI, 'filled');
+    }
+
+    // Tabella postazioni dai rilevamenti
+    if (DATA._postazioni && DATA._postazioni.length > 0) {
+      WIZARD.postazioni = DATA._postazioni.map(p => ({ ...p }));
+      renderMeasTable();
+    }
+
+    sendUpdate();
+  }
+
+  // ── Setter wizard ─────────────────────────────────────────────────────────
+  window.setVdt = function (val) {
+    WIZARD.has_vdt = val;
+    document.getElementById('btnVdtSi').classList.toggle('active', val === true);
+    document.getElementById('btnVdtNo').classList.toggle('active', val === false);
+    // aggiorna status span
+    const sp = document.getElementById('vdtStatus');
+    sp.className = 'field-filled';
+    sp.textContent = val ? 'Sì — presenza VDT sistematici' : 'No — NON VDT (< 20 h/sett.)';
+    sp.style.removeProperty('display');
+    // aggiornamento sottotitolo
+    document.getElementById('docSubtitle').textContent = val
+      ? 'Analisi delle postazioni munite di videoterminale e dei livelli di illuminamento'
+      : 'Analisi dei livelli di illuminamento delle postazioni di lavoro';
+    // aggiornamento note premessa
+    const noteEl = document.getElementById('pVdtNote');
+    if (val) {
+      noteEl.className = 'vdt-alert vdt';
+      noteEl.textContent = '(inclusa analisi ergonomica postazioni VDT)';
+    } else {
+      noteEl.className = 'vdt-alert no-vdt';
+      noteEl.textContent = '(nessun videoterminalista sistematico rilevato — < 20h/sett.)';
+    }
+    updateCicloText();
+    sendUpdate();
+  };
+
+  window.setUni = function (rif) {
+    WIZARD.uni_rif = rif || null;
+    const opts = getUniOpts();
+    const sel = opts.find(o => o.rif === rif);
+    if (sel) {
+      renderUniTable(sel);
+      updateCicloText();
+    } else {
+      document.getElementById('uniTableWrap').innerHTML = '';
+      setText('pCiclo', null, null);
+    }
+    sendUpdate();
+  };
+
+  window.setDescLocali = function (v) {
+    WIZARD.descrizione_locali = v;
+    setText('pDescLocali', v || null, v ? 'filled' : null);
+    sendUpdate();
+  };
+
+  window.setStrumento = function (v) {
+    WIZARD.strumento_luxmetro = v;
+    sendUpdate();
+  };
+
+  function updateCicloText() {
+    const sel = getUniOpts().find(o => o.rif === WIZARD.uni_rif);
+    if (!sel) {
+      setText('pCiclo', null, null);
+      return;
+    }
+    let ciclo = '\u201c' + sel.attivita + '\u201d';
+    if (WIZARD.has_vdt) ciclo += ' (utilizzo di apparecchiature per l\u2019elaborazione dati — videoterminali)';
+    setText('pCiclo', ciclo, 'filled');
+  }
+
+  function getUniOpts() {
+    return (ADAPTER && ADAPTER.getUniOptions) ? ADAPTER.getUniOptions() : (window.UNI_EN_12464_1_OPTIONS || []);
+  }
+
+  function populateUniSelect() {
+    const sel = document.getElementById('uniSelect');
+    sel.innerHTML = '<option value="">— Seleziona attività UNI EN 12464-1 —</option>';
+    const opts = getUniOpts();
+    if (!opts.length) {
+      const op = document.createElement('option');
+      op.disabled = true;
+      op.textContent = '(catalogo UNI non caricato)';
+      sel.appendChild(op);
+      return;
+    }
+    const groups = {};
+    opts.forEach(o => {
+      const key = o.tabella_num || parseInt(String(o.tabella).replace(/\D/g, ''), 10) || 0;
+      if (!groups[key]) {
+        groups[key] = { label: 'Tab. ' + key + (o.tabella_titolo ? ' — ' + o.tabella_titolo : ''), items: [] };
+      }
+      groups[key].items.push(o);
+    });
+    Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(key => {
+      const g = groups[key];
+      const og = document.createElement('optgroup');
+      og.label = g.label;
+      g.items.forEach(o => {
+        const op = document.createElement('option');
+        op.value = o.rif;
+        op.textContent = o.rif + ' — ' + o.attivita;
+        og.appendChild(op);
+      });
+      sel.appendChild(og);
+    });
+  }
+
+  // ── Tabella UNI ───────────────────────────────────────────────────────────
+  function renderUniTable(sel) {
+    const opts = getUniOpts().filter(o => o.tabella_num === sel.tabella_num || o.tabella === sel.tabella);
+    let html = '<table class="uni-table"><thead>'
+      + '<tr><th>Rif.</th><th>Attività</th><th>Ēm req. (lx)</th><th>Ēm mod. (lx)</th><th>Uo</th><th>Ra</th><th>RUGL</th></tr>'
+      + '</thead><tbody>';
+    opts.forEach(o => {
+      const hl = o.rif === sel.rif ? ' class="highlight"' : '';
+      html += `<tr${hl}>`
+        + `<td>${esc(o.rif)}</td><td>${esc(o.attivita)}</td>`
+        + `<td>${o.em_req}</td><td>${o.em_mod}</td>`
+        + `<td>${o.uo}</td><td>${o.ra}</td><td>${o.rugl}</td>`
+        + '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('uniTableWrap').innerHTML = html;
+  }
+
+  // ── Tabella misure ────────────────────────────────────────────────────────
+  function renderMeasTable() {
+    const tbody = document.getElementById('measBody');
+    if (!WIZARD.postazioni.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;padding:10px;">Nessuna postazione — aggiungi sotto</td></tr>';
+      return;
+    }
+    tbody.innerHTML = WIZARD.postazioni.map((p, i) => `
+      <tr>
+        <td><input value="${escAttr(p.nome)}" onchange="updatePost(${i},'nome',this.value)" placeholder="Postazione"></td>
+        <td><input value="${escAttr(p.n_finestre)}" onchange="updatePost(${i},'n_finestre',this.value)" style="width:40px;text-align:center;" placeholder="—"></td>
+        <td><input value="${escAttr(p.oscuramento)}" onchange="updatePost(${i},'oscuramento',this.value)" placeholder="Sì/No"></td>
+        <td><input value="${escAttr(p.lux_piano)}" onchange="updatePost(${i},'lux_piano',this.value)" style="width:70px;text-align:center;" placeholder="lx"></td>
+        <td><input value="${escAttr(p.lux_ambiente)}" onchange="updatePost(${i},'lux_ambiente',this.value)" style="width:70px;text-align:center;" placeholder="lx"></td>
+        <td><input value="${escAttr(p.annotazioni)}" onchange="updatePost(${i},'annotazioni',this.value)" placeholder="—"></td>
+      </tr>`).join('');
+  }
+
+  window.updatePost = function (idx, field, val) {
+    if (WIZARD.postazioni[idx]) WIZARD.postazioni[idx][field] = val;
+    sendUpdate();
+  };
+
+  window.addPostazioneRow = function () {
+    WIZARD.postazioni.push({ nome: '', n_finestre: '', oscuramento: '', lux_piano: '', lux_ambiente: '', annotazioni: '' });
+    renderMeasTable();
+    sendUpdate();
+  };
+
+  // ── Genera DOCX (richiede window.parent) ──────────────────────────────────
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) {
+      alert('Errori:\n' + errors.join('\n'));
+      return;
+    }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function setText(id, value, state) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!value) {
+      el.className = 'field-missing';
+      el.textContent = '—';
+    } else {
+      el.className = state === 'auto' ? 'field-auto' : state === 'filled' ? 'field-filled' : '';
+      el.textContent = value;
+    }
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function escAttr(s) {
+    return String(s || '').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  // ── Avvio ─────────────────────────────────────────────────────────────────
+  // Segnala al parent che l'iframe è pronto
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+
+  // Auto-init se i dati arrivano direttamente (sviluppo locale)
+  if (window.location.search) {
+    const params = new URLSearchParams(window.location.search);
+    const demo = params.get('demo');
+    if (demo === '1') {
+      DATA = {
+        RAGIONE_SOCIALE:  'Azienda Demo S.r.l.',
+        SEDE_OPERATIVA:   'Via Roma 1, 00100 Roma (RM)',
+        LOGO: '',
+        MODULO_NUMERO: '01',
+        DATA_EMISSIONE: new Date().toLocaleDateString('it-IT'),
+        LUOGO: 'Roma',
+        STRUMENTO_LUXMETRO: 'Delta Ohm modello HD2302.0 / Testo modello 540',
+        DESCRIZIONE_LOCALI: '',
+        _postazioni: [
+          { nome: 'Ufficio 1 — Post. A', n_finestre: '2', oscuramento: 'Sì (tende)', lux_piano: '520', lux_ambiente: '480', annotazioni: '' },
+          { nome: 'Ufficio 2 — Post. B', n_finestre: '1', oscuramento: 'Sì (veneziana)', lux_piano: '310', lux_ambiente: '290', annotazioni: 'Lux leggermente sotto soglia' },
+        ],
+        _has_vdt: null,
+      };
+      initFromData();
+    }
+  }
+
+})();
+</script>
+</body>
+</html>

@@ -59,20 +59,27 @@ L'utente seleziona l'attività dalla tabella UNI. I seguenti placeholder vengono
 
 ### 2.5 Tabella misure postazioni (sezione 3.5.2 — Table 9 nel DOCX)
 
-Ogni riga della tabella è una **postazione misurata**. I dati provengono da:
-- Fonte A: `rilevamenti_ambientali` filtrati per `azienda_id` + tipo illuminamento
-- Fonte B: inserimento manuale nel wizard (n righe libere)
+Loop Docxtemplater sulla **riga dati** (riga 4 della tabella, dopo le intestazioni):
 
-Struttura di ogni riga:
+| Colonna | Tag nella cella |
+|---------|-----------------|
+| Postazione | `{{#POSTAZIONI}}{{POSTAZIONE}}` |
+| N° finestre | `{{N_FINESTRE}}` |
+| Oscuramento | `{{OSCURAMENTO}}` |
+| Lux piano lavoro | `{{LUX_PIANO}}` |
+| Lux centro ambiente | `{{LUX_CENTRO}}` |
+| Annotazioni | `{{ANNOTAZIONI}}{{/POSTAZIONI}}` |
 
-| Campo | Fonte | Note |
-|-------|-------|------|
-| `postazione` | Input wizard | Es. "Ufficio 1 – Postazione A" |
-| `n_finestre` | Input wizard | Numero finestre presenti |
-| `oscuramento` | Input wizard | Sì/No, tipo (tende, veneziane…) |
-| `lux_piano_lavoro` | `rilevamenti_ambientali.valore_misurato` o input | Misurato sul piano di lavoro |
-| `lux_centro_ambiente` | `rilevamenti_ambientali.valore_misurato` o input | Misurato al centro ambiente |
-| `annotazioni` | Input wizard | Note di non conformità |
+Dati in `adapter.js` → array `POSTAZIONI` (da wizard `postazioni` o rilevamenti). Script: `scripts/insert_postazioni_loop.py`.
+
+| Campo wizard | Chiave loop |
+|--------------|-------------|
+| `nome` | `POSTAZIONE` |
+| `n_finestre` | `N_FINESTRE` |
+| `oscuramento` | `OSCURAMENTO` |
+| `lux_piano` | `LUX_PIANO` (con suffisso ` lx` se assente) |
+| `lux_ambiente` | `LUX_CENTRO` |
+| `annotazioni` | `ANNOTAZIONI` |
 
 ---
 

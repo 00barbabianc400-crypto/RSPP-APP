@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Modulo Illuminamento</title>
 <script src="uni-options.js"></script>
-<script src="adapter.js"></script>
+<script src="vdt-variants.js"></script>
+<script src="adapter.js?v=20260520c"></script>
 <!-- docx-preview richiede JSZip globale (loadAsync) -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
@@ -193,6 +194,48 @@
   .hint-str { font-size: 9pt; color: #666; display: block; margin-top: 2px; }
   .blocco-vdt textarea { width: 100%; min-height: 56px; margin-top: 4px; font-size: 10pt; }
 
+  .vdt-variant-card {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    font-size: 10pt;
+  }
+  .vdt-variant-card .vdt-card-head {
+    background: #ecf0f1;
+    padding: 6px 10px;
+    font-weight: 700;
+    font-size: 9.5pt;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .vdt-variant-card .vdt-card-head .vdt-sec { color: #555; font-weight: normal; }
+  .vdt-variant-card .vdt-active {
+    padding: 8px 10px;
+    background: #eafaf1;
+    border-left: 4px solid #27ae60;
+    line-height: 1.45;
+  }
+  .vdt-variant-card .vdt-alt {
+    padding: 6px 10px 8px;
+    background: #f8f9fa;
+    color: #666;
+    font-size: 9pt;
+    border-top: 1px dashed #ddd;
+    line-height: 1.4;
+  }
+  .vdt-variant-card .vdt-alt::before { content: 'Alternativa (non usata): '; font-weight: 600; }
+  .vdt-variant-card.skipped { opacity: 0.45; }
+  .uni-macro-label {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #eaf4fb;
+    border-left: 4px solid #3498db;
+    font-size: 10pt;
+  }
+  .uni-table-caption { font-size: 9pt; color: #666; margin-top: 4px; }
+
   /* ── Footer table ── */
   .footer-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 16px; }
   .footer-table td { border: 1px solid #888; padding: 4px 8px; vertical-align: top; }
@@ -248,10 +291,9 @@
     nell'ambito degli accertamenti previsti ai fini della valutazione del rischio, ha programmato un intervento
     per verificare i principali rischi igienistico-occupazionali presso la propria sede di
     <span id="pSede" class="field-auto">—</span>.
-    Sono state condotte indagini sull'ergonomia delle postazioni
-    <span id="pVdtNote" class="vdt-alert"></span>
-    e sui livelli di illuminamento dei luoghi di lavoro.
+    Sono state condotte <span id="pErgonomiaIndagini" class="field-missing">indagini su ergonomia e illuminamento (seleziona VDT)</span>.
   </p>
+  <p id="pAssenzaVdtBlock" style="display:none; margin-top:8px; padding:8px 10px; background:#eafaf1; border-left:3px solid #27ae60; font-size:10pt;"></p>
 
   <!-- Selezione VDT -->
   <h3 class="doc-sub">Tipologia lavoratori</h3>
@@ -273,10 +315,10 @@
     <span id="pCiclo" class="field-missing">seleziona l'attività UNI</span>.
   </p>
   <p>
-    Attività UNI di riferimento:&nbsp;
+    Tabella UNI di riferimento (macrocategoria):&nbsp;
     <span class="ctrl-wrap">
       <select id="uniSelect" class="inline-select" onchange="setUni(this.value)">
-        <option value="">— Seleziona attività —</option>
+        <option value="">— Seleziona tabella UNI —</option>
       </select>
     </span>
   </p>
@@ -297,17 +339,17 @@
       oninput="setDescLocali(this.value)"></textarea>
   </div>
 
-  <!-- Testi variabili VDT / NON VDT (modificabili) -->
+  <!-- Testi variabili VDT / NON VDT -->
   <h2 class="doc-section">Testi variabili (VDT / NON VDT)</h2>
-  <p class="hint-str" style="margin-bottom:8px;">Blocchi che cambiano in base alla scelta VDT — modificabili prima della generazione.</p>
-  <div class="blocco-vdt">
-    <label>Premessa — nota su tipologia postazioni</label>
-    <textarea id="taBloccoPremessa" oninput="WIZARD.blocco_premessa=this.value; sendUpdate();"
-      placeholder="Es: indagini sull'ergonomia delle postazioni al videoterminale…"></textarea>
-  </div>
+  <p class="hint-str" style="margin-bottom:8px;">
+    In base a <strong>Sì — VDT</strong> o <strong>No — NON VDT</strong> cambiano titoli, premessa, cap. 2 e conclusioni nel Word.
+    Il riquadro verde è il testo attivo; in grigio l’alternativa non usata.
+    (La scelta VDT va fatta <em>sopra</em>, in «Tipologia lavoratori».)
+  </p>
+  <div id="vdtVariantsPanel"></div>
 
   <!-- Sezione 3.5.2 Tabella misure -->
-  <h2 class="doc-section">3.5.2 Risultati misure postazioni</h2>
+  <h2 class="doc-section" id="h352Title">3.5.2 Risultati misure postazioni</h2>
   <p id="pStrumento">
     Strumento (sez. 3.4 — da rilevamento o inserimento manuale):&nbsp;
     <input id="inStrumento" class="inline-input" type="text" style="min-width:280px;"
@@ -335,12 +377,7 @@
 
   <!-- Conclusioni brevi -->
   <h2 class="doc-section">4. Conclusioni</h2>
-  <p>
-    Dall'analisi condotta sulle postazioni della sede di
-    <span id="pSedeConcl" class="field-auto">—</span>
-    della <span id="pRagSocConcl" class="field-auto">—</span>
-    è emerso che all'interno degli uffici il livello di illuminamento risulta conforme alla normativa.
-  </p>
+  <p id="pConclusioni" class="field-missing">Seleziona VDT / NON VDT per vedere il testo delle conclusioni.</p>
 
   <!-- Footer tabella -->
   <hr style="border:none; border-top:1px solid #888; margin:20px 0 12px;">
@@ -380,7 +417,7 @@
   let DATA = null;       // oggetto dati ricevuto dal parent
   let WIZARD = {
     has_vdt:              null,
-    uni_rif:              null,
+    uni_tabella_num:      null,
     strumento_luxmetro:   '',
     descrizione_locali:   '',
     postazioni:           [],
@@ -499,9 +536,14 @@
 
     // Modulo e sottotitolo
     document.getElementById('modTitle').textContent = 'MODULO ' + (DATA.MODULO_NUMERO || '—');
-    document.getElementById('docSubtitle').textContent = DATA._has_vdt
-      ? 'Analisi delle postazioni munite di videoterminale e dei livelli di illuminamento'
-      : 'Analisi dei livelli di illuminamento';
+
+    if (DATA._has_vdt === true || DATA._has_vdt === false) {
+      setVdt(DATA._has_vdt);
+    } else {
+      refreshVdtDocSections();
+    }
+
+    syncUniFromData();
 
     // Logo
     const logoPreview = DATA.LOGO_PREVIEW_URL || DATA.LOGO || '';
@@ -540,34 +582,20 @@
     WIZARD.has_vdt = val;
     document.getElementById('btnVdtSi').classList.toggle('active', val === true);
     document.getElementById('btnVdtNo').classList.toggle('active', val === false);
-    // aggiorna status span
     const sp = document.getElementById('vdtStatus');
     sp.className = 'field-filled';
     sp.textContent = val ? 'Sì — presenza VDT sistematici' : 'No — NON VDT (< 20 h/sett.)';
     sp.style.removeProperty('display');
-    // aggiornamento sottotitolo
-    document.getElementById('docSubtitle').textContent = val
-      ? 'Analisi delle postazioni munite di videoterminale e dei livelli di illuminamento'
-      : 'Analisi dei livelli di illuminamento delle postazioni di lavoro';
-    // aggiornamento note premessa
-    const noteEl = document.getElementById('pVdtNote');
-    if (val) {
-      noteEl.className = 'vdt-alert vdt';
-      noteEl.textContent = '(inclusa analisi ergonomica postazioni VDT)';
-    } else {
-      noteEl.className = 'vdt-alert no-vdt';
-      noteEl.textContent = '(nessun videoterminalista sistematico rilevato — < 20h/sett.)';
-    }
+    refreshVdtDocSections();
     updateCicloText();
     sendUpdate();
   };
 
-  window.setUni = function (rif) {
-    WIZARD.uni_rif = rif || null;
-    const opts = getUniOpts();
-    const sel = opts.find(o => o.rif === rif);
-    if (sel) {
-      renderUniTable(sel);
+  window.setUni = function (tabNum) {
+    WIZARD.uni_tabella_num = tabNum ? Number(tabNum) : null;
+    const group = getUniGroups().find(g => g.tabella_num === WIZARD.uni_tabella_num);
+    if (group) {
+      renderUniTable(group);
       updateCicloText();
     } else {
       document.getElementById('uniTableWrap').innerHTML = '';
@@ -588,13 +616,19 @@
   };
 
   function updateCicloText() {
-    const sel = getUniOpts().find(o => o.rif === WIZARD.uni_rif);
-    if (!sel) {
+    const group = getUniGroups().find(g => g.tabella_num === WIZARD.uni_tabella_num);
+    if (!group) {
       setText('pCiclo', null, null);
       return;
     }
-    let ciclo = '\u201c' + sel.attivita + '\u201d';
-    if (WIZARD.has_vdt) ciclo += ' (utilizzo di apparecchiature per l\u2019elaborazione dati — videoterminali)';
+    const merged = buildMerged();
+    let ciclo = merged.DESCRIZIONE_CICLO_LAVORO;
+    if (!ciclo) {
+      ciclo = 'attivit\u00e0 del tipo \u201c' + group.label + '\u201d';
+      if (WIZARD.has_vdt) {
+        ciclo += ' che si esplica attraverso l\u2019utilizzo di apparecchiature per l\u2019elaborazione dati (videoterminali)';
+      }
+    }
     setText('pCiclo', ciclo, 'filled');
   }
 
@@ -602,47 +636,171 @@
     return (ADAPTER && ADAPTER.getUniOptions) ? ADAPTER.getUniOptions() : (window.UNI_EN_12464_1_OPTIONS || []);
   }
 
+  function getUniGroups() {
+    if (ADAPTER?.getUniTableGroups) return ADAPTER.getUniTableGroups();
+    const opts = getUniOpts();
+    const map = {};
+    opts.forEach(o => {
+      const n = o.tabella_num;
+      if (n == null || map[n]) return;
+      const label = o.tabella_titolo
+        ? o.tabella_titolo.charAt(0) + o.tabella_titolo.slice(1).toLowerCase()
+        : '';
+      map[n] = { tabella_num: n, tabella: o.tabella, tabella_titolo: o.tabella_titolo, label };
+    });
+    return Object.values(map).sort((a, b) => a.tabella_num - b.tabella_num);
+  }
+
+  function getVdtVariants() {
+    return (ADAPTER?.getVdtVariants) ? ADAPTER.getVdtVariants() : (window.VDT_VARIANTS || []);
+  }
+
+  function variantById(id) {
+    return getVdtVariants().find(v => v.id === id);
+  }
+
+  function syncUniFromData() {
+    if (WIZARD.uni_tabella_num != null) return;
+    const rif = DATA?.UNI_TABELLA_RIF || '';
+    const groups = getUniGroups();
+    let g = groups.find(x => x.tabella_rif === rif);
+    if (!g && rif) {
+      const m = rif.match(/Tab\.?\s*(\d+)/i);
+      if (m) g = groups.find(x => x.tabella_num === Number(m[1]));
+    }
+    if (g) {
+      document.getElementById('uniSelect').value = String(g.tabella_num);
+      setUni(String(g.tabella_num));
+    }
+  }
+
   function populateUniSelect() {
     const sel = document.getElementById('uniSelect');
-    sel.innerHTML = '<option value="">— Seleziona attività UNI EN 12464-1 —</option>';
-    const opts = getUniOpts();
-    if (!opts.length) {
+    sel.innerHTML = '<option value="">— Seleziona tabella UNI EN 12464-1 —</option>';
+    const groups = getUniGroups();
+    if (!groups.length) {
       const op = document.createElement('option');
       op.disabled = true;
       op.textContent = '(catalogo UNI non caricato)';
       sel.appendChild(op);
       return;
     }
-    const groups = {};
-    opts.forEach(o => {
-      const key = o.tabella_num || parseInt(String(o.tabella).replace(/\D/g, ''), 10) || 0;
-      if (!groups[key]) {
-        groups[key] = { label: 'Tab. ' + key + (o.tabella_titolo ? ' — ' + o.tabella_titolo : ''), items: [] };
-      }
-      groups[key].items.push(o);
-    });
-    Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(key => {
-      const g = groups[key];
-      const og = document.createElement('optgroup');
-      og.label = g.label;
-      g.items.forEach(o => {
-        const op = document.createElement('option');
-        op.value = o.rif;
-        op.textContent = o.rif + ' — ' + o.attivita;
-        og.appendChild(op);
-      });
-      sel.appendChild(og);
+    groups.forEach(g => {
+      const op = document.createElement('option');
+      op.value = String(g.tabella_num);
+      op.textContent = 'Tab. ' + g.tabella_num + ' — ' + (g.tabella_titolo || g.label);
+      sel.appendChild(op);
     });
   }
 
-  // ── Tabella UNI ───────────────────────────────────────────────────────────
-  function renderUniTable(sel) {
-    const opts = getUniOpts().filter(o => o.tabella_num === sel.tabella_num || o.tabella === sel.tabella);
-    let html = '<table class="uni-table"><thead>'
+  function refreshVdtDocSections() {
+    const vdt = WIZARD.has_vdt === true;
+    const non = WIZARD.has_vdt === false;
+    const unknown = WIZARD.has_vdt == null;
+
+    const titolo = variantById('titolo_modulo');
+    if (titolo) {
+      document.getElementById('docSubtitle').textContent = unknown
+        ? '—'
+        : (vdt ? titolo.vdt : titolo.nonVdt);
+    }
+
+    const erg = variantById('premessa_ergonomia');
+    const ergEl = document.getElementById('pErgonomiaIndagini');
+    if (erg && ergEl) {
+      if (unknown) {
+        ergEl.className = 'field-missing';
+        ergEl.textContent = 'indagini su ergonomia e illuminamento (seleziona VDT sopra)';
+      } else {
+        ergEl.className = 'field-filled';
+        ergEl.textContent = vdt ? erg.vdt : erg.nonVdt;
+      }
+    }
+
+    const assenza = variantById('premessa_nota_assenza');
+    const assenzaEl = document.getElementById('pAssenzaVdtBlock');
+    if (assenzaEl && assenza) {
+      if (non && assenza.nonVdt && assenza.nonVdt.indexOf('non aggiunta') === -1) {
+        assenzaEl.style.display = 'block';
+        assenzaEl.textContent = assenza.nonVdt;
+      } else {
+        assenzaEl.style.display = 'none';
+        assenzaEl.textContent = '';
+      }
+    }
+
+    const s352 = variantById('misure_352');
+    const h352 = document.getElementById('h352Title');
+    if (h352 && s352) {
+      h352.textContent = unknown
+        ? '3.5.2 Risultati misure postazioni'
+        : ('3.5.2 ' + (vdt ? s352.vdt : s352.nonVdt));
+    }
+
+    const concl = variantById('conclusioni');
+    const pConcl = document.getElementById('pConclusioni');
+    if (pConcl && concl) {
+      if (unknown) {
+        pConcl.className = 'field-missing';
+        pConcl.textContent = 'Seleziona VDT / NON VDT per vedere il testo delle conclusioni.';
+      } else {
+        pConcl.className = 'field-filled';
+        let txt = vdt ? concl.vdt : concl.nonVdt;
+        if (DATA) {
+          txt = txt
+            .replace(/sulle postazioni al VDT/g, 'sulle postazioni della sede di ' + (DATA.SEDE_OPERATIVA || '…'))
+            .replace(/sulle postazioni di lavoro/g, 'sulle postazioni della sede di ' + (DATA.SEDE_OPERATIVA || '…'));
+        }
+        pConcl.textContent = txt;
+      }
+    }
+
+    renderVdtPanel();
+  }
+
+  function renderVdtPanel() {
+    const host = document.getElementById('vdtVariantsPanel');
+    if (!host) return;
+    const vdt = WIZARD.has_vdt;
+    const variants = getVdtVariants();
+    if (vdt == null) {
+      host.innerHTML = '<p class="field-missing" style="padding:10px;">Seleziona prima «Sì — VDT» o «No — NON VDT» in Tipologia lavoratori.</p>';
+      return;
+    }
+    const isVdt = vdt === true;
+    host.innerHTML = variants.map(v => {
+      if (v.onlyNonVdt && isVdt) {
+        return '<div class="vdt-variant-card skipped"><div class="vdt-card-head">'
+          + esc(v.label) + '<span class="vdt-sec">' + esc(v.sezione) + '</span></div>'
+          + '<div class="vdt-active" style="background:#f4f6f7;border-color:#bbb;">Non applicabile (solo versione NON VDT)</div></div>';
+      }
+      if (v.onlyNonVdt && !isVdt && (!v.nonVdt || v.nonVdt.indexOf('non aggiunta') !== -1)) return '';
+      const active = isVdt ? v.vdt : v.nonVdt;
+      const alt = isVdt ? v.nonVdt : v.vdt;
+      return '<div class="vdt-variant-card"><div class="vdt-card-head">'
+        + esc(v.label) + '<span class="vdt-sec">' + esc(v.sezione) + '</span></div>'
+        + '<div class="vdt-active">' + esc(active) + '</div>'
+        + (alt ? '<div class="vdt-alt">' + esc(alt) + '</div>' : '')
+        + '</div>';
+    }).join('');
+  }
+
+  // ── Tabella UNI (tutte le righe della macro-tabella) ─────────────────────
+  function renderUniTable(group) {
+    const opts = getUniOpts().filter(o => o.tabella_num === group.tabella_num);
+    let refRif = group.default_rif;
+    if (!refRif) {
+      const r2 = opts.find(o => /^\d+\.2$/.test(String(o.rif)));
+      refRif = (r2 || opts[0])?.rif;
+    }
+    const refRow = opts.find(o => o.rif === refRif);
+    let html = '<p class="uni-table-caption">Riferimento completo UNI — nel documento verrà indicata la macrocategoria «'
+      + esc(group.label) + '», non la singola riga.</p>';
+    html += '<table class="uni-table"><thead>'
       + '<tr><th>Rif.</th><th>Attività</th><th>Ēm req. (lx)</th><th>Ēm mod. (lx)</th><th>Uo</th><th>Ra</th><th>RUGL</th></tr>'
       + '</thead><tbody>';
     opts.forEach(o => {
-      const hl = o.rif === sel.rif ? ' class="highlight"' : '';
+      const hl = refRow && o.rif === refRow.rif ? ' class="highlight"' : '';
       html += `<tr${hl}>`
         + `<td>${esc(o.rif)}</td><td>${esc(o.attivita)}</td>`
         + `<td>${o.em_req}</td><td>${o.em_mod}</td>`
@@ -650,6 +808,10 @@
         + '</tr>';
     });
     html += '</tbody></table>';
+    html += '<p class="uni-macro-label"><strong>Nel documento Word:</strong> '
+      + esc(group.tabella || ('Tab.' + group.tabella_num)) + ' — <span id="pUniMacro">' + esc(group.label) + '</span>'
+      + (refRow ? ' <span class="hint-str">(valori lx da riga tipica ' + esc(refRow.rif) + ')</span>' : '')
+      + '</p>';
     document.getElementById('uniTableWrap').innerHTML = html;
   }
 

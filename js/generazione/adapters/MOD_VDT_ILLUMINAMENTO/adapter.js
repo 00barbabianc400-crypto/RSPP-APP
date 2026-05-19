@@ -11,6 +11,111 @@
     return window.UNI_EN_12464_1_OPTIONS || [];
   }
 
+  function titleCaseTitolo(s) {
+    if (!s) return '';
+    const t = String(s).trim();
+    if (!t.length) return '';
+    return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+  }
+
+  /** Macrocategorie (Tab. N — titolo), non singole righe UNI */
+  function getUniTableGroups() {
+    const opts = getUniOptions();
+    const byNum = new Map();
+    for (const o of opts) {
+      const num = o.tabella_num;
+      if (num == null || byNum.has(num)) continue;
+      const label = titleCaseTitolo(o.tabella_titolo);
+      const rows = opts.filter(r => r.tabella_num === num);
+      byNum.set(num, {
+        tabella_num: num,
+        tabella: o.tabella,
+        tabella_titolo: o.tabella_titolo,
+        label,
+        tabella_rif: formatUniTabellaRif(o.tabella, label),
+        default_rif: pickDefaultRifForTable(rows),
+      });
+    }
+    return Array.from(byNum.values()).sort((a, b) => a.tabella_num - b.tabella_num);
+  }
+
+  function formatUniTabellaRif(tabella, label) {
+    return `${tabella} - ${label}`;
+  }
+
+  function pickDefaultRifForTable(rows) {
+    const exact2 = rows.find(r => /^\d+\.2$/.test(String(r.rif)));
+    if (exact2) return exact2.rif;
+    const ends2 = rows.find(r => /\.2$/.test(String(r.rif)) && !/\.2\./.test(String(r.rif)));
+    if (ends2) return ends2.rif;
+    return rows[0]?.rif || '';
+  }
+
+  /** Risolve macro-tabella + riga tipica (lux) da wizard */
+  function resolveUniFromWizard(wizard) {
+    const w = wizard || {};
+    const opts = getUniOptions();
+    let group = null;
+    let row = null;
+
+    if (w.uni_tabella_num != null && w.uni_tabella_num !== '') {
+      const num = Number(w.uni_tabella_num);
+      group = getUniTableGroups().find(g => g.tabella_num === num) || null;
+      if (group) {
+        row = opts.find(o => o.rif === group.default_rif)
+          || opts.find(o => o.tabella_num === num);
+      }
+    } else if (w.uni_rif) {
+      row = opts.find(o => o.rif === w.uni_rif) || null;
+      if (row) {
+        group = getUniTableGroups().find(g => g.tabella_num === row.tabella_num) || null;
+      }
+    }
+
+    return { group, row };
+  }
+
+  function uniFieldsFromWizard(wizard, hasVdt) {
+    const { group, row } = resolveUniFromWizard(wizard);
+    if (!group) {
+      return {
+        UNI_TABELLA_RIF: '',
+        UNI_ATTIVITA: '',
+        UNI_EM_REQ: '',
+        UNI_EM_MOD: '',
+        UNI_UO: '',
+        UNI_RA: '',
+        UNI_RUGL: '',
+        descrizioneCicloLavoro: wizard?.descrizione_ciclo_lavoro || '',
+      };
+    }
+
+    const macroLabel = group.label;
+    let descrizioneCicloLavoro = wizard?.descrizione_ciclo_lavoro || '';
+    if (!descrizioneCicloLavoro) {
+      if (hasVdt) {
+        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${macroLabel}\u201d che si esplica attraverso l\u2019utilizzo di apparecchiature per l\u2019elaborazione dati (videoterminali)`;
+      } else if (hasVdt === false) {
+        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${macroLabel}\u201d`;
+      }
+    }
+
+    return {
+      UNI_TABELLA_RIF: group.tabella_rif,
+      UNI_ATTIVITA: macroLabel,
+      UNI_EM_REQ: row?.em_req != null ? String(row.em_req) : '',
+      UNI_EM_MOD: row?.em_mod != null ? String(row.em_mod) : '',
+      UNI_UO: row?.uo || '',
+      UNI_RA: row?.ra != null ? String(row.ra) : '',
+      UNI_RUGL: row?.rugl != null ? String(row.rugl) : '',
+      descrizioneCicloLavoro,
+    };
+  }
+
+  function getVdtVariants() {
+    return window.VDT_VARIANTS || [];
+  }
+
   // Suggerimento studio (solo placeholder UI, non precompilato automaticamente)
   const DEFAULT_STRUMENTO = 'Delta Ohm modello HD2302.0 / Testo modello 540';
 
@@ -309,23 +414,37 @@
     }));
   }
 
+  /** Formato lux per Word (es. "490 lx") */
+  function formatLuxCell(val) {
+    if (val == null || val === '') return '';
+    const s = String(val).trim();
+    if (!s) return '';
+    if (/\blx\b/i.test(s)) return s;
+    return s + ' lx';
+  }
+
+  /** Righe tabella §3.5.2 per loop Docxtemplater {{#POSTAZIONI}}…{{/POSTAZIONI}} */
+  function postazioniToTemplateRows(postazioni) {
+    return (postazioni || [])
+      .map(p => ({
+        POSTAZIONE: String(p.nome ?? p.postazione ?? '').trim(),
+        N_FINESTRE: String(p.n_finestre ?? '').trim(),
+        OSCURAMENTO: String(p.oscuramento ?? '').trim(),
+        LUX_PIANO: formatLuxCell(p.lux_piano),
+        LUX_CENTRO: formatLuxCell(p.lux_ambiente),
+        ANNOTAZIONI: String(p.annotazioni ?? '').trim(),
+      }))
+      .filter(r => r.POSTAZIONE);
+  }
+
   // ── buildData ─────────────────────────────────────────────────────────────
   function buildData(azienda, rilevamenti, wizardInput) {
     const now = new Date();
     const dataEmissione = now.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
     const filtered = filterRilevamentiIlluminamento(rilevamenti);
-    const uniSel = getUniOptions().find(o => o.rif === wizardInput?.uni_rif) || null;
     const hasVdt = wizardInput?.has_vdt ?? null;
-
-    let descrizioneCicloLavoro = wizardInput?.descrizione_ciclo_lavoro || '';
-    if (!descrizioneCicloLavoro && uniSel) {
-      if (hasVdt) {
-        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${uniSel.attivita}\u201d che si esplica attraverso l\u2019utilizzo di apparecchiature per l\u2019elaborazione dati (videoterminali)`;
-      } else {
-        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${uniSel.attivita}\u201d`;
-      }
-    }
+    const uniFields = uniFieldsFromWizard(wizardInput, hasVdt);
 
     let descrizioneLocali = wizardInput?.descrizione_locali || '';
     if (!descrizioneLocali) descrizioneLocali = descrizioneLocaliDaRilevamenti(rilevamenti);
@@ -357,16 +476,17 @@
       MODULO_NUMERO:          wizardInput?.modulo_numero || '01',
       DATA_EMISSIONE:         dataEmissione,
       LUOGO:                  luogo,
-      DESCRIZIONE_CICLO_LAVORO: descrizioneCicloLavoro,
+      DESCRIZIONE_CICLO_LAVORO: uniFields.descrizioneCicloLavoro,
       STRUMENTO_LUXMETRO:     strumento,
       DESCRIZIONE_LOCALI:     descrizioneLocali,
-      UNI_TABELLA_RIF:        uniSel ? uniSel.rif : '',
-      UNI_ATTIVITA:           uniSel?.attivita || '',
-      UNI_EM_REQ:             uniSel?.em_req != null ? String(uniSel.em_req) : '',
-      UNI_EM_MOD:             uniSel?.em_mod != null ? String(uniSel.em_mod) : '',
-      UNI_UO:                 uniSel?.uo || '',
-      UNI_RA:                 uniSel?.ra != null ? String(uniSel.ra) : '',
-      UNI_RUGL:               uniSel?.rugl != null ? String(uniSel.rugl) : '',
+      UNI_TABELLA_RIF:        uniFields.UNI_TABELLA_RIF,
+      UNI_ATTIVITA:           uniFields.UNI_ATTIVITA,
+      UNI_EM_REQ:             uniFields.UNI_EM_REQ,
+      UNI_EM_MOD:             uniFields.UNI_EM_MOD,
+      UNI_UO:                 uniFields.UNI_UO,
+      UNI_RA:                 uniFields.UNI_RA,
+      UNI_RUGL:               uniFields.UNI_RUGL,
+      POSTAZIONI:             postazioniToTemplateRows(postazioni),
 
       // ── Metadati interni (prefisso _ = non entrano nel template) ──
       _has_vdt:     hasVdt,
@@ -380,17 +500,12 @@
   function applyWizard(base, wizard) {
     if (!base) return {};
     const w = wizard || {};
-    const uniSel = getUniOptions().find(o => o.rif === w.uni_rif) || null;
     const hasVdt = w.has_vdt !== undefined && w.has_vdt !== null ? w.has_vdt : base._has_vdt;
-
-    let descrizioneCicloLavoro = w.descrizione_ciclo_lavoro || base.DESCRIZIONE_CICLO_LAVORO || '';
-    if (uniSel && !w.descrizione_ciclo_lavoro) {
-      if (hasVdt) {
-        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${uniSel.attivita}\u201d che si esplica attraverso l\u2019utilizzo di apparecchiature per l\u2019elaborazione dati (videoterminali)`;
-      } else if (hasVdt === false) {
-        descrizioneCicloLavoro = `attivit\u00e0 del tipo \u201c${uniSel.attivita}\u201d`;
-      }
-    }
+    const uniFields = uniFieldsFromWizard(w, hasVdt);
+    const descrizioneCicloLavoro = w.descrizione_ciclo_lavoro
+      || uniFields.descrizioneCicloLavoro
+      || base.DESCRIZIONE_CICLO_LAVORO
+      || '';
 
     const descrizioneLocali = (w.descrizione_locali && String(w.descrizione_locali).trim())
       || base.DESCRIZIONE_LOCALI || '';
@@ -408,13 +523,14 @@
       DESCRIZIONE_CICLO_LAVORO: descrizioneCicloLavoro,
       DESCRIZIONE_LOCALI: descrizioneLocali,
       STRUMENTO_LUXMETRO: strumento,
-      UNI_TABELLA_RIF: uniSel ? uniSel.rif : (base.UNI_TABELLA_RIF || ''),
-      UNI_ATTIVITA: uniSel ? uniSel.attivita : (w.uni_rif ? '' : base.UNI_ATTIVITA || ''),
-      UNI_EM_REQ: uniSel && uniSel.em_req != null ? String(uniSel.em_req) : base.UNI_EM_REQ || '',
-      UNI_EM_MOD: uniSel && uniSel.em_mod != null ? String(uniSel.em_mod) : base.UNI_EM_MOD || '',
-      UNI_UO: uniSel ? uniSel.uo : base.UNI_UO || '',
-      UNI_RA: uniSel && uniSel.ra != null ? String(uniSel.ra) : base.UNI_RA || '',
-      UNI_RUGL: uniSel && uniSel.rugl != null ? String(uniSel.rugl) : base.UNI_RUGL || '',
+      UNI_TABELLA_RIF: uniFields.UNI_TABELLA_RIF || base.UNI_TABELLA_RIF || '',
+      UNI_ATTIVITA: uniFields.UNI_ATTIVITA || base.UNI_ATTIVITA || '',
+      UNI_EM_REQ: uniFields.UNI_EM_REQ || base.UNI_EM_REQ || '',
+      UNI_EM_MOD: uniFields.UNI_EM_MOD || base.UNI_EM_MOD || '',
+      UNI_UO: uniFields.UNI_UO || base.UNI_UO || '',
+      UNI_RA: uniFields.UNI_RA || base.UNI_RA || '',
+      UNI_RUGL: uniFields.UNI_RUGL || base.UNI_RUGL || '',
+      POSTAZIONI: postazioniToTemplateRows(postazioni),
       _has_vdt: hasVdt,
       _postazioni: postazioni,
     };
@@ -427,12 +543,15 @@
     if (!data.SEDE_OPERATIVA)   errors.push('Sede Operativa mancante');
     if (data._has_vdt === null || data._has_vdt === undefined)
       errors.push('Indicare se sono presenti lavoratori VDT sistematici (≥20 h/sett.)');
-    if (!data.UNI_ATTIVITA)
-      errors.push('Selezionare l\'attività UNI EN 12464-1 di riferimento');
+    if (!data.UNI_TABELLA_RIF)
+      errors.push('Selezionare la tabella UNI EN 12464-1 di riferimento (es. Tab. 34 — Uffici)');
     if (!data.STRUMENTO_LUXMETRO)
       errors.push('Strumento luxmetro mancante');
     if (!data.DESCRIZIONE_LOCALI)
       errors.push('Descrizione locali (sez. 3.5.1) mancante');
+    const postRows = data.POSTAZIONI || postazioniToTemplateRows(data._postazioni);
+    if (!postRows.length)
+      errors.push('Inserire almeno una postazione nella tabella misure (§3.5.2)');
     return errors;
   }
 
@@ -501,10 +620,14 @@
     codice:      'MOD_VDT_ILLUMINAMENTO',
     nome:        'Modulo Illuminamento VDT / NON VDT',
     getUniOptions,
+    getUniTableGroups,
+    resolveUniFromWizard,
+    getVdtVariants,
     get UNI_OPTIONS() { return getUniOptions(); },
     DEFAULT_STRUMENTO,
     buildData,
     applyWizard,
+    postazioniToTemplateRows,
     filterRilevamentiIlluminamento,
     validate,
     generateDocx,

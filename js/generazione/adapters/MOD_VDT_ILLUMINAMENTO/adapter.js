@@ -59,15 +59,20 @@
     return text.replace(re, (_, inner) => open + inner.replace(/<[^>]+>/g, '') + close);
   }
 
-  /** Docxtemplater conta ogni <w:t>: serve unire se il tag è spezzato su più run. */
+  /**
+   * Unisce <w:t> solo se un placeholder è spezzato tra run.
+   * Più tag completi nella stessa cella (es. copertina: {%LOGO} + {{RAGIONE_SOCIALE}}) sono OK.
+   */
   function needsWtMerge(texts, joined) {
     if (texts.length < 2) return false;
     if (texts.some(isBrokenPlaceholderRun)) return true;
     const opens = (joined.match(/\{\{/g) || []).length;
     const complete = (joined.match(/\{\{[A-Z0-9_]+\}\}/g) || []).length;
     if (opens > complete) return true;
-    const delimNodes = texts.filter((t) => /\{\{|\{%|\}\}|%\}/.test(t)).length;
-    return delimNodes >= 2;
+    const opensImg = (joined.match(/\{%/g) || []).length;
+    const completeImg = (joined.match(/\{%[A-Za-z0-9_]+\}/g) || []).length;
+    if (opensImg > completeImg) return true;
+    return false;
   }
 
   function mergeWtInBlock(block) {
@@ -248,7 +253,8 @@
     for (let pass = 0; pass < 5; pass += 1) {
       const n = repairAllXml();
       fixedCount += n;
-      const compileErr = tryCompileDocxtemplater(zip, modules);
+      // Senza moduli: evita "ImageModule already attached" al render finale
+      const compileErr = tryCompileDocxtemplater(zip, []);
       if (!compileErr) break;
       if (pass === 4) {
         console.warn('[MOD_VDT] Template ancora non compilabile dopo 5 passaggi');

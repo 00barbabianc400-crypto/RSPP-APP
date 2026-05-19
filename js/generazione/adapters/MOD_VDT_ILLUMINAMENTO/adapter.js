@@ -418,7 +418,7 @@
   }
 
   // ── generateDocx ──────────────────────────────────────────────────────────
-  // Template logo: {%LOGO} (paragrafo dedicato) + ImageModule
+  // Template logo: {%LOGO} — inserito post-render via PizZip (no ImageModule browser)
   async function generateDocx(templateArrayBuffer, data) {
     const DocxtemplaterCtor = getDocxtemplaterCtor();
     if (!window.PizZip)        throw new Error('PizZip non caricato');
@@ -438,40 +438,30 @@
       templateData[k] = v;
     }
 
-    const modules = [];
-    if (logoBuffer && window.GEN_LOGO_DOCX?.createLogoImageModule) {
-      const imageModule = await window.GEN_LOGO_DOCX.createLogoImageModule(logoBuffer);
-      if (imageModule) {
-        modules.push(imageModule);
-        templateData.LOGO = logoBuffer;
-      }
-    }
-
     const issuesBefore = inspectDocxTemplate(templateArrayBuffer);
     if (issuesBefore.length) {
       console.warn('[MOD_VDT] Tag spezzati nel template scaricato:', issuesBefore.length, issuesBefore.slice(0, 5));
     }
 
-    const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer), modules);
+    const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer), []);
 
     let doc;
     try {
       doc = new DocxtemplaterCtor(zip, {
-        modules,
         ...DOCXTEMPLATER_OPTIONS,
       });
-      if (typeof doc.resolveData === 'function') {
-        await doc.resolveData(templateData);
-        doc.render();
-      } else {
-        doc.setData(templateData);
-        doc.render();
-      }
+      doc.setData(templateData);
+      doc.render();
     } catch (err) {
       throw new Error('Errore rendering template: ' + formatDocxtemplaterErrors(err));
     }
 
-    return doc.getZip().generate({ type: 'arraybuffer', compression: 'DEFLATE' });
+    let outZip = doc.getZip();
+    if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
+      await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);
+    }
+
+    return outZip.generate({ type: 'arraybuffer', compression: 'DEFLATE' });
   }
 
   // ── Registra adapter ──────────────────────────────────────────────────────

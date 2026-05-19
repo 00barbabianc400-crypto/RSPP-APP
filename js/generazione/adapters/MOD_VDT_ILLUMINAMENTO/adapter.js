@@ -33,26 +33,56 @@
     return window.Docxtemplater || window.docxtemplater || null;
   }
 
-  /**
-   * Word (anche da bucket modelli) spezza spesso i tag tra più <w:t>.
-   * Unisce il testo rimuovendo markup OOXML dentro {{…}} e {%…}.
-   */
+  /** Rimuove tag OOXML tra caratteri di delimitatori spezzati ({ + XML + { → {{). */
+  function reuniteSplitDelimiters(xml) {
+    let out = xml;
+    let prev;
+    do {
+      prev = out;
+      out = out.replace(/\{(?:<[^>]+>)+\{/g, '{{');
+      out = out.replace(/\}(?:<[^>]+>)+\}/g, '}}');
+      // {%LOGO} spezzato in { | % | LOGO} (tre run Word)
+      out = out.replace(/\{(?:<[^>]+>)*%(?:<[^>]+>)*([A-Za-z0-9_]+)\}/g, '{%$1}');
+      out = out.replace(/\{(?:<[^>]+>)*%/g, '{%');
+      out = out.replace(/(?:<[^>]+>)*%\}/g, '%}');
+    } while (out !== prev);
+    return out;
+  }
+
+  /** Unisce testo placeholder spezzato tra più <w:t> dentro {{…}} / {%…}. */
+  function mergeDelimitedPlaceholders(text, open, close) {
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(
+      esc(open) + '((?:(?!' + esc(open) + '|' + esc(close) + ').)*?)' + esc(close),
+      'gs'
+    );
+    return text.replace(re, (_, inner) => open + inner.replace(/<[^>]+>/g, '') + close);
+  }
+
   function fixSplitPlaceholdersInXml(xml) {
-    function mergeDelimited(text, open, close) {
-      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const re = new RegExp(
-        esc(open) + '((?:(?!' + esc(open) + '|' + esc(close) + ').)*?)' + esc(close),
-        'gs'
-      );
-      return text.replace(re, (_, inner) => open + inner.replace(/<[^>]+>/g, '') + close);
-    }
-    let out = mergeDelimited(xml, '{{', '}}');
-    out = mergeDelimited(out, '{%', '%}');
+    let out = reuniteSplitDelimiters(xml);
+    out = mergeDelimitedPlaceholders(out, '{{', '}}');
+    out = mergeDelimitedPlaceholders(out, '{%', '%}');
     out = out.replace(/\{\{LOGO\}\}/g, '{%LOGO}');
     return out;
   }
 
+  function formatDocxtemplaterErrors(err) {
+    const list = err.properties?.errors || (err.properties?.id ? [err] : []);
+    const parts = list.map((e) => {
+      const f = e.properties?.file || '';
+      const tag = e.properties?.xtag || e.properties?.context || '';
+      return (f ? f + ' — ' : '') + e.message + (tag ? ' [' + tag + ']' : '');
+    });
+    let msg = parts.length ? parts.join('; ') : err.message;
+    if (list.some((e) => /duplicate_(open|close)_tag/.test(e.properties?.id || ''))) {
+      msg += ' (tag Word spezzati nel .docx del bucket modelli)';
+    }
+    return msg;
+  }
+
   function repairDocxTemplateZip(zip) {
+    let fixedCount = 0;
     Object.keys(zip.files || {}).forEach((path) => {
       if (!/^word\/.*\.xml$/i.test(path)) return;
       const file = zip.file(path);
@@ -64,8 +94,14 @@
         return;
       }
       const fixed = fixSplitPlaceholdersInXml(xml);
-      if (fixed !== xml) zip.file(path, fixed);
+      if (fixed !== xml) {
+        zip.file(path, fixed);
+        fixedCount += 1;
+      }
     });
+    if (fixedCount > 0) {
+      console.info('[MOD_VDT] Riparati', fixedCount, 'file XML nel template');
+    }
     return zip;
   }
 
@@ -252,13 +288,13 @@
     }
 
     const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer));
-    const doc = new DocxtemplaterCtor(zip, {
-      modules,
-      paragraphLoop: true,
-      linebreaks:    true,
-    });
-
+    let doc;
     try {
+      doc = new DocxtemplaterCtor(zip, {
+        modules,
+        paragraphLoop: true,
+        linebreaks:    true,
+      });
       if (typeof doc.resolveData === 'function') {
         await doc.resolveData(templateData);
         doc.render();
@@ -267,16 +303,7 @@
         doc.render();
       }
     } catch (err) {
-      const parts = (err.properties?.errors || []).map((e) => {
-        const f = e.properties?.file || '';
-        const tag = e.properties?.xtag || e.properties?.context || '';
-        return (f ? f + ' — ' : '') + e.message + (tag ? ' [' + tag + ']' : '');
-      });
-      let msg = parts.length ? parts.join('; ') : err.message;
-      if ((err.properties?.errors || []).some((e) => /duplicate_(open|close)_tag/.test(e.properties?.id || ''))) {
-        msg += ' (placeholder Word spezzati: nel template riscrivi ogni tag in un colpo solo, es. {{RAGIONE_SOCIALE}})';
-      }
-      throw new Error('Errore rendering template: ' + msg);
+      throw new Error('Errore rendering template: ' + formatDocxtemplaterErrors(err));
     }
 
     return doc.getZip().generate({ type: 'arraybuffer', compression: 'DEFLATE' });

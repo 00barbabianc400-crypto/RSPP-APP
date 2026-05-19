@@ -1,0 +1,3 @@
+# GitHub Pages / Jekyll — SPA statica: non generare pagine dai file di documentazione interna
+exclude:
+  - js/generazione/adapters/MOD_VDT_ILLUMINAMENTO/fields-map.md

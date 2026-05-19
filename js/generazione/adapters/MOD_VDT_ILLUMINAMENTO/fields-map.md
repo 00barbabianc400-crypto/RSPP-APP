@@ -107,7 +107,7 @@ Catalogo completo testi: `vdt-texts.js`.
 | Posizione | VDT | NON VDT |
 |-----------|-----|---------|
 | Heading cap. 2 | `ILLUMINAMENTO E VIDEOTERMINALI` | `ILLUMINAMENTO` |
-| Titolo modulo (pag. 1) | `Analisi delle postazioni munite di videoterminale e dei livelli di illuminamento` | identico |
+| Titolo modulo (pag. 1 / `{{TITOLO_MODULO}}`) | `Analisi delle postazioni munite di videoterminale e dei livelli di illuminamento` | `Analisi dei livelli di illuminamento delle postazioni di lavoro` |
 
 ### 3.2 Sezione 1 PREMESSA
 

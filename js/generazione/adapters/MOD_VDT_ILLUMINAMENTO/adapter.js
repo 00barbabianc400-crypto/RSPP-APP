@@ -30,7 +30,8 @@
 
   /** CDN jsdelivr espone `window.docxtemplater`, non `Docxtemplater` */
   function getDocxtemplaterCtor() {
-    return window.Docxtemplater || window.docxtemplater || null;
+    const d = window.Docxtemplater || window.docxtemplater || null;
+    return d && d.default ? d.default : d;
   }
 
   /** Rimuove tag OOXML tra caratteri di delimitatori spezzati ({ + XML + { → {{). */
@@ -443,7 +444,14 @@
       console.warn('[MOD_VDT] Tag spezzati nel template scaricato:', issuesBefore.length, issuesBefore.slice(0, 5));
     }
 
+    if (!templateArrayBuffer || !templateArrayBuffer.byteLength) {
+      throw new Error('Template Word vuoto o non scaricato');
+    }
+
     const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer), []);
+    if (!zip || typeof zip.file !== 'function') {
+      throw new Error('Template Word non leggibile (PizZip)');
+    }
 
     let doc;
     try {
@@ -456,7 +464,10 @@
       throw new Error('Errore rendering template: ' + formatDocxtemplaterErrors(err));
     }
 
-    let outZip = doc.getZip();
+    const outZip = doc.getZip();
+    if (!outZip || typeof outZip.generate !== 'function') {
+      throw new Error('Errore rendering template: zip di output non disponibile');
+    }
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);
     }

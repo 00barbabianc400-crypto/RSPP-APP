@@ -6,7 +6,9 @@
 <title>Anteprima — Modulo Illuminamento</title>
 <script src="uni-options.js"></script>
 <script src="adapter.js"></script>
-<script src="https://unpkg.com/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<!-- docx-preview richiede JSZip globale (loadAsync) -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -427,6 +429,10 @@
   async function renderDocxBlob(buffer) {
     const host = document.getElementById('docxPreviewHost');
     host.innerHTML = '';
+    if (!window.JSZip || typeof window.JSZip.loadAsync !== 'function') {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">JSZip non caricato (richiesto per anteprima Word).</p>';
+      return;
+    }
     if (!window.docx || !window.docx.renderAsync) {
       host.innerHTML = '<p style="color:#c0392b;padding:20px;">Libreria docx-preview non caricata.</p>';
       return;

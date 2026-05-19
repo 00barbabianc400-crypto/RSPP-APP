@@ -59,24 +59,14 @@
     return text.replace(re, (_, inner) => open + inner.replace(/<[^>]+>/g, '') + close);
   }
 
-  function isPartialPlaceholderRun(text) {
-    return (
-      /^\{\{[A-Z0-9_]*$/.test(text) ||
-      /^[A-Z0-9_]*\}\}$/.test(text) ||
-      text === '{' || text === '%' ||
-      /^LOGO\}$/.test(text) ||
-      /^\{%[A-Z0-9_]*$/.test(text)
-    );
-  }
-
-  /** Docxtemplater legge ogni <w:t> a sé: se il tag è spezzato, mette tutto nel primo run. */
+  /** Docxtemplater legge ogni <w:t> separatamente: unisce tutti i run del paragrafo se c'è un placeholder. */
   function consolidatePlaceholderParagraphs(xml) {
     return xml.replace(/<w:p[\s\S]*?<\/w:p>/g, (para) => {
       const texts = [];
       const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
       let m;
       while ((m = re.exec(para)) !== null) texts.push(m[1]);
-      if (texts.length < 2 || !texts.some(isPartialPlaceholderRun)) return para;
+      if (texts.length < 2) return para;
       const joined = texts.join('');
       if (!/\{\{|\{%/.test(joined)) return para;
       let idx = 0;
@@ -91,11 +81,62 @@
     });
   }
 
+  /** Unisce coppie adiacenti spezzate: <w:t>{{RAGI</w:t>…<w:t>ONE_SOCIALE}}</w:t> */
+  function mergeAdjacentSplitPlaceholderRuns(xml) {
+    let out = xml;
+    let prev;
+    do {
+      prev = out;
+      out = out.replace(
+        /(<w:t[^>]*>)(\{\{[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t[^>]*>)([A-Z0-9_]*\}\})(<\/w:t>)/g,
+        (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2
+      );
+      out = out.replace(
+        /(<w:t[^>]*>)(\{%[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t[^>]*>)([A-Z0-9_]*%\})(<\/w:t>)/g,
+        (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2
+      );
+    } while (out !== prev);
+    return out;
+  }
+
+  function findBrokenPlaceholderRunsInXml(xml, filePath) {
+    const issues = [];
+    const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    let m;
+    while ((m = re.exec(xml)) !== null) {
+      const t = m[1];
+      if (/^\{\{/.test(t) && !/\}\}$/.test(t)) {
+        issues.push({ file: filePath, kind: 'open', text: t });
+      } else if (/\}\}$/.test(t) && !/^\{\{/.test(t) && !/^\{%/.test(t)) {
+        issues.push({ file: filePath, kind: 'close', text: t });
+      } else if (t === '{' || t === '%' || /^LOGO\}$/.test(t)) {
+        issues.push({ file: filePath, kind: 'fragment', text: t });
+      }
+    }
+    return issues;
+  }
+
+  function inspectDocxTemplate(arrayBuffer) {
+    const zip = new window.PizZip(arrayBuffer);
+    const issues = [];
+    Object.keys(zip.files || {}).forEach((path) => {
+      if (!/^word\/.*\.xml$/i.test(path)) return;
+      const file = zip.file(path);
+      if (!file || file.dir) return;
+      try {
+        issues.push(...findBrokenPlaceholderRunsInXml(file.asText(), path));
+      } catch (_) { /* skip */ }
+    });
+    return issues;
+  }
+
   function fixSplitPlaceholdersInXml(xml) {
     let out = reuniteSplitDelimiters(xml);
     out = mergeDelimitedPlaceholders(out, '{{', '}}');
     out = mergeDelimitedPlaceholders(out, '{%', '%}');
+    out = mergeAdjacentSplitPlaceholderRuns(out);
     out = consolidatePlaceholderParagraphs(out);
+    out = mergeAdjacentSplitPlaceholderRuns(out);
     out = out.replace(/\{\{LOGO\}\}/g, '{%LOGO}');
     return out;
   }
@@ -132,9 +173,7 @@
         fixedCount += 1;
       }
     });
-    if (fixedCount > 0) {
-      console.info('[MOD_VDT] Riparati', fixedCount, 'file XML nel template');
-    }
+    console.info('[MOD_VDT] Riparati', fixedCount, 'file XML nel template');
     return zip;
   }
 
@@ -320,7 +359,31 @@
       }
     }
 
+    const issuesBefore = inspectDocxTemplate(templateArrayBuffer);
+    if (issuesBefore.length) {
+      console.warn('[MOD_VDT] Tag spezzati nel template scaricato:', issuesBefore.length, issuesBefore.slice(0, 5));
+    }
+
     const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer));
+
+    const issuesAfter = [];
+    Object.keys(zip.files || {}).forEach((path) => {
+      if (!/^word\/.*\.xml$/i.test(path)) return;
+      const file = zip.file(path);
+      if (!file || file.dir) return;
+      try {
+        issuesAfter.push(...findBrokenPlaceholderRunsInXml(file.asText(), path));
+      } catch (_) { /* skip */ }
+    });
+    if (issuesAfter.length) {
+      const sample = issuesAfter.slice(0, 3).map((i) => i.file + ': "' + i.text + '"').join('; ');
+      throw new Error(
+        'Template Word ancora con tag spezzati dopo riparazione (' + issuesAfter.length + '). '
+        + 'Esempio: ' + sample
+        + '. Scarica MOD_VDT_ILLUMINAMENTO.docx dal bucket, esegui scripts/fix_docx_split_tags.py e ricarica.'
+      );
+    }
+
     let doc;
     try {
       doc = new DocxtemplaterCtor(zip, {
@@ -355,5 +418,7 @@
     filterRilevamentiIlluminamento,
     validate,
     generateDocx,
+    inspectDocxTemplate,
+    repairDocxTemplateZip,
   };
 })();

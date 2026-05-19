@@ -3490,7 +3490,8 @@
             try {
                 const { error } = await supabaseClient.storage.from(bucket).upload(path, file, {
                     upsert: true,
-                    contentType: file.type || undefined
+                    contentType: file.type || 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    cacheControl: '0',
                 });
                 if (error) throw error;
                 showToast('Modello caricato', 'success');
@@ -4095,18 +4096,36 @@
             try {
                 await loadScriptOnce(base + 'logo-docx.js');
             } catch (_) { /* helper logo opzionale */ }
-            await loadScriptOnce(base + 'adapter.js?v=20260519d');
+            await loadScriptOnce(base + 'adapter.js?v=20260519e');
+        }
+
+        async function downloadModelloTemplate(codice) {
+            await loadModelliStorageIndex();
+            const path = STATE.data.modelliStorageByCodice?.[codice]?.name || (codice + '.docx');
+            const { data, error } = await supabaseClient.storage
+                .from(CONFIG.storage.modelli)
+                .download(path, { cache: 'no-store' });
+            if (error) throw error;
+            const buf = await data.arrayBuffer();
+            console.info('[Generazione] Template:', path, '|', buf.byteLength, 'bytes');
+            const adapter = window.GEN_ADAPTERS?.[codice];
+            if (adapter?.inspectDocxTemplate) {
+                const issues = adapter.inspectDocxTemplate(buf);
+                if (issues.length) {
+                    console.warn('[Generazione] Tag spezzati nel file scaricato:', issues);
+                } else {
+                    console.info('[Generazione] Template OK (nessun tag spezzato rilevato)');
+                }
+            }
+            return buf;
         }
 
         async function renderGenerazionePreviewDocx(codice, wizardData, iframe) {
             const adapter = window.GEN_ADAPTERS?.[codice];
             if (!adapter) return;
             try {
-                const templateName = codice + '.docx';
-                const { data: templateBlob, error: dlErr } = await supabaseClient.storage
-                    .from(CONFIG.storage.modelli).download(templateName);
-                if (dlErr) throw dlErr;
-                const buffer = await adapter.generateDocx(await templateBlob.arrayBuffer(), wizardData);
+                const templateBuffer = await downloadModelloTemplate(codice);
+                const buffer = await adapter.generateDocx(templateBuffer, wizardData);
                 iframe.contentWindow.postMessage({ type: 'PREVIEW_DOCX_BLOB', buffer }, '*', [buffer]);
             } catch (err) {
                 iframe.contentWindow.postMessage({ type: 'PREVIEW_DOCX_ERROR', message: err.message }, '*');
@@ -4126,13 +4145,7 @@
             showToast('Generazione in corso…', 'info');
 
             try {
-                // Scarica template dal bucket modelli
-                const templateName = codice + '.docx';
-                const { data: templateBlob, error: dlErr } = await supabaseClient.storage
-                    .from(CONFIG.storage.modelli).download(templateName);
-                if (dlErr) throw dlErr;
-
-                const templateBuffer = await templateBlob.arrayBuffer();
+                const templateBuffer = await downloadModelloTemplate(codice);
 
                 // Genera DOCX
                 const outputBuffer = await adapter.generateDocx(templateBuffer, data);

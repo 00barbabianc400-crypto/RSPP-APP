@@ -10,6 +10,9 @@
     <!-- DOCX generation -->
     <script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.49.0/build/docxtemplater.js"></script>
+    <script>
+      if (window.docxtemplater && !window.Docxtemplater) window.Docxtemplater = window.docxtemplater;
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/docxtemplater-image-module-free@1.1.1/build/imagemodule.js"></script>
     <!-- Runtime ENV (generated from .env) -->
     <script src="./env.js"></script>

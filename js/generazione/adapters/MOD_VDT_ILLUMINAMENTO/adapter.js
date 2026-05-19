@@ -28,6 +28,11 @@
     return found ? String(found).trim() : '';
   }
 
+  /** CDN jsdelivr espone `window.docxtemplater`, non `Docxtemplater` */
+  function getDocxtemplaterCtor() {
+    return window.Docxtemplater || window.docxtemplater || null;
+  }
+
   function descrizioneLocaliDaRilevamenti(rilevamenti) {
     const filtered = filterRilevamentiIlluminamento(rilevamenti);
     if (!filtered.length) return '';
@@ -183,8 +188,9 @@
   // ── generateDocx ──────────────────────────────────────────────────────────
   // Template logo: {%LOGO} (paragrafo dedicato) + ImageModule
   async function generateDocx(templateArrayBuffer, data) {
+    const DocxtemplaterCtor = getDocxtemplaterCtor();
     if (!window.PizZip)        throw new Error('PizZip non caricato');
-    if (!window.Docxtemplater) throw new Error('Docxtemplater non caricato');
+    if (!DocxtemplaterCtor)    throw new Error('Docxtemplater non caricato');
 
     const logoBuffer = data._logo_buffer || null;
     const logoPathHint = data._logo_path || '';
@@ -210,7 +216,7 @@
     }
 
     const zip = new window.PizZip(templateArrayBuffer);
-    const doc = new window.Docxtemplater(zip, {
+    const doc = new DocxtemplaterCtor(zip, {
       modules,
       paragraphLoop: true,
       linebreaks:    true,

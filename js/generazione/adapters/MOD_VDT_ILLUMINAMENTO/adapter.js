@@ -59,26 +59,44 @@
     return text.replace(re, (_, inner) => open + inner.replace(/<[^>]+>/g, '') + close);
   }
 
-  /** Docxtemplater legge ogni <w:t> separatamente: unisce tutti i run del paragrafo se c'è un placeholder. */
-  function consolidatePlaceholderParagraphs(xml) {
-    return xml.replace(/<w:p[\s\S]*?<\/w:p>/g, (para) => {
-      const texts = [];
-      const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
-      let m;
-      while ((m = re.exec(para)) !== null) texts.push(m[1]);
-      if (texts.length < 2) return para;
-      const joined = texts.join('');
-      if (!/\{\{|\{%/.test(joined)) return para;
-      let idx = 0;
-      return para.replace(/<w:t([^>]*)>([^<]*)<\/w:t>/g, (_full, attrs) => {
-        if (idx === 0) {
-          idx += 1;
-          return '<w:t' + attrs + '>' + joined + '</w:t>';
-        }
+  /** Docxtemplater conta ogni <w:t>: serve unire se il tag è spezzato su più run. */
+  function needsWtMerge(texts, joined) {
+    if (texts.length < 2) return false;
+    if (texts.some(isBrokenPlaceholderRun)) return true;
+    const opens = (joined.match(/\{\{/g) || []).length;
+    const complete = (joined.match(/\{\{[A-Z0-9_]+\}\}/g) || []).length;
+    if (opens > complete) return true;
+    const delimNodes = texts.filter((t) => /\{\{|\{%|\}\}|%\}/.test(t)).length;
+    return delimNodes >= 2;
+  }
+
+  function mergeWtInBlock(block) {
+    const texts = [];
+    const re = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+    let m;
+    while ((m = re.exec(block)) !== null) texts.push(m[1]);
+    const joined = texts.join('');
+    if (!needsWtMerge(texts, joined)) return block;
+    let idx = 0;
+    return block.replace(/<w:t([^>]*)>([^<]*)<\/w:t>/g, (_full, attrs) => {
+      if (idx === 0) {
         idx += 1;
-        return '<w:t' + attrs + '></w:t>';
-      });
+        return '<w:t' + attrs + '>' + joined + '</w:t>';
+      }
+      idx += 1;
+      return '<w:t' + attrs + '></w:t>';
     });
+  }
+
+  function consolidatePlaceholderBlocks(xml, tagName) {
+    const re = new RegExp('<' + tagName + '[\\s\\S]*?<\\/' + tagName + '>', 'g');
+    return xml.replace(re, (block) => mergeWtInBlock(block));
+  }
+
+  function consolidatePlaceholderParagraphs(xml) {
+    let out = consolidatePlaceholderBlocks(xml, 'w:p');
+    out = consolidatePlaceholderBlocks(out, 'w:tc');
+    return out;
   }
 
   /** Unisce coppie adiacenti spezzate: <w:t>{{RAGI</w:t>…<w:t>ONE_SOCIALE}}</w:t> */
@@ -126,7 +144,42 @@
       const openOnly = (/\{\{/.test(t) || /\{%/.test(t)) && !/\}\}/.test(t) && !/%\}/.test(t);
       issues.push({ file: filePath, kind: openOnly ? 'open' : 'close', text: t });
     }
+    ['w:p', 'w:tc'].forEach((tag) => {
+      const blockRe = new RegExp('<' + tag + '[\\s\\S]*?<\\/' + tag + '>', 'g');
+      let bm;
+      while ((bm = blockRe.exec(xml)) !== null) {
+        const block = bm[0];
+        const texts = [];
+        const tre = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+        let tm;
+        while ((tm = tre.exec(block)) !== null) texts.push(tm[1]);
+        const joined = texts.join('');
+        if (needsWtMerge(texts, joined)) {
+          issues.push({ file: filePath, kind: 'split-run', text: joined.slice(0, 60) });
+        }
+      }
+    });
     return issues;
+  }
+
+  /** Delimitatori template Word ({{CAMPO}}); default Docxtemplater è { } e rompe {{…}}. */
+  const DOCXTEMPLATER_OPTIONS = {
+    delimiters: { start: '{{', end: '}}' },
+    paragraphLoop: true,
+    linebreaks: true,
+  };
+
+  function tryCompileDocxtemplater(zip, modules) {
+    const DocxtemplaterCtor = getDocxtemplaterCtor();
+    try {
+      new DocxtemplaterCtor(zip, {
+        modules: modules || [],
+        ...DOCXTEMPLATER_OPTIONS,
+      });
+      return null;
+    } catch (err) {
+      return err;
+    }
   }
 
   function inspectDocxTemplate(arrayBuffer) {
@@ -168,25 +221,41 @@
     return msg;
   }
 
-  function repairDocxTemplateZip(zip) {
+  function repairDocxTemplateZip(zip, modules) {
     let fixedCount = 0;
-    Object.keys(zip.files || {}).forEach((path) => {
-      if (!/^word\/.*\.xml$/i.test(path)) return;
-      const file = zip.file(path);
-      if (!file || file.dir) return;
-      let xml;
-      try {
-        xml = file.asText();
-      } catch (_) {
-        return;
+    const paths = Object.keys(zip.files || {}).filter((p) => /^word\/.*\.xml$/i.test(p));
+
+    function repairAllXml() {
+      let n = 0;
+      paths.forEach((path) => {
+        const file = zip.file(path);
+        if (!file || file.dir) return;
+        let xml;
+        try {
+          xml = file.asText();
+        } catch (_) {
+          return;
+        }
+        const fixed = fixSplitPlaceholdersInXml(xml);
+        if (fixed !== xml) {
+          zip.file(path, fixed);
+          n += 1;
+        }
+      });
+      return n;
+    }
+
+    for (let pass = 0; pass < 5; pass += 1) {
+      const n = repairAllXml();
+      fixedCount += n;
+      const compileErr = tryCompileDocxtemplater(zip, modules);
+      if (!compileErr) break;
+      if (pass === 4) {
+        console.warn('[MOD_VDT] Template ancora non compilabile dopo 5 passaggi');
       }
-      const fixed = fixSplitPlaceholdersInXml(xml);
-      if (fixed !== xml) {
-        zip.file(path, fixed);
-        fixedCount += 1;
-      }
-    });
-    console.info('[MOD_VDT] Riparati', fixedCount, 'file XML nel template');
+    }
+
+    console.info('[MOD_VDT] Riparati', fixedCount, 'file XML (passaggi fino a compilazione)');
     return zip;
   }
 
@@ -377,32 +446,13 @@
       console.warn('[MOD_VDT] Tag spezzati nel template scaricato:', issuesBefore.length, issuesBefore.slice(0, 5));
     }
 
-    const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer));
-
-    const issuesAfter = [];
-    Object.keys(zip.files || {}).forEach((path) => {
-      if (!/^word\/.*\.xml$/i.test(path)) return;
-      const file = zip.file(path);
-      if (!file || file.dir) return;
-      try {
-        issuesAfter.push(...findBrokenPlaceholderRunsInXml(file.asText(), path));
-      } catch (_) { /* skip */ }
-    });
-    if (issuesAfter.length) {
-      const sample = issuesAfter.slice(0, 3).map((i) => i.file + ': "' + i.text + '"').join('; ');
-      throw new Error(
-        'Template Word ancora con tag spezzati dopo riparazione (' + issuesAfter.length + '). '
-        + 'Esempio: ' + sample
-        + '. Scarica MOD_VDT_ILLUMINAMENTO.docx dal bucket, esegui scripts/fix_docx_split_tags.py e ricarica.'
-      );
-    }
+    const zip = repairDocxTemplateZip(new window.PizZip(templateArrayBuffer), modules);
 
     let doc;
     try {
       doc = new DocxtemplaterCtor(zip, {
         modules,
-        paragraphLoop: true,
-        linebreaks:    true,
+        ...DOCXTEMPLATER_OPTIONS,
       });
       if (typeof doc.resolveData === 'function') {
         await doc.resolveData(templateData);

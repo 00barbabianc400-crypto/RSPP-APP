@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Stress lavoro-correlato</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <script src="stress-questionario-xlsx.js?v=20260520c"></script>
 <script src="pianificazione-misure.js?v=20260520a"></script>
 <script src="adapter.js?v=20260520stress9"></script>
@@ -21,6 +23,14 @@
     border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
   }
   #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc;
+    padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .hidden { display: none !important; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
   .stop-badge, .ok-badge {
     padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
   }
@@ -90,12 +100,15 @@
 <body>
 
 <div id="toolbar">
-  <span class="title">MOD_STRESS_LC — Compila</span>
+  <span class="title" id="toolbarTitle">MOD_STRESS_LC — Compila</span>
   <span class="stop-badge" id="stopBadge"></span>
   <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
   <button type="button" id="btnGenera" disabled>Genera DOCX</button>
 </div>
 
+<div id="viewCompile">
 <div class="page-wrap">
   <div class="page">
     <h1 class="doc-title">Valutazione rischio stress lavoro-correlato</h1>
@@ -224,6 +237,13 @@
     <p class="hint-str" style="margin-top:8px;">Tag Word (sostituisce i due paragrafi conclusivi): <code>{{CONCLUSIONI_TESTO}}</code></p>
   </div>
 </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost" class="page-wrap" style="background:#fff;padding:20px;">
+    <p style="text-align:center;color:#888;">Passa a questa scheda per l’anteprima Word dal modello caricato.</p>
+  </div>
+</div>
 
 <script>
 (function () {
@@ -241,6 +261,8 @@
     conclusioni_testo: '',
     pianificazione_misure: null,
   };
+  let activeView = 'compile';
+  let previewTimer = null;
 
   function riskCssClass(key) {
     const k = String(key || '').toUpperCase();
@@ -591,6 +613,51 @@
       document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
       document.getElementById('stopBadge').title = errors.join('\n');
     }
+    if (activeView === 'docx' && errors.length === 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 600);
+    }
+  }
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_STRESS_LC — Compila' : 'MOD_STRESS_LC — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + escapeHtml(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima dal modello Word…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || typeof window.JSZip.loadAsync !== 'function') {
+      host.innerHTML = '<p style="color:#c0392c;padding:20px;">JSZip non caricato.</p>';
+      return;
+    }
+    if (!window.docx || !window.docx.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392c;padding:20px;">docx-preview non caricata.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392c;padding:20px;">' + escapeHtml(err.message || String(err)) + '</p>';
+    }
   }
 
   window.setModuloNumero = function (v) {
@@ -674,6 +741,13 @@
     if (e.data.type === 'SET_DATA') {
       DATA = e.data.data || {};
       initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + escapeHtml(e.data.message || 'Errore anteprima') + '</p>';
     }
   });
 

@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Stress lavoro-correlato</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="stress-questionario-xlsx.js?v=20260520c"></script>
+<script src="pianificazione-misure.js?v=20260520a"></script>
+<script src="adapter.js?v=20260520stress9"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  .stop-badge, .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  .ok-badge.visible { display: inline-block; background: #27ae60; }
+  .page-wrap { max-width: 720px; margin: 20px auto; padding-bottom: 40px; }
+  .page {
+    background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .inline-input { font-size: 10.5pt; padding: 4px 8px; border: 1px solid #bbb; border-radius: 3px; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .gruppi-pre {
+    margin-top: 8px; padding: 10px 12px; background: #f4f8fb; border: 1px solid #c5d9e8;
+    border-radius: 4px; font-size: 10.5pt; line-height: 1.5; white-space: pre-line;
+    text-align: center; min-height: 48px;
+  }
+  .comitato-table { width: 100%; border-collapse: collapse; font-size: 10.5pt; margin-top: 8px; }
+  .comitato-table th, .comitato-table td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+  .comitato-table th { background: #eee; width: 55%; }
+  .crono-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8px; }
+  .crono-table th, .crono-table td { border: 1px solid #ccc; padding: 5px 8px; vertical-align: top; }
+  .crono-table thead th { background: #2a2a2a; color: #fff; font-size: 9pt; text-align: center; }
+  .crono-table .col-fase { width: 22%; font-weight: 600; background: #f5f5f5; }
+  .crono-table .col-att { width: 48%; }
+  .crono-table .col-data { width: 30%; }
+  .crono-input { width: 100%; font-size: 9.5pt; padding: 4px 6px; border: 1px solid #bbb; border-radius: 3px; box-sizing: border-box; }
+  .crono-tag { display: block; font-size: 8pt; color: #888; margin-top: 2px; font-family: Consolas, monospace; }
+  .esito-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 10px; }
+  .esito-table td { border: 1px solid #ccc; padding: 10px; vertical-align: top; }
+  .esito-table .col-livello { width: 28%; font-weight: 700; text-align: center; }
+  .esito-table .col-testo { width: 72%; line-height: 1.45; }
+  .risk-basso { color: #00B050; }
+  .risk-medio { color: #e6a800; }
+  .risk-alto { color: #C00000; }
+  .upload-box { margin: 10px 0; padding: 12px; background: #f8f9fa; border: 1px dashed #aaa; border-radius: 4px; }
+  .upload-err { color: #922b21; font-size: 9.5pt; margin-top: 8px; }
+  .upload-ok { color: #1e6b3a; font-size: 9.5pt; margin-top: 8px; }
+  .va-auto-box {
+    padding: 12px; background: #eef8f0; border: 1px solid #b8dfc4; border-radius: 4px;
+    font-size: 10.5pt; line-height: 1.5; white-space: pre-line;
+  }
+  .va-textarea {
+    width: 100%; min-height: 140px; font-size: 10.5pt; padding: 8px 10px;
+    border: 1px solid #bbb; border-radius: 4px; line-height: 1.45; font-family: inherit;
+  }
+  .pian-box {
+    margin-top: 8px; padding: 12px; background: #f8f9fb; border: 1px solid #ccd6e0;
+    border-radius: 4px; font-size: 10.5pt; line-height: 1.5; white-space: pre-line;
+  }
+  .pian-box .area-h { font-weight: 700; color: #1a5276; margin-top: 10px; }
+  .pian-box .area-h:first-child { margin-top: 0; }
+  .misure-wrap { margin-top: 10px; }
+  .misure-grp { margin-bottom: 8px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; }
+  .misure-grp summary { cursor: pointer; padding: 8px 10px; font-weight: 600; font-size: 10pt; }
+  .misure-grp-hint { padding: 0 10px 8px; font-size: 9pt; color: #666; font-style: italic; line-height: 1.4; }
+  .misure-row { display: grid; grid-template-columns: 22px 1fr; gap: 6px 8px; padding: 6px 10px; border-top: 1px solid #eee; align-items: start; }
+  .misure-row input[type="text"] { width: 100%; font-size: 9.5pt; padding: 4px 6px; border: 1px solid #ccc; border-radius: 3px; }
+  .misure-row.off { opacity: 0.45; }
+  .misure-preview { margin-top: 8px; padding: 10px; background: #fff; border: 1px solid #ccd6e0; border-radius: 4px; font-size: 10pt; white-space: pre-line; max-height: 220px; overflow-y: auto; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title">MOD_STRESS_LC — Compila</span>
+  <span class="stop-badge" id="stopBadge"></span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div class="page-wrap">
+  <div class="page">
+    <h1 class="doc-title">Valutazione rischio stress lavoro-correlato</h1>
+
+    <h2 class="doc-section">Dati documento</h2>
+    <p><strong>Ragione sociale</strong>: <span id="pRagSoc" class="field-auto">—</span></p>
+    <p><strong>Sede operativa</strong>: <span id="pSede" class="field-auto">—</span></p>
+    <p>
+      <strong>Numero modulo</strong> (copertina / intestazione):<br>
+      <input type="text" id="inpModuloNumero" class="inline-input" inputmode="numeric" maxlength="6"
+        style="width:120px;margin-top:6px;" placeholder="es. 90" autocomplete="off"
+        oninput="setModuloNumero(this.value)">
+    </p>
+    <p class="hint-str">Suggerimento iniziale dall’ordine nel catalogo documenti; modificabile dall’operatore.</p>
+
+    <h2 class="doc-section">Premessa — Direzione aziendale</h2>
+    <p class="hint-str" style="margin-bottom:10px;">
+      Frase nel modulo: «La Direzione Aziendale <em>[testo]</em> [ragione sociale]…» — il testo può variare
+      (es. <em>della società</em>, <em>dell’azienda</em>, <em>del committente</em>).
+    </p>
+    <p>
+      <strong>Testo proprietario direzione</strong>:<br>
+      <input type="text" id="inpTestoDirezione" class="inline-input" maxlength="80"
+        style="width:100%;max-width:420px;margin-top:6px;" placeholder="della società" autocomplete="off"
+        oninput="setTestoDirezione(this.value)">
+    </p>
+    <p class="hint-str">
+      Anteprima: La Direzione Aziendale <span id="pTestoDirezione" class="field-auto">della società</span>
+      <span id="pRagSocInline" class="field-auto">—</span>
+    </p>
+
+    <p><strong>Data emissione</strong>: <span id="pData" class="field-auto">—</span></p>
+    <p><strong>Luogo (firma)</strong>: <span id="pLuogo" class="field-auto">—</span></p>
+
+    <h2 class="doc-section">§6.1.1 — Comitato di valutazione</h2>
+    <p class="hint-str">Da anagrafica azienda (sola lettura).</p>
+    <table class="comitato-table">
+      <tbody>
+        <tr><th>Datore di Lavoro</th><td id="pDatore" class="field-auto">—</td></tr>
+        <tr><th>RSPP</th><td id="pRspp" class="field-auto">—</td></tr>
+        <tr><th>Rappresentante dei lavoratori (RLS)</th><td id="pRls" class="field-auto">—</td></tr>
+        <tr><th>Medico Competente</th><td id="pMedico" class="field-auto">—</td></tr>
+      </tbody>
+    </table>
+
+    <h2 class="doc-section">§6.1.2 / §6.2 — Gruppi omogenei</h2>
+    <p class="hint-str">Profili di rischio associati all’azienda (Profili), uno per riga nel Word.</p>
+    <div id="pGruppi" class="gruppi-pre field-auto">—</div>
+
+    <h2 class="doc-section">§6.1.3 — Cronoprogramma</h2>
+    <p class="hint-str">Compila tutte le date nella colonna «Data attuazione» (anno, data o testo libero, es. <em>Non applicabile</em>).</p>
+    <div id="cronoTableWrap"></div>
+
+    <h2 class="doc-section">§6.2 — Valutazione preliminare (questionario Excel)</h2>
+    <p class="hint-str">
+      Carica il file Excel compilato (nome libero; struttura con fogli <strong>RISULTATI</strong> e <strong>INTEGRATIVA</strong>).
+    </p>
+    <div class="upload-box">
+      <input type="file" id="inpQuestionario" accept=".xlsx,.xlsm,.xls" />
+      <div id="uploadStatus" class="hint-str" style="margin-top:8px;"></div>
+    </div>
+
+    <p class="hint-str" style="margin-top:12px;"><strong>Questionario comitato</strong> (foglio RISULTATI)</p>
+    <table class="esito-table" id="tblRisultati">
+      <tr>
+        <td class="col-livello" id="pRisLivello">—</td>
+        <td class="col-testo" id="pRisTesto">—</td>
+      </tr>
+    </table>
+    <p class="hint-str" style="margin-top:4px;">
+      Tag Word: <code>{{RISULTATI_LIVELLO_RISCHIO}}</code> | <code>{{RISULTATI_TESTO_ESITO}}</code>
+    </p>
+
+    <p class="hint-str" style="margin-top:14px;"><strong>Dimensione lavoro da remoto / innovazione</strong> (foglio INTEGRATIVA)</p>
+    <table class="esito-table" id="tblIntegrativa">
+      <tr>
+        <td class="col-livello" id="pIntLivello">—</td>
+        <td class="col-testo" id="pIntTesto">—</td>
+      </tr>
+    </table>
+    <p class="hint-str" style="margin-top:4px;">
+      Tag Word: <code>{{INTEGRATIVA_LIVELLO_RISCHIO}}</code> | <code>{{INTEGRATIVA_TESTO_ESITO}}</code>
+    </p>
+
+    <h2 class="doc-section">§6.3 — Valutazione approfondita</h2>
+    <p id="vaHint" class="hint-str">Carica il questionario Excel (§6.2) per abilitare questa sezione.</p>
+    <div id="vaAuto" style="display:none;">
+      <p class="hint-str">Testo standard (rischio BASSO su entrambe le valutazioni):</p>
+      <div id="pVaAuto" class="va-auto-box field-auto"></div>
+    </div>
+    <div id="vaEdit" style="display:none;">
+      <p class="hint-str"><strong>Testo da compilare</strong> (almeno un rischio MEDIO o ALTO):</p>
+      <textarea id="inpValApprofondita" class="va-textarea" placeholder="Descrivi l’esito della valutazione approfondita…"></textarea>
+    </div>
+    <p class="hint-str" style="margin-top:8px;">Tag Word (sostituisce l’intero §6.3): <code>{{VALUTAZIONE_APPROFONDITA_TESTO}}</code></p>
+
+    <h2 class="doc-section">§6.4 — Pianificazione interventi (da Excel)</h2>
+    <p class="hint-str">
+      Generato dal questionario: solo gli indicatori con <strong>X</strong> nella colonna «Azioni di miglioramento»
+      sulla <strong>stessa riga</strong>
+      (<code>INDICATORI</code> col. U · <code>CONTENUTO</code> col. N · <code>CONTESTO</code> col. M),
+      testo in forma negativa/critica.
+    </p>
+    <div id="pPianificazione" class="pian-box field-auto">Carica il questionario per vedere l’anteprima.</div>
+    <p class="hint-str" style="margin-top:6px;">Tag Word (aspetti da Excel): <code>{{PIANIFICAZIONE_INTERVENTI_ELENCO}}</code></p>
+
+    <h3 style="font-size:11pt;margin:14px 0 6px;">Misure «Direzione si è attivata per»</h3>
+    <p class="hint-str">
+      Elenco puntato unico nel Word: deseleziona o svuota le righe da escludere; modifica il testo per contestualizzare.
+      Le note sotto ogni area indicano quando personalizzare.
+    </p>
+    <div id="misureEditor" class="misure-wrap"></div>
+    <div id="pMisurePreview" class="misure-preview">—</div>
+    <p class="hint-str" style="margin-top:6px;">Tag Word (sostituisce tutto l’elenco puntato sotto «In particolare la Direzione si è attivata per:»): <code>{{PIANIFICAZIONE_INTERVENTI_MISURE}}</code></p>
+
+    <h2 class="doc-section">Conclusioni</h2>
+    <p id="concHint" class="hint-str">Carica il questionario Excel (§6.2) per abilitare questa sezione.</p>
+    <div id="concAuto" style="display:none;">
+      <p class="hint-str">Testo standard (rischio BASSO su entrambe le valutazioni):</p>
+      <div id="pConcAuto" class="va-auto-box field-auto"></div>
+    </div>
+    <div id="concEdit" style="display:none;">
+      <p class="hint-str"><strong>Testo da compilare</strong> (almeno un rischio MEDIO o ALTO):</p>
+      <textarea id="inpConclusioni" class="va-textarea" placeholder="Redigi le conclusioni in base agli esiti della valutazione…"></textarea>
+    </div>
+    <p class="hint-str" style="margin-top:8px;">Tag Word (sostituisce i due paragrafi conclusivi): <code>{{CONCLUSIONI_TESTO}}</code></p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_STRESS_LC'];
+  let DATA = null;
+  let WIZARD = {
+    modulo_numero: '',
+    testo_direzione_proprietario: 'della società',
+    cronoprogramma: {},
+    questionario_esiti: null,
+    questionario_filename: '',
+    valutazione_approfondita_testo: '',
+    conclusioni_testo: '',
+    pianificazione_misure: null,
+  };
+
+  function riskCssClass(key) {
+    const k = String(key || '').toUpperCase();
+    if (k === 'BASSO') return 'risk-basso';
+    if (k === 'MEDIO') return 'risk-medio';
+    if (k === 'ALTO') return 'risk-alto';
+    return '';
+  }
+
+  function renderEsitoPreview(livelloEl, testoEl, livello, testo, key) {
+    livelloEl.textContent = livello || '—';
+    livelloEl.className = 'col-livello ' + riskCssClass(key);
+    testoEl.textContent = testo || '—';
+  }
+
+  function getMisureWizardMap() {
+    if (!WIZARD.pianificazione_misure || typeof WIZARD.pianificazione_misure !== 'object') {
+      WIZARD.pianificazione_misure = window.GEN_STRESS_MISURE?.defaultMisureMap?.() || {};
+    }
+    return WIZARD.pianificazione_misure;
+  }
+
+  function renderMisurePreview() {
+    const el = document.getElementById('pMisurePreview');
+    if (!el) return;
+    const build = window.GEN_STRESS_MISURE?.buildPianificazioneMisureElenco;
+    const t = build ? build(getMisureWizardMap()) : '';
+    el.textContent = t || '(nessuna misura selezionata)';
+  }
+
+  function buildMisureEditor() {
+    const wrap = document.getElementById('misureEditor');
+    const groups = window.GEN_STRESS_MISURE?.PIANIFICAZIONE_MISURE_GROUPS;
+    if (!wrap || !groups) {
+      if (wrap) wrap.innerHTML = '<p class="hint-str">Catalogo misure non caricato.</p>';
+      return;
+    }
+    const map = getMisureWizardMap();
+    let html = '';
+    for (const g of groups) {
+      html += '<details class="misure-grp" open><summary>' + escapeHtml(g.title) + '</summary>';
+      html += '<p class="misure-grp-hint">' + escapeHtml(g.hint || '') + '</p>';
+      for (const it of g.items) {
+        const val = map[it.id] != null ? String(map[it.id]) : it.text;
+        const on = val.trim() !== '';
+        html += '<div class="misure-row' + (on ? '' : ' off') + '" data-id="' + escapeHtml(it.id) + '">'
+          + '<input type="checkbox" class="misure-chk"' + (on ? ' checked' : '') + ' title="Includi nel Word">'
+          + '<div><input type="text" class="misure-txt" value="' + escapeHtml(val) + '">'
+          + '<span class="crono-tag">' + escapeHtml(it.id) + '</span></div></div>';
+      }
+      html += '</details>';
+    }
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('.misure-row').forEach((row) => {
+      const id = row.getAttribute('data-id');
+      const chk = row.querySelector('.misure-chk');
+      const txt = row.querySelector('.misure-txt');
+      const sync = () => {
+        const m = getMisureWizardMap();
+        if (!chk.checked) {
+          m[id] = '';
+          row.classList.add('off');
+        } else {
+          const t = txt.value.trim();
+          m[id] = t || false;
+          row.classList.toggle('off', !t);
+          if (!t) chk.checked = false;
+        }
+        renderMisurePreview();
+        sendUpdate();
+      };
+      chk.addEventListener('change', () => {
+        if (chk.checked && !txt.value.trim()) txt.value = groups.flatMap((x) => x.items).find((i) => i.id === id)?.text || '';
+        sync();
+      });
+      txt.addEventListener('input', () => {
+        if (txt.value.trim()) chk.checked = true;
+        sync();
+      });
+    });
+    renderMisurePreview();
+  }
+
+  function renderPianificazionePreview(testo, dettaglio) {
+    const el = document.getElementById('pPianificazione');
+    if (!el) return;
+    const t = (testo || '').trim();
+    if (!t) {
+      el.textContent = 'Nessun intervento da pianificare (nessuna X in colonna Azioni di miglioramento, oppure indicatori senza valutazione SI/NO).';
+      el.classList.add('field-missing');
+      return;
+    }
+    el.classList.remove('field-missing');
+    const headers = window.GEN_STRESS_XLSX?.PIANIFICAZIONE_HEADERS || {};
+    let html = '';
+    const parts = t.split(/\n\n+/);
+    parts.forEach((block) => {
+      const lines = block.split('\n');
+      const head = lines[0] || '';
+      if (head === headers.indicatori || head === headers.contenuto || head === headers.contesto) {
+        html += '<div class="area-h">' + escapeHtml(head) + '</div>';
+        html += escapeHtml(lines.slice(1).join('\n'));
+      } else {
+        html += escapeHtml(block);
+      }
+      html += '\n';
+    });
+    el.innerHTML = html.trim();
+  }
+
+  function applyQuestionarioToWizard(parsed) {
+    WIZARD.questionario_esiti = {
+      risultati: parsed.risultati,
+      integrativa: parsed.integrativa,
+      pianificazione: parsed.pianificazione,
+      fields: parsed.fields,
+    };
+    renderPianificazionePreview(
+      parsed.fields?.PIANIFICAZIONE_INTERVENTI_ELENCO || parsed.pianificazione?.testo,
+      parsed.pianificazione
+    );
+    renderEsitoPreview(
+      document.getElementById('pRisLivello'),
+      document.getElementById('pRisTesto'),
+      parsed.risultati.livello,
+      parsed.risultati.testo,
+      parsed.risultati.key
+    );
+    renderEsitoPreview(
+      document.getElementById('pIntLivello'),
+      document.getElementById('pIntTesto'),
+      parsed.integrativa.livello,
+      parsed.integrativa.testo,
+      parsed.integrativa.key
+    );
+    syncValutazioneApprofonditaUI();
+    syncConclusioniUI();
+    sendUpdate();
+  }
+
+  function tuttiRischiBassiFromWizard() {
+    const e = WIZARD.questionario_esiti;
+    if (!e) return false;
+    return e.risultati?.key === 'BASSO' && e.integrativa?.key === 'BASSO';
+  }
+
+  function syncConclusioniUI() {
+    const hint = document.getElementById('concHint');
+    const wrapAuto = document.getElementById('concAuto');
+    const wrapEdit = document.getElementById('concEdit');
+    const pAuto = document.getElementById('pConcAuto');
+    const ta = document.getElementById('inpConclusioni');
+    if (!hint || !wrapAuto || !wrapEdit) return;
+
+    if (!WIZARD.questionario_esiti) {
+      hint.textContent = 'Carica il questionario Excel (§6.2) per abilitare questa sezione.';
+      wrapAuto.style.display = 'none';
+      wrapEdit.style.display = 'none';
+      return;
+    }
+
+    const def = ADAPTER?.CONCLUSIONI_DEFAULT || '';
+    if (tuttiRischiBassiFromWizard()) {
+      WIZARD.conclusioni_testo = '';
+      wrapAuto.style.display = 'block';
+      wrapEdit.style.display = 'none';
+      pAuto.textContent = def;
+      hint.textContent = 'Rischio BASSO su RISULTATI e INTEGRATIVA: testo conclusivo standard applicato automaticamente.';
+      return;
+    }
+
+    wrapAuto.style.display = 'none';
+    wrapEdit.style.display = 'block';
+    const keys = [
+      WIZARD.questionario_esiti.risultati?.key,
+      WIZARD.questionario_esiti.integrativa?.key,
+    ].filter(Boolean).join(', ');
+    hint.textContent = 'Rischio MEDIO o ALTO (' + keys + '): compila il testo delle conclusioni.';
+    if (ta && WIZARD.conclusioni_testo != null) {
+      ta.value = WIZARD.conclusioni_testo;
+    }
+  }
+
+  function syncValutazioneApprofonditaUI() {
+    const hint = document.getElementById('vaHint');
+    const wrapAuto = document.getElementById('vaAuto');
+    const wrapEdit = document.getElementById('vaEdit');
+    const pAuto = document.getElementById('pVaAuto');
+    const ta = document.getElementById('inpValApprofondita');
+    if (!hint || !wrapAuto || !wrapEdit) return;
+
+    if (!WIZARD.questionario_esiti) {
+      hint.textContent = 'Carica il questionario Excel (§6.2) per abilitare questa sezione.';
+      wrapAuto.style.display = 'none';
+      wrapEdit.style.display = 'none';
+      return;
+    }
+
+    const def = ADAPTER?.VALUTAZIONE_APPROFONDITA_DEFAULT || '';
+    if (tuttiRischiBassiFromWizard()) {
+      WIZARD.valutazione_approfondita_testo = '';
+      wrapAuto.style.display = 'block';
+      wrapEdit.style.display = 'none';
+      pAuto.textContent = def;
+      hint.textContent = 'Rischio BASSO su RISULTATI e INTEGRATIVA: testo standard applicato automaticamente.';
+      return;
+    }
+
+    wrapAuto.style.display = 'none';
+    wrapEdit.style.display = 'block';
+    const keys = [
+      WIZARD.questionario_esiti.risultati?.key,
+      WIZARD.questionario_esiti.integrativa?.key,
+    ].filter(Boolean).join(', ');
+    hint.textContent = 'Rischio MEDIO o ALTO (' + keys + '): compila il testo della valutazione approfondita.';
+    if (ta && WIZARD.valutazione_approfondita_testo != null) {
+      ta.value = WIZARD.valutazione_approfondita_testo;
+    }
+  }
+
+  async function onQuestionarioFile(file) {
+    const status = document.getElementById('uploadStatus');
+    if (!file) {
+      status.textContent = '';
+      WIZARD.questionario_esiti = null;
+      WIZARD.questionario_filename = '';
+      renderPianificazionePreview('', null);
+      renderEsitoPreview(
+        document.getElementById('pRisLivello'),
+        document.getElementById('pRisTesto'),
+        '', '', ''
+      );
+      renderEsitoPreview(
+        document.getElementById('pIntLivello'),
+        document.getElementById('pIntTesto'),
+        '', '', ''
+      );
+      syncValutazioneApprofonditaUI();
+      syncConclusioniUI();
+      sendUpdate();
+      return;
+    }
+    if (!window.GEN_STRESS_XLSX) {
+      status.innerHTML = '<span class="upload-err">Parser Excel non caricato.</span>';
+      return;
+    }
+    status.textContent = 'Lettura in corso…';
+    try {
+      const buf = await file.arrayBuffer();
+      const parsed = window.GEN_STRESS_XLSX.parseQuestionarioArrayBuffer(buf);
+      if (!parsed.ok) {
+        status.innerHTML = '<span class="upload-err">' + escapeHtml((parsed.errors || []).join(' ')) + '</span>';
+        WIZARD.questionario_esiti = null;
+        sendUpdate();
+        return;
+      }
+      WIZARD.questionario_filename = file.name;
+      applyQuestionarioToWizard(parsed);
+      status.innerHTML = '<span class="upload-ok">✓ ' + escapeHtml(file.name)
+        + ' — RISULTATI: ' + escapeHtml(parsed.risultati.livello)
+        + ' | INTEGRATIVA: ' + escapeHtml(parsed.integrativa.livello) + '</span>';
+    } catch (err) {
+      status.innerHTML = '<span class="upload-err">' + escapeHtml(err.message || String(err)) + '</span>';
+      WIZARD.questionario_esiti = null;
+      sendUpdate();
+    }
+  }
+
+  function cronoprogrammaRows() {
+    return (ADAPTER && ADAPTER.CRONOPROGRAMMA_ROWS) ? ADAPTER.CRONOPROGRAMMA_ROWS : [];
+  }
+
+  function buildCronoprogrammaTable() {
+    const wrap = document.getElementById('cronoTableWrap');
+    if (!wrap) return;
+    const rows = cronoprogrammaRows();
+    if (!rows.length) {
+      wrap.innerHTML = '<p class="hint-str">Definizione cronoprogramma non caricata.</p>';
+      return;
+    }
+    let html = '<table class="crono-table"><thead><tr>'
+      + '<th>Fase</th><th>Attività</th><th>Data attuazione</th></tr></thead><tbody>';
+    for (const row of rows) {
+      const faseCell = row.fase
+        ? '<td class="col-fase">' + escapeHtml(row.fase) + '</td>'
+        : '<td class="col-fase"></td>';
+      html += '<tr>' + faseCell
+        + '<td class="col-att">' + escapeHtml(row.attivita) + '</td>'
+        + '<td class="col-data"><input type="text" class="crono-input" data-tag="' + escapeHtml(row.tag) + '"'
+        + ' maxlength="40" autocomplete="off">'
+        + '<span class="crono-tag">{{' + escapeHtml(row.tag) + '}}</span></td></tr>';
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('.crono-input').forEach((inp) => {
+      inp.addEventListener('input', () => {
+        const tag = inp.getAttribute('data-tag');
+        if (!WIZARD.cronoprogramma) WIZARD.cronoprogramma = {};
+        WIZARD.cronoprogramma[tag] = inp.value;
+        sendUpdate();
+      });
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function syncCronoprogrammaInputsFromData(data) {
+    if (!WIZARD.cronoprogramma) WIZARD.cronoprogramma = {};
+    for (const row of cronoprogrammaRows()) {
+      const v = data[row.tag] != null ? String(data[row.tag]) : row.default;
+      WIZARD.cronoprogramma[row.tag] = v;
+      const inp = document.querySelector('.crono-input[data-tag="' + row.tag + '"]');
+      if (inp) inp.value = v;
+    }
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const s = String(padded || '').trim();
+    if (!s) return '';
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? String(n) : s;
+  }
+
+  function buildMerged() {
+    if (!DATA || !ADAPTER?.applyWizard) return {};
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    window.parent.postMessage({
+      type: 'DATA_UPDATE',
+      data: merged,
+      valid: errors.length === 0,
+      errors,
+    }, '*');
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+  }
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
+  window.setTestoDirezione = function (v) {
+    WIZARD.testo_direzione_proprietario = v;
+    const display = (v && String(v).trim()) ? String(v).trim() : 'della società';
+    document.getElementById('pTestoDirezione').textContent = display;
+    sendUpdate();
+  };
+
+  function initFromData() {
+    if (!DATA) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pRagSocInline').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+    const testoDir = DATA.TESTO_DIREZIONE_PROPRIETARIO || 'della società';
+    document.getElementById('inpTestoDirezione').value = testoDir;
+    document.getElementById('pTestoDirezione').textContent = testoDir;
+    WIZARD.testo_direzione_proprietario = testoDir;
+    document.getElementById('pDatore').textContent = DATA.DATORE_LAVORO || '—';
+    document.getElementById('pRspp').textContent = DATA.RSPP || '—';
+    document.getElementById('pRls').textContent = DATA.RLS || '—';
+    document.getElementById('pMedico').textContent = DATA.MEDICO_COMPETENTE || '—';
+    const gruppi = (DATA.GRUPPI_OMOGENEI_TESTO || '').trim();
+    const elGruppi = document.getElementById('pGruppi');
+    elGruppi.textContent = gruppi || '—';
+    elGruppi.classList.toggle('field-missing', !gruppi);
+    syncCronoprogrammaInputsFromData(DATA);
+    if (WIZARD.valutazione_approfondita_testo == null) {
+      WIZARD.valutazione_approfondita_testo = DATA._valutazione_approfondita_auto
+        ? ''
+        : (DATA.VALUTAZIONE_APPROFONDITA_TESTO || '');
+    }
+    const taVa = document.getElementById('inpValApprofondita');
+    if (taVa) taVa.value = WIZARD.valutazione_approfondita_testo || '';
+    syncValutazioneApprofonditaUI();
+    if (WIZARD.conclusioni_testo == null) {
+      WIZARD.conclusioni_testo = DATA._conclusioni_auto
+        ? ''
+        : (DATA.CONCLUSIONI_TESTO || '');
+    }
+    const taConc = document.getElementById('inpConclusioni');
+    if (taConc) taConc.value = WIZARD.conclusioni_testo || '';
+    syncConclusioniUI();
+    renderPianificazionePreview(DATA.PIANIFICAZIONE_INTERVENTI_ELENCO, DATA._pianificazione_dettaglio);
+    if (DATA._pianificazione_misure_defaults && !WIZARD.pianificazione_misure) {
+      WIZARD.pianificazione_misure = { ...DATA._pianificazione_misure_defaults };
+    }
+    buildMisureEditor();
+
+    if (DATA.RISULTATI_LIVELLO_RISCHIO) {
+      renderEsitoPreview(
+        document.getElementById('pRisLivello'),
+        document.getElementById('pRisTesto'),
+        DATA.RISULTATI_LIVELLO_RISCHIO,
+        DATA.RISULTATI_TESTO_ESITO,
+        DATA._risultati_livello_key
+      );
+      renderEsitoPreview(
+        document.getElementById('pIntLivello'),
+        document.getElementById('pIntTesto'),
+        DATA.INTEGRATIVA_LIVELLO_RISCHIO,
+        DATA.INTEGRATIVA_TESTO_ESITO,
+        DATA._integrativa_livello_key
+      );
+    }
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) {
+      alert(errors.join('\n'));
+      return;
+    }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  } else {
+    buildCronoprogrammaTable();
+    buildMisureEditor();
+  }
+
+  document.getElementById('inpValApprofondita').addEventListener('input', (e) => {
+    WIZARD.valutazione_approfondita_testo = e.target.value;
+    sendUpdate();
+  });
+
+  document.getElementById('inpConclusioni').addEventListener('input', (e) => {
+    WIZARD.conclusioni_testo = e.target.value;
+    sendUpdate();
+  });
+
+  document.getElementById('inpQuestionario').addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    onQuestionarioFile(f || null);
+  });
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

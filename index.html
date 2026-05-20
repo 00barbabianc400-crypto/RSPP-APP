@@ -4506,12 +4506,21 @@
                 logoUrl = urlData?.signedUrl || null;
             }
 
-            // Fetch rilevamenti illuminamento per questa azienda
-            const { data: rilevamenti } = await supabaseClient
-                .from(CONFIG.tables.rilevamentiAmbientali)
-                .select('*, tipo_rilevamento:tipo_rilevamento_id(id, nome_tipo)')
-                .eq('azienda_id', aziendaId)
-                .order('data_rilevamento', { ascending: false });
+            const [{ data: rilevamenti }, { data: profiliAssociati }] = await Promise.all([
+                supabaseClient
+                    .from(CONFIG.tables.rilevamentiAmbientali)
+                    .select('*, tipo_rilevamento:tipo_rilevamento_id(id, nome_tipo)')
+                    .eq('azienda_id', aziendaId)
+                    .order('data_rilevamento', { ascending: false }),
+                supabaseClient
+                    .from(CONFIG.tables.aziendeProfili)
+                    .select('profilo:profilo_id(nome_profilo, attivo)')
+                    .eq('azienda_id', aziendaId),
+            ]);
+            const profiliNomi = (profiliAssociati || [])
+                .filter((row) => row.profilo && row.profilo.attivo !== false)
+                .map((row) => row.profilo.nome_profilo)
+                .filter(Boolean);
 
             // Recupera numero modulo dal catalogo
             const catalogoItem = (STATE.data?.catalogoDocumenti || []).find(d => d.codice === codice);
@@ -4526,6 +4535,7 @@
                     logo_buffer:   logoBuffer,
                     logo_path:     logoPath,
                     modulo_numero: moduloNumero,
+                    profili_nomi:  profiliNomi,
                 }
             );
 
@@ -4628,7 +4638,12 @@
             try {
                 await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
             } catch (_) { /* helper logo opzionale */ }
-            await loadScriptOnce(base + 'adapter.js?v=20260520c');
+            if (codice === 'MOD_STRESS_LC') {
+                await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520a');
+                await loadScriptOnce(base + 'stress-docx-color.js?v=20260520a');
+                await loadScriptOnce(base + 'pianificazione-misure.js?v=20260520a');
+            }
+            await loadScriptOnce(base + 'adapter.js?v=20260520stress9');
         }
 
         async function downloadModelloTemplate(codice) {

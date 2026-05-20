@@ -63,6 +63,16 @@
     return String(n).padStart(2, '0');
   }
 
+  const ORGANIGRAMMA_RIMOSSO_RE =
+    /\n*\s*Per\s+quanto\s+concerne\s+lo\s+studio\s+dei\s+parametri[\s\S]*$/i;
+
+  function stripOrganigrammaTesto(text) {
+    return String(text || '')
+      .replace(/\r\n/g, '\n')
+      .replace(ORGANIGRAMMA_RIMOSSO_RE, '')
+      .trim();
+  }
+
   const GRUPPI_OMOGENEI_GENERALE_DEFAULT =
     'Si è ritenuto valido operare l\'analisi del rischio stress lavoro-correlato senza definire specificamente '
     + 'gruppi omogenei di lavoratori distinti, in considerazione dell\'omogeneità delle mansioni svolte, '
@@ -86,7 +96,9 @@
       const intro =
         'Il personale della ' + rs + ' è stato considerato nel suo complesso ai fini della presente '
         + 'valutazione del rischio stress lavoro-correlato.';
-      const mid = String(generaleTesto || GRUPPI_OMOGENEI_GENERALE_DEFAULT).trim();
+      const mid = stripOrganigrammaTesto(
+        String(generaleTesto || GRUPPI_OMOGENEI_GENERALE_DEFAULT)
+      );
       return intro + '\n\n' + mid;
     }
     const intro =
@@ -106,10 +118,11 @@
       w.gruppi_omogenei_elenco != null
         ? String(w.gruppi_omogenei_elenco).trim()
         : String(b.GRUPPI_OMOGENEI_TESTO || profiliDefault).trim();
-    const generale =
+    const generale = stripOrganigrammaTesto(
       w.gruppi_omogenei_generale_testo != null
-        ? String(w.gruppi_omogenei_generale_testo).trim()
-        : GRUPPI_OMOGENEI_GENERALE_DEFAULT;
+        ? String(w.gruppi_omogenei_generale_testo)
+        : GRUPPI_OMOGENEI_GENERALE_DEFAULT
+    );
     const rs = b.RAGIONE_SOCIALE || '';
     return {
       GRUPPI_OMOGENEI_TESTO: modalita === 'elenco' ? elenco : '',
@@ -480,6 +493,7 @@
     VALUTAZIONE_APPROFONDITA_DEFAULT,
     CONCLUSIONI_DEFAULT,
     GRUPPI_OMOGENEI_GENERALE_DEFAULT,
+    stripOrganigrammaTesto,
     buildSezione612GruppiOmogenei,
     tuttiRischiBassi,
     CRONOPROGRAMMA_ROWS,

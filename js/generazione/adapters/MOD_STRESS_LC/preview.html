@@ -766,9 +766,10 @@
     const defElenco = d._gruppi_omogenei_elenco_default || '';
     WIZARD.gruppi_omogenei_modalita = d._gruppi_omogenei_modalita === 'generale' ? 'generale' : 'elenco';
     WIZARD.gruppi_omogenei_elenco = String(d.GRUPPI_OMOGENEI_TESTO || defElenco || '').trim();
-    if (!WIZARD.gruppi_omogenei_generale_testo) {
-      WIZARD.gruppi_omogenei_generale_testo = gruppiGeneraleDefault();
-    }
+    const defGen = gruppiGeneraleDefault();
+    WIZARD.gruppi_omogenei_generale_testo = ADAPTER?.stripOrganigrammaTesto
+      ? ADAPTER.stripOrganigrammaTesto(WIZARD.gruppi_omogenei_generale_testo || defGen)
+      : (WIZARD.gruppi_omogenei_generale_testo || defGen);
     document.querySelectorAll('input[name="gruppiModalita"]').forEach((inp) => {
       inp.checked = inp.value === WIZARD.gruppi_omogenei_modalita;
     });
@@ -785,6 +786,13 @@
       inp.addEventListener('change', () => {
         if (!inp.checked) return;
         WIZARD.gruppi_omogenei_modalita = inp.value === 'generale' ? 'generale' : 'elenco';
+        if (WIZARD.gruppi_omogenei_modalita === 'generale' && ADAPTER?.stripOrganigrammaTesto) {
+          WIZARD.gruppi_omogenei_generale_testo = ADAPTER.stripOrganigrammaTesto(
+            WIZARD.gruppi_omogenei_generale_testo || gruppiGeneraleDefault()
+          );
+          const taG = document.getElementById('inpGruppiGenerale');
+          if (taG) taG.value = WIZARD.gruppi_omogenei_generale_testo;
+        }
         updateGruppiModalitaPanels();
         refreshSezione612Preview();
         sendUpdate();
@@ -801,7 +809,10 @@
     }
     if (taG) {
       taG.addEventListener('input', () => {
-        WIZARD.gruppi_omogenei_generale_testo = taG.value;
+        WIZARD.gruppi_omogenei_generale_testo = ADAPTER?.stripOrganigrammaTesto
+          ? ADAPTER.stripOrganigrammaTesto(taG.value)
+          : taG.value;
+        if (ADAPTER?.stripOrganigrammaTesto) taG.value = WIZARD.gruppi_omogenei_generale_testo;
         refreshSezione612Preview();
         sendUpdate();
       });

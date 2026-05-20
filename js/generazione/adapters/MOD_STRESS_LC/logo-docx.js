@@ -145,8 +145,8 @@
       replaced = true;
     });
 
-    if (!replaced) {
-      console.warn('[GEN_LOGO_DOCX] Tag {%LOGO} non trovato nel template');
+    if (!replaced && docPaths.some((p) => zip.file(p)?.asText().includes('LOGO'))) {
+      console.warn('[GEN_LOGO_DOCX] Segnaposto logo presente ma non sostituibile (verifica {%LOGO} in un unico run)');
     }
     return zip;
   }

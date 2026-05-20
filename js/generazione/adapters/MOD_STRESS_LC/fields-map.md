@@ -51,7 +51,7 @@ Gruppi omogenei afferenti all'Unità Produttiva
 {{GRUPPI_OMOGENEI_TESTO}}    ← nella cella blu
 ```
 
-Post-generazione (`stress-docx-gruppi-612.js`): se scegli «senza distinzione», vengono cancellati dal XML solo il paragrafo «Gruppi omogenei afferenti…» e la tabella/cella sotto; il corpo completo resta in `{{SEZIONE_612_GRUPPI_OMOGENEI}}`.
+Post-generazione (`stress-docx-gruppi-612.js`): rimuove sempre il vecchio paragrafo «Per quanto concerne lo studio dei parametri…» se è ancora nel modello come testo fisso; in «senza distinzione» rimuove anche titolo + cella elenco; in «elenco» rimuove un eventuale duplicato titolo+mansione fuori dalla tabella.
 
 - Elenco: un profilo/mansione per riga (`\n`); ordine alfabetico; precompilato dai profili associati all’azienda.
 - Cella tabella elenco: allineamento orizzontale e verticale **centrato** (formattazione cella Word).

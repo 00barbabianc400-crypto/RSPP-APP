@@ -4473,7 +4473,7 @@
 
         function previewHtmlSrc(codice) {
             const v = {
-                MOD_STRESS_LC: '20260520stress14',
+                MOD_STRESS_LC: '20260520stress15',
                 MOD_MICROCLIMA: '20260520c',
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
             };
@@ -4655,7 +4655,7 @@
                 await loadScriptOnce(base + 'stress-docx-color.js?v=20260520d');
                 await loadScriptOnce(base + 'pianificazione-misure.js?v=20260520a');
             }
-            const adapterVer = codice === 'MOD_STRESS_LC' ? '20260520stress14' : '20260520c';
+            const adapterVer = codice === 'MOD_STRESS_LC' ? '20260520stress15' : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }
 

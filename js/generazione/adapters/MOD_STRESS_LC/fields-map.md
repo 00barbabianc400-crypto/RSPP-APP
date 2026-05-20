@@ -68,20 +68,20 @@ Colonne **Fase** e **Attività** restano testo fisso nel Word; solo **Data attua
 
 | Tag Word | Fase | Attività | Default |
 |----------|------|----------|---------|
-| `{{CRONO_DATA_01}}` | FASE PROPEDEUTICA | Costituzione Gruppo di lavoro | 2018 |
-| `{{CRONO_DATA_02}}` | | Sviluppo strategia comunicativa e di coinvolgimento | 2018 |
-| `{{CRONO_DATA_03}}` | | Sensibilizzazione ed informazione | 2018 |
-| `{{CRONO_DATA_04}}` | | Piano di valutazione del Rischio | 2018 |
-| `{{CRONO_DATA_05}}` | | Individuazione gruppi omogenei | 2018 |
-| `{{CRONO_DATA_06}}` | FASE PRELIMINARE | Lista di controllo ed analisi risultati | 2018 |
-| `{{CRONO_DATA_07}}` | | Piano di monitoraggio | 2018 |
-| `{{CRONO_DATA_08}}` | | Verifica efficacia interventi correttivi | 2020 |
+| `{{CRONO_DATA_01}}` | FASE PROPEDEUTICA | Costituzione Gruppo di lavoro | *(vuoto — obbligatorio in compilazione)* |
+| `{{CRONO_DATA_02}}` | | Sviluppo strategia comunicativa e di coinvolgimento | *(vuoto)* |
+| `{{CRONO_DATA_03}}` | | Sensibilizzazione ed informazione | *(vuoto)* |
+| `{{CRONO_DATA_04}}` | | Piano di valutazione del Rischio | *(vuoto)* |
+| `{{CRONO_DATA_05}}` | | Individuazione gruppi omogenei | *(vuoto)* |
+| `{{CRONO_DATA_06}}` | FASE PRELIMINARE | Lista di controllo ed analisi risultati | *(vuoto)* |
+| `{{CRONO_DATA_07}}` | | Piano di monitoraggio | *(vuoto)* |
+| `{{CRONO_DATA_08}}` | | Verifica efficacia interventi correttivi | *(vuoto)* |
 | `{{CRONO_DATA_09}}` | FASE APPROFONDITA | Somministrazione Questionario / Focus group | Non applicabile |
 | `{{CRONO_DATA_10}}` | | Analisi dei risultati | Non applicabile |
-| `{{CRONO_DATA_11}}` | FASE PIANIFICAZIONE INTERVENTI | Pianificazione interventi correttivi | 2018 |
-| `{{CRONO_DATA_12}}` | | Verifica efficacia interventi correttivi | 2020 |
+| `{{CRONO_DATA_11}}` | FASE PIANIFICAZIONE INTERVENTI | Pianificazione interventi correttivi | *(vuoto)* |
+| `{{CRONO_DATA_12}}` | | Verifica efficacia interventi correttivi | *(vuoto)* |
 
-Valore libero (anno, data completa, «Non applicabile», ecc.).
+Valore libero (anno, data completa, «Non applicabile», ecc.). Righe 01–08 e 11–12 partono vuote; 09–10 con default «Non applicabile». Tutte obbligatorie prima di generare il Word.
 
 ## §6.2 — Valutazione preliminare (questionario Excel)
 

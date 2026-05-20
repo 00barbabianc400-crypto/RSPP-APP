@@ -10,18 +10,18 @@
 
   /** §6.1.3 — Cronoprogramma: solo colonna «Data attuazione» (tag → valore operatore). */
   const CRONOPROGRAMMA_ROWS = [
-    { tag: 'CRONO_DATA_01', fase: 'FASE PROPEDEUTICA', attivita: 'Costituzione Gruppo di lavoro', default: '2018' },
-    { tag: 'CRONO_DATA_02', fase: '', attivita: 'Sviluppo strategia comunicativa e di coinvolgimento', default: '2018' },
-    { tag: 'CRONO_DATA_03', fase: '', attivita: 'Sensibilizzazione ed informazione', default: '2018' },
-    { tag: 'CRONO_DATA_04', fase: '', attivita: 'Piano di valutazione del Rischio', default: '2018' },
-    { tag: 'CRONO_DATA_05', fase: '', attivita: 'Individuazione gruppi omogenei', default: '2018' },
-    { tag: 'CRONO_DATA_06', fase: 'FASE PRELIMINARE', attivita: 'Lista di controllo ed analisi risultati', default: '2018' },
-    { tag: 'CRONO_DATA_07', fase: '', attivita: 'Piano di monitoraggio', default: '2018' },
-    { tag: 'CRONO_DATA_08', fase: '', attivita: 'Verifica efficacia interventi correttivi', default: '2020' },
+    { tag: 'CRONO_DATA_01', fase: 'FASE PROPEDEUTICA', attivita: 'Costituzione Gruppo di lavoro', default: '' },
+    { tag: 'CRONO_DATA_02', fase: '', attivita: 'Sviluppo strategia comunicativa e di coinvolgimento', default: '' },
+    { tag: 'CRONO_DATA_03', fase: '', attivita: 'Sensibilizzazione ed informazione', default: '' },
+    { tag: 'CRONO_DATA_04', fase: '', attivita: 'Piano di valutazione del Rischio', default: '' },
+    { tag: 'CRONO_DATA_05', fase: '', attivita: 'Individuazione gruppi omogenei', default: '' },
+    { tag: 'CRONO_DATA_06', fase: 'FASE PRELIMINARE', attivita: 'Lista di controllo ed analisi risultati', default: '' },
+    { tag: 'CRONO_DATA_07', fase: '', attivita: 'Piano di monitoraggio', default: '' },
+    { tag: 'CRONO_DATA_08', fase: '', attivita: 'Verifica efficacia interventi correttivi', default: '' },
     { tag: 'CRONO_DATA_09', fase: 'FASE APPROFONDITA', attivita: 'Somministrazione Questionario / Focus group', default: 'Non applicabile' },
     { tag: 'CRONO_DATA_10', fase: '', attivita: 'Analisi dei risultati', default: 'Non applicabile' },
-    { tag: 'CRONO_DATA_11', fase: 'FASE PIANIFICAZIONE INTERVENTI', attivita: 'Pianificazione interventi correttivi', default: '2018' },
-    { tag: 'CRONO_DATA_12', fase: '', attivita: 'Verifica efficacia interventi correttivi', default: '2020' },
+    { tag: 'CRONO_DATA_11', fase: 'FASE PIANIFICAZIONE INTERVENTI', attivita: 'Pianificazione interventi correttivi', default: '' },
+    { tag: 'CRONO_DATA_12', fase: '', attivita: 'Verifica efficacia interventi correttivi', default: '' },
   ];
 
   function defaultCronoprogrammaMap() {

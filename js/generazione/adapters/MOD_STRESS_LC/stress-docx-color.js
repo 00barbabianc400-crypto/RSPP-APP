@@ -1,12 +1,35 @@
 /**
- * Post-render DOCX §6.2: sfondo colorato celle livello, testo grassetto nero,
- * allineamento sinistro su tutte e 4 le celle (2 tabelle × livello + testo).
+ * Post-render DOCX §6.2 — solo celle foglia (w:tc senza tabella annidata).
+ * Regex con confine </w:tc> per non inglobare righe/tabelle intere.
  */
 (function () {
   'use strict';
 
+  const RISK_LABELS = ['RISCHIO BASSO', 'RISCHIO MEDIO', 'RISCHIO ALTO'];
+
   function escapeRegex(s) {
     return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function isLeafTcBody(body) {
+    return body && !/<w:tbl[\s>]/i.test(body);
+  }
+
+  /** w:tc la cui body contiene snippet, senza attraversare un altro </w:tc>. */
+  function forEachLeafTcContaining(xml, snippet, fn) {
+    const s = String(snippet || '').trim();
+    if (s.length < 8) return xml;
+
+    const esc = escapeRegex(s.slice(0, Math.min(s.length, 120)));
+    const re = new RegExp(
+      '(<w:tc(?:\\b[^>]*)>)((?:(?!<\\/w:tc>)[\\s\\S])*?' + esc + '(?:(?!<\\/w:tc>)[\\s\\S])*?)(<\\/w:tc>)',
+      'gi'
+    );
+
+    return xml.replace(re, (full, open, body, close) => {
+      if (!isLeafTcBody(body)) return full;
+      return open + fn(body) + close;
+    });
   }
 
   function ensureTcTopLeft(body) {
@@ -46,30 +69,30 @@
     return '<w:tcPr>' + shd + '</w:tcPr>' + body;
   }
 
-  /** Trova w:tc che contiene un frammento di testo e applica callback sul corpo cella. */
-  function forEachTcContaining(xml, snippet, fn) {
-    if (!snippet || snippet.length < 6) return xml;
-    const esc = escapeRegex(snippet.slice(0, Math.min(snippet.length, 160)));
-    const re = new RegExp(
-      '(<w:tc(?:\\b[^>]*)>)([\\s\\S]*?' + esc + '[\\s\\S]*?)(</w:tc>)',
-      'gi'
-    );
-    return xml.replace(re, (full, open, body, close) => open + fn(body) + close);
+  function riskLabelForKey(key) {
+    const k = String(key || '').toUpperCase();
+    if (k === 'BASSO' || k === 'MEDIO' || k === 'ALTO') return 'RISCHIO ' + k;
+    return '';
   }
 
-  function snippetsForField(value) {
-    const s = String(value || '').trim();
-    if (!s) return [];
+  function uniqueSnippetsForEsitoAlign(data) {
     const out = [];
-    if (s.length >= 12) out.push(s.slice(0, Math.min(s.length, 140)));
-    for (const line of s.split('\n')) {
-      const t = line.trim();
-      if (t.length >= 6) out.push(t.slice(0, Math.min(t.length, 80)));
+    const push = (v, minLen) => {
+      const s = String(v || '').trim();
+      if (s.length >= minLen) out.push(s.slice(0, Math.min(s.length, 100)));
+    };
+
+    for (const key of ['_risultati_livello_key', '_integrativa_livello_key']) {
+      const lbl = riskLabelForKey(data[key]);
+      if (lbl) out.push(lbl);
     }
+    push(data.RISULTATI_TESTO_ESITO, 40);
+    push(data.INTEGRATIVA_TESTO_ESITO, 40);
+
     return [...new Set(out)];
   }
 
-  /** Sfondo colore + grassetto nero sulle due celle livello (sinistra). */
+  /** Sfondo + grassetto nero solo sulla cella che contiene «RISCHIO …». */
   function applyRiskLevelCellShadingToZip(zip, data) {
     const xlsx = window.GEN_STRESS_XLSX;
     if (!zip || !xlsx) return zip;
@@ -78,17 +101,17 @@
     if (!file) return zip;
 
     let xml = file.asText();
-    const pairs = [
-      [data.RISULTATI_LIVELLO_RISCHIO, data._risultati_livello_key],
-      [data.INTEGRATIVA_LIVELLO_RISCHIO, data._integrativa_livello_key],
+    const keys = [
+      data._risultati_livello_key,
+      data._integrativa_livello_key,
     ];
 
-    for (const [label, key] of pairs) {
+    for (const key of keys) {
       const fill = xlsx.colorForKey(key);
-      if (!label || !fill) continue;
-      const search = String(label).split('\n')[0].trim();
-      if (search.length < 6) continue;
-      xml = forEachTcContaining(xml, search, (body) => {
+      const label = riskLabelForKey(key);
+      if (!fill || !label) continue;
+
+      xml = forEachLeafTcContaining(xml, label, (body) => {
         let b = applyTcShade(body, fill);
         b = forceBoldBlackRunsInTc(b);
         return ensureTcTopLeft(b);
@@ -99,29 +122,21 @@
     return zip;
   }
 
-  /** Allineamento sinistro (e alto) sulle 4 celle §6.2. */
+  /** Allineamento sinistro sulle 4 celle §6.2 (snippet lunghi e univoci). */
   function applyEsitoFourCellsLayout(zip, data) {
     const file = zip.file('word/document.xml');
     if (!file) return zip;
 
     let xml = file.asText();
-    const fields = [
-      data.RISULTATI_LIVELLO_RISCHIO,
-      data.RISULTATI_TESTO_ESITO,
-      data.INTEGRATIVA_LIVELLO_RISCHIO,
-      data.INTEGRATIVA_TESTO_ESITO,
-    ];
-
-    for (const field of fields) {
-      for (const snip of snippetsForField(field)) {
-        xml = forEachTcContaining(xml, snip, ensureTcTopLeft);
-      }
+    for (const snip of uniqueSnippetsForEsitoAlign(data)) {
+      xml = forEachLeafTcContaining(xml, snip, ensureTcTopLeft);
     }
 
     zip.file('word/document.xml', xml);
     return zip;
   }
 
+  /** Grassetto solo sul run che contiene l’intestazione Area (§6.4). */
   function boldBlackLabelInXml(xml, label) {
     if (!label) return xml;
     const esc = escapeRegex(label);
@@ -142,19 +157,17 @@
     const file = zip.file('word/document.xml');
     if (!file) return zip;
     let xml = file.asText();
-    const headers = [
+    for (const h of [
       'Area indicatori aziendali:',
       'Area contenuto:',
       'Area Contesto:',
-    ];
-    for (const h of headers) {
+    ]) {
       xml = boldBlackLabelInXml(xml, h);
     }
     zip.file('word/document.xml', xml);
     return zip;
   }
 
-  /** @deprecated usa applyRiskLevelCellShadingToZip */
   function applyRiskLevelColorsToZip(zip, data) {
     return applyRiskLevelCellShadingToZip(zip, data);
   }

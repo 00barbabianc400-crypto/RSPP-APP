@@ -94,19 +94,21 @@ L’operatore carica il file Excel (`.xlsx` / `.xlsm`; nome libero). Il sistema 
 
 ### Tag Word — tabella «questionario comitato» (2 colonne)
 
-| Colonna sinistra (grassetto + colore in DOCX) | Colonna destra (testo) |
+| Colonna sinistra (sfondo colore livello + testo grassetto nero) | Colonna destra (testo esito, allineato a sinistra) |
 |-----------------------------------------------|------------------------|
 | `{{RISULTATI_LIVELLO_RISCHIO}}` | `{{RISULTATI_TESTO_ESITO}}` |
 
 Sostituisci la riga tipo `RISCHIO BASSO[FM1.1]` + paragrafo a destra. Rimuovi `[FM1.1]` / note a piè di pagina se non servono.
 
-**Colori applicati in generazione DOCX** (non serve colorare il tag in Word):
+**Layout (4 celle):** nelle due tabelle §6.2, **tutte e 4 le celle** (livello + testo esito × 2) con allineamento **sinistro** e verticale **alto** nel DOCX generato.
 
-| Livello | Colore |
-|---------|--------|
-| BASSO | verde `#00B050` |
-| MEDIO | arancio `#FFC000` |
-| ALTO | rosso `#C00000` |
+**Colori celle livello** (solo le **due celle sinistre**, non il colore del carattere):
+
+| Livello | Sfondo cella | Testo |
+|---------|--------------|-------|
+| BASSO | verde `#00B050` | grassetto nero |
+| MEDIO | arancio `#FFC000` | grassetto nero |
+| ALTO | rosso `#C00000` | grassetto nero |
 
 ### Tag Word — tabella «lavoro da remoto / innovazione» (2 colonne)
 
@@ -174,11 +176,14 @@ Stesso file questionario (`Questionario SLC CON RISULTATI agg. 2026.xlsx`). I te
 
 La colonna azioni è rilevata dall’intestazione «AZIONI DI MIGLIORAMENTO» (riga 5); se assente, si usano i fallback sopra.
 
-**Trasformazione al negativo** (solo sulle righe incluse), es.:
+**Trasformazione al negativo** (solo righe con **SI** o **NO** sulla stessa riga; escluse intestazioni di sotto-area):
 
-- NO su «Presenza di…» → «Assenti…» / «Non…»
-- SI su «Rischio…» → «Presenza di rischio…»
-- INDICATORI: trend **J** → «Aumento …»; **F** → «Diminuzione …»
+- NO su «Presenza di…» → «Non è presente …» / «Assenti …»
+- NO su «adeguato…» → «Non adeguato: …» (senza ripetere «adeguato»)
+- NO su «diffusione…» → «Non è diffuso l'…»
+- SI su «ci sono…» → «Sono presenti …»; SI su criticità → frase al positivo («È presente il lavoro a turni», ecc.)
+- INDICATORI: **J** → «Aumento degli indici infortunistici» / ferie / procedimenti; **F** → «Diminuzione …»
+- Escluse righe-titolo (es. «ambiente di lavoro ed attrezzature», «ruolo nell'ambito dell'organizzazione») senza SI/NO
 
 **Formato output** in `{{PIANIFICAZIONE_INTERVENTI_ELENCO}}` (un paragrafo strutturato, a capo):
 
@@ -232,7 +237,7 @@ Output: righe `•\tTesto` concatenate con un solo a capo (`\n`), senza doppi sp
 |------|--------|
 | `adapter.js` | buildData, applyWizard, validate, generateDocx |
 | `stress-questionario-xlsx.js` | Parser Excel (RISULTATI, INTEGRATIVA, §6.4) |
-| `stress-docx-color.js` | Colore livelli rischio + grassetto aree §6.4 |
+| `stress-docx-color.js` | Sfondo celle livello §6.2, allineamento 4 celle, grassetto aree §6.4 |
 | `pianificazione-misure.js` | Catalogo misure §6.4 (elenco puntato Direzione) |
 | `preview.html` | UI compilazione |
 | `logo-docx.js` | Iniezione logo nel DOCX |

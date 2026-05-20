@@ -367,8 +367,11 @@
     }
 
     const outZip = doc.getZip();
-    if (window.GEN_STRESS_DOCX_COLOR?.applyRiskLevelColorsToZip) {
-      window.GEN_STRESS_DOCX_COLOR.applyRiskLevelColorsToZip(outZip, data);
+    if (window.GEN_STRESS_DOCX_COLOR?.applyRiskLevelCellShadingToZip) {
+      window.GEN_STRESS_DOCX_COLOR.applyRiskLevelCellShadingToZip(outZip, data);
+    }
+    if (window.GEN_STRESS_DOCX_COLOR?.applyEsitoFourCellsLayout) {
+      window.GEN_STRESS_DOCX_COLOR.applyEsitoFourCellsLayout(outZip, data);
     }
     if (window.GEN_STRESS_DOCX_COLOR?.applyPianificazioneBoldHeaders) {
       window.GEN_STRESS_DOCX_COLOR.applyPianificazioneBoldHeaders(outZip);

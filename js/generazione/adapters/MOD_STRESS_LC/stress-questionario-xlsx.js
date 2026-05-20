@@ -228,88 +228,142 @@
     return cut || t;
   }
 
-  function lcFirst(s) {
-    const t = normText(s);
+  /** Normalizza maiuscole Excel (es. «iNDICI») in frase leggibile. */
+  function normalizePhrase(s) {
+    let t = normText(s);
     if (!t) return '';
-    return t.charAt(0).toLowerCase() + t.slice(1);
+    const letters = t.replace(/[^A-Za-zÀ-ú]/g, '');
+    const uppers = (letters.match(/[A-ZÀ-Ú]/g) || []).length;
+    if (letters.length > 4 && uppers / letters.length > 0.45) {
+      t = t.toLowerCase();
+    }
+    return t;
+  }
+
+  function capFirst(s) {
+    const t = normalizePhrase(s);
+    if (!t) return '';
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+
+  function stripLeadingAdeguato(s) {
+    return normalizePhrase(s).replace(/^adeguat[oaie]+\s*:?\s*/i, '').trim();
   }
 
   function cellAt(sheet, col, row) {
     return cellVal(sheet, col + row);
   }
 
-  /** Trasforma testo indicatore in formulazione «critica» (evento non adeguato / assente). */
+  const SECTION_TITLE_RE = [
+    /^ambiente di lavoro\b/i,
+    /^ruolo nell['\u2019]?ambito\b/i,
+    /^contenuto del lavoro\b/i,
+    /^contesto organizzativo\b/i,
+    /^area\s+(contenuto|contesto|indicatori)/i,
+    /^sotto-?area\b/i,
+  ];
+
+  /** Trasforma testo indicatore in formulazione critica (SI/NO sulla stessa riga). */
   function testoNegativoContestoContenuto(testo, siX, noX) {
     const raw = shortTestoIndicatore(testo);
-    if (!raw) return '';
-    const low = raw.toLowerCase();
+    if (!raw || (!siX && !noX)) return '';
+    const phrase = normalizePhrase(raw);
+    const low = phrase.toLowerCase();
 
     if (noX) {
       if (low.startsWith('presenza di ')) {
-        const rest = lcFirst(raw.slice(11));
-        if (low.includes('sistemi per') || low.includes('sistema di') || low.includes('sistema ')) {
-          return 'Assenti ' + rest;
-        }
-        return 'Non ' + rest;
+        const rest = phrase.slice(11).trim();
+        if (/sistemi?\s+(per|di)\b/i.test(rest)) return 'Assenti ' + rest;
+        return 'Non è presente ' + rest;
       }
+      if (low.startsWith('non disponibilit')) return capFirst(phrase);
       if (low.startsWith('possibilità di ') || low.startsWith('possibilita di ')) {
-        return 'Impossibilità di ' + lcFirst(raw.replace(/^possibilit[aà] di /i, ''));
+        return 'Impossibilità di ' + phrase.replace(/^possibilit[aà] di /i, '');
       }
-      if (low.startsWith('sono predisposti ') || low.startsWith('sono definiti ') || low.startsWith('sono previsti ')) {
-        return 'Non ' + lcFirst(raw);
+      if (low.startsWith('sono predisposti ')) {
+        return 'Non sono predisposti ' + phrase.replace(/^sono predisposti\s+/i, '');
       }
-      if (low.startsWith('esistono ')) {
-        return 'Non esistono ' + lcFirst(raw.slice(9));
+      if (low.startsWith('sono definiti ')) {
+        return 'Non sono definiti ' + phrase.replace(/^sono definiti\s+/i, '');
       }
-      if (low.startsWith('diffusione ')) {
-        return 'Non diffusi ' + lcFirst(raw.slice(11));
+      if (low.startsWith('sono previsti ')) {
+        return 'Non sono previsti ' + phrase.replace(/^sono previsti\s+/i, '');
       }
-      if (low.startsWith('effettuazione ')) {
-        return 'Non effettuata ' + lcFirst(raw.slice(14));
+      if (low.startsWith('esistono ')) return 'Non esistono ' + phrase.slice(9);
+      if (low.startsWith('diffusione ') || low.startsWith('diffusi ')) {
+        let rest = phrase.replace(/^diffusione\s+/i, '').replace(/^diffusi\s+/i, '');
+        if (!/^(l['\u2019]?|il |la |lo |gli |le |i )/i.test(rest)) rest = "l'" + rest;
+        return 'Non è diffuso ' + rest;
       }
-      if (low.startsWith('adeguat')) return 'Non adeguato: ' + lcFirst(raw);
-      return 'Non ' + lcFirst(raw);
+      if (low.startsWith('effettuazione ')) return 'Non è effettuata ' + phrase.slice(14);
+      if (low.startsWith('adeguat')) return 'Non adeguato: ' + stripLeadingAdeguato(phrase);
+      if (/^un\s/.test(low) || /^una\s/.test(low)) return 'Non è previsto ' + phrase;
+      if (low.startsWith('i lavoratori') || low.startsWith('il ') || low.startsWith('gli ')) {
+        return 'Non ' + phrase.charAt(0).toLowerCase() + phrase.slice(1);
+      }
+      return 'Non ' + phrase.charAt(0).toLowerCase() + phrase.slice(1);
     }
 
     if (siX) {
       if (low.includes('rischio')) {
-        if (low.startsWith('rischio ')) return 'Presenza di ' + lcFirst(raw);
-        return 'Presenza di rischio: ' + lcFirst(raw);
+        if (low.startsWith('rischio ')) return 'Presenza di ' + phrase;
+        return 'Presenza di rischio ' + phrase.replace(/^rischio\s+/i, '');
       }
-      if (low.startsWith('ci sono ')) return lcFirst(raw.charAt(0).toUpperCase() + raw.slice(1));
-      if (low.startsWith('è presente') || low.startsWith('e\' presente') || low.startsWith('e\u2019 presente')) {
-        return 'Presente ' + lcFirst(raw.replace(/^e['\u2019]? presente /i, ''));
+      if (low.startsWith('ci sono ')) {
+        return 'Sono presenti ' + phrase.replace(/^ci sono\s+/i, '');
       }
-      if (low.startsWith('sono presenti ')) return lcFirst(raw.charAt(0).toUpperCase() + raw.slice(1));
-      if (low.startsWith('viene ') || low.startsWith('vi è ') || low.startsWith('vi ')) {
-        return lcFirst(raw.charAt(0).toUpperCase() + raw.slice(1));
+      if (low.startsWith('è presente') || low.startsWith('e\' presente') || low.startsWith('e presente')) {
+        return 'È presente ' + phrase.replace(/^e['\u2019]?\s*presente\s+/i, '');
       }
-      if (low.startsWith('il ') || low.startsWith('i ') || low.startsWith('lavoro ')) {
-        return lcFirst(raw.charAt(0).toUpperCase() + raw.slice(1));
+      if (low.startsWith('sono presenti ')) return capFirst(phrase);
+      if (low.startsWith('è abituale') || low.startsWith('e\' abituale') || low.startsWith('e abituale')) {
+        return capFirst(phrase);
       }
-      if (low.startsWith('adeguat')) return 'Non adeguato: ' + lcFirst(raw);
-      return lcFirst(raw.charAt(0).toUpperCase() + raw.slice(1));
+      if (low.startsWith('la programmazione') || low.startsWith('presente un ')) return capFirst(phrase);
+      if (low.startsWith('viene ') || low.startsWith('vi è ') || low.startsWith('vi ')) return capFirst(phrase);
+      if (low.startsWith('il ') || low.startsWith('i ') || low.startsWith('lavoro ')) return capFirst(phrase);
+      if (low.startsWith('adeguat')) return 'Non adeguato: ' + stripLeadingAdeguato(phrase);
+      return capFirst(phrase);
     }
 
-    return lcFirst(raw.charAt(0).toUpperCase() + raw.slice(1));
+    return '';
   }
 
   function testoNegativoIndicatoriAziendali(sheet, row, testo) {
-    const label = shortTestoIndicatore(testo);
+    const label = normalizePhrase(shortTestoIndicatore(testo));
     if (!label) return '';
+    const low = label.toLowerCase();
 
-    if (isMarkerX(cellAt(sheet, 'J', row))) return 'Aumento ' + lcFirst(label);
-    if (isMarkerX(cellAt(sheet, 'F', row))) return 'Diminuzione ' + lcFirst(label);
+    if (isMarkerX(cellAt(sheet, 'J', row))) {
+      if (/infortunist/i.test(low)) return 'Aumento degli indici infortunistici';
+      if (/ferie/i.test(low)) return 'Aumento della percentuale di ferie non godute';
+      if (/procediment|sanzion|disciplin/i.test(low)) {
+        return 'Aumento dei procedimenti/sanzioni disciplinari';
+      }
+      return 'Aumento ' + (low.match(/^(del|della|dei|degli|delle|dell['\u2019])\s/)
+        ? low
+        : (/^[aeiouàèéìòù]/i.test(low) ? 'degli ' : 'dei ') + low);
+    }
+    if (isMarkerX(cellAt(sheet, 'F', row))) {
+      if (/ferie/i.test(low)) return 'Diminuzione della percentuale di ferie non godute';
+      return 'Diminuzione ' + (low.match(/^(del|della|dei|degli|delle|dell['\u2019])\s/)
+        ? low
+        : (/^[aeiouàèéìòù]/i.test(low) ? 'degli ' : 'dei ') + low);
+    }
 
     const m = parseNumber(cellAt(sheet, 'M', row));
     const n = parseNumber(cellAt(sheet, 'N', row));
     const o = parseNumber(cellAt(sheet, 'O', row));
     if (Number.isFinite(m) && Number.isFinite(n) && Number.isFinite(o)) {
-      if (o > m && o > n && o > 0) return 'Aumento ' + lcFirst(label);
-      if (m > n && m > o && m > 0) return 'Diminuzione ' + lcFirst(label);
+      if (o > m && o > n && o > 0) {
+        if (/infortunist/i.test(low)) return 'Aumento degli indici infortunistici';
+        if (/ferie/i.test(low)) return 'Aumento della percentuale di ferie non godute';
+        return 'Aumento ' + low;
+      }
+      if (m > n && m > o && m > 0) return 'Diminuzione ' + low;
     }
 
-    return lcFirst(label.charAt(0).toUpperCase() + label.slice(1));
+    return '';
   }
 
   const PROFILI_RISCHIO_KW = [
@@ -334,10 +388,16 @@
   function isSectionTitle(cVal, dVal) {
     const c = normText(cVal);
     const d = normText(dVal);
+    if (!d) return true;
+    if (d === c && c.length > 6) return true;
+    if (SECTION_TITLE_RE.some((re) => re.test(d))) return true;
     if (!c || c === 'N' || /^\d+$/.test(c)) return false;
-    if (d.length > 10) return false;
+    if (d.length > 28) return false;
     if (/INDICATORE|AZIONI DI MIGLIORAMENTO|RISULTATI|PAGINA|SCHEDA|^AREA |^A CURA/i.test(c)) return false;
-    return true;
+    if (!/^(presenza|possibilit|sono|esistono|ci sono|è |e'|adeguat|non |il |i |lavoro |la |viene|diffusione)/i.test(d)) {
+      return true;
+    }
+    return false;
   }
 
   const SHEET_COLS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -363,12 +423,14 @@
 
       const d = cellAt(sheet, 'D', rs);
       const testo = normText(d);
-      if (testo.length < 12 || /INDICATORE/i.test(testo)) continue;
+      if (testo.length < 22 || /INDICATORE/i.test(testo)) continue;
       if (/^RISULTATI/i.test(testo) || /PAGINA/i.test(testo)) continue;
       if (isSectionTitle(cellAt(sheet, 'C', rs), d)) continue;
 
       const siX = isMarkerX(cellAt(sheet, siCol, rs));
       const noX = isMarkerX(cellAt(sheet, noCol, rs));
+      if (!siX && !noX) continue;
+
       const neg = testoNegativoContestoContenuto(testo, siX, noX);
       if (neg) items.push(prefissoGruppiOmogenei(neg) + neg);
     }
@@ -433,10 +495,6 @@
       contesto,
       testo: formatPianificazioneElenco(indicatori, contenuto, contesto),
     };
-  }
-
-  function colorForKey(key) {
-    return LIVELLO_COLORI[key] || '000000';
   }
 
   window.GEN_STRESS_XLSX = {

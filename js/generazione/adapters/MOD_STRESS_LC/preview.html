@@ -65,12 +65,22 @@
   .crono-input { width: 100%; font-size: 9.5pt; padding: 4px 6px; border: 1px solid #bbb; border-radius: 3px; box-sizing: border-box; }
   .crono-tag { display: block; font-size: 8pt; color: #888; margin-top: 2px; font-family: Consolas, monospace; }
   .esito-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 10px; }
-  .esito-table td { border: 1px solid #ccc; padding: 10px; vertical-align: top; }
-  .esito-table .col-livello { width: 28%; font-weight: 700; text-align: center; }
-  .esito-table .col-testo { width: 72%; line-height: 1.45; }
-  .risk-basso { color: #00B050; }
-  .risk-medio { color: #e6a800; }
-  .risk-alto { color: #C00000; }
+  .esito-table td {
+    border: 1px solid #ccc;
+    padding: 10px;
+    vertical-align: top;
+    text-align: left;
+  }
+  .esito-table .col-livello {
+    width: 28%;
+    font-weight: 700;
+    color: #000;
+    line-height: 1.35;
+  }
+  .esito-table .col-testo { width: 72%; line-height: 1.45; text-align: left; }
+  .risk-basso { background-color: #00B050; }
+  .risk-medio { background-color: #FFC000; }
+  .risk-alto { background-color: #C00000; }
   .upload-box { margin: 10px 0; padding: 12px; background: #f8f9fa; border: 1px dashed #aaa; border-radius: 4px; }
   .upload-err { color: #922b21; font-size: 9.5pt; margin-top: 8px; }
   .upload-ok { color: #1e6b3a; font-size: 9.5pt; margin-top: 8px; }

@@ -35,13 +35,23 @@
 
 | Scelta operatore | Contenuto nel Word |
 |------------------|-------------------|
-| **Elenco mansioni** | Intro + «Gruppi omogenei afferenti…» + elenco (profili, modificabile) + paragrafo organigramma |
-| **Analisi senza distinzione** | Intro sintetica + testo standard (modificabile) + stesso paragrafo finale |
+| **Elenco mansioni** | Intro in `{{SEZIONE_612…}}` → titolo fisso → elenco in cella blu |
+| **Analisi senza distinzione** | Intro + testo centrale in `{{SEZIONE_612…}}`; titolo e cella **rimossi** dal post-processo |
 
 | Tag Word | Uso |
 |----------|-----|
-| `{{SEZIONE_612_GRUPPI_OMOGENEI}}` | **Sostituisce tutto il corpo** del §6.1.2 (da «Il personale della…» fino al paragrafo sull’organigramma). Il titolo «6.1.2 INDIVIDUAZIONE…» resta fisso nel modello. |
-| `{{GRUPPI_OMOGENEI_TESTO}}` | Solo in **modalità elenco**: elenco multiriga per eventuale cella tabella (§6.1.2 o §6.2). Vuoto in modalità «senza distinzione». |
+| `{{SEZIONE_612_GRUPPI_OMOGENEI}}` | **Elenco:** solo intro. **Generale:** intro + testo centrale (textarea operatore). |
+| `{{GRUPPI_OMOGENEI_TESTO}}` | Solo nella cella blu (modalità elenco). In generale resta vuoto e il blocco viene eliminato da `stress-docx-gruppi-612.js`. |
+
+**Layout unico nel modello** (stesso `.docx` per entrambe le scelte):
+
+```
+{{SEZIONE_612_GRUPPI_OMOGENEI}}
+Gruppi omogenei afferenti all'Unità Produttiva
+{{GRUPPI_OMOGENEI_TESTO}}    ← nella cella blu
+```
+
+Post-generazione (`stress-docx-gruppi-612.js`): se scegli «senza distinzione», vengono cancellati dal XML solo il paragrafo «Gruppi omogenei afferenti…» e la tabella/cella sotto; il corpo completo resta in `{{SEZIONE_612_GRUPPI_OMOGENEI}}`.
 
 - Elenco: un profilo/mansione per riga (`\n`); ordine alfabetico; precompilato dai profili associati all’azienda.
 - Cella tabella elenco: allineamento orizzontale e verticale **centrato** (formattazione cella Word).
@@ -61,19 +71,15 @@ Rappresentante dei lavoratori …:         →  {{RLS}}
 Medico Competente:                       →  {{MEDICO_COMPETENTE}}
 ```
 
-### §6.1.2 — corpo sezione (sostituire tutti i paragrafi dinamici)
+### §6.1.2 — blocco unico (entrambe le modalità)
 
 ```
 {{SEZIONE_612_GRUPPI_OMOGENEI}}
-```
-
-### Cella elenco (solo se modalità «elenco» e tabella separata)
-
-```
+Gruppi omogenei afferenti all'Unità Produttiva
 {{GRUPPI_OMOGENEI_TESTO}}
 ```
 
-Centratura cella: orizzontale **Centrato**, verticale **Centrato**.
+Cella blu: centratura orizzontale/verticale; mansioni in **grassetto nero** (formattazione cella Word).
 
 ## §6.1.3 — Cronoprogramma (operatore)
 

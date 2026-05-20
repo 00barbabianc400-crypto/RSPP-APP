@@ -63,12 +63,6 @@
     return String(n).padStart(2, '0');
   }
 
-  const GRUPPI_OMOGENEI_PIE_TESTO =
-    'Per quanto concerne lo studio dei parametri oggettivi rilevanti ai fini della valutazione del rischio SLC '
-    + 'l\'organigramma aziendale è stato riesaminato per verificare l\'opportunità di individuare Classi Omogenee '
-    + 'di lavoratori esposti a livelli di rischio differenti. Ai fini della presente valutazione non si è resa '
-    + 'necessaria una distinzione fra gruppi omogenei di lavoratori.';
-
   const GRUPPI_OMOGENEI_GENERALE_DEFAULT =
     'Si è ritenuto valido operare l\'analisi del rischio stress lavoro-correlato senza definire specificamente '
     + 'gruppi omogenei di lavoratori distinti, in considerazione dell\'omogeneità delle mansioni svolte, '
@@ -88,21 +82,19 @@
   /** Corpo §6.1.2 (senza titolo «6.1.2») per {{SEZIONE_612_GRUPPI_OMOGENEI}}. */
   function buildSezione612GruppiOmogenei(ragioneSociale, modalita, elencoTesto, generaleTesto) {
     const rs = String(ragioneSociale || '').trim();
-    const footer = GRUPPI_OMOGENEI_PIE_TESTO;
     if (modalita === 'generale') {
       const intro =
         'Il personale della ' + rs + ' è stato considerato nel suo complesso ai fini della presente '
         + 'valutazione del rischio stress lavoro-correlato.';
       const mid = String(generaleTesto || GRUPPI_OMOGENEI_GENERALE_DEFAULT).trim();
-      return intro + '\n\n' + mid + '\n\n' + footer;
+      return intro + '\n\n' + mid;
     }
     const intro =
       'Il personale della ' + rs + ' è distribuito nelle differenti mansioni di seguito specificate. '
       + 'Il personale viene suddiviso con lo scopo di individuare dei gruppi omogenei di lavoratori, '
       + 'sulla base delle mansioni svolte alla luce del loro inquadramento, per i quali è ragionevole supporre '
       + 'lo stesso genere di rischi occupazionali (incidenti e/o malattie professionali).';
-    const lista = String(elencoTesto || '').trim();
-    return intro + '\n\nGruppi omogenei afferenti all\'Unità Produttiva\n' + lista + '\n\n' + footer;
+    return intro;
   }
 
   function gruppiOmogeneiFields(wizard, base) {
@@ -143,6 +135,17 @@
       RSPP: pickAziendaField(azienda, 'rspp', 'RSPP'),
       RLS: pickAziendaField(azienda, 'rls', 'RLS'),
       MEDICO_COMPETENTE: pickAziendaField(azienda, 'medico_competente', 'MedicoCompetente'),
+    };
+  }
+
+  /** Dati già in forma tag Word (applyWizard); non sovrascrivere con pick su riga DB. */
+  function campiAnagraficaForDocx(data, aziendaRow) {
+    const fromRow = campiAnagraficaComitato(aziendaRow);
+    return {
+      DATORE_LAVORO: templateValue(data.DATORE_LAVORO) || fromRow.DATORE_LAVORO,
+      RSPP: templateValue(data.RSPP) || fromRow.RSPP,
+      RLS: templateValue(data.RLS) || fromRow.RLS,
+      MEDICO_COMPETENTE: templateValue(data.MEDICO_COMPETENTE) || fromRow.MEDICO_COMPETENTE,
     };
   }
 
@@ -327,6 +330,7 @@
       NOTE_WIZARD: w.note_wizard != null ? String(w.note_wizard) : '',
       _rilevamenti: rilevamenti || [],
       _profili_nomi: profiliNomi,
+      _azienda_row: azienda || null,
       _cronoprogramma_defaults: defaultCronoprogrammaMap(),
     };
   }
@@ -417,8 +421,7 @@
       if (k === 'LOGO_PREVIEW_URL') continue;
       templateData[k] = templateValue(v);
     }
-    const comitato = campiAnagraficaComitato(data);
-    Object.assign(templateData, comitato);
+    Object.assign(templateData, campiAnagraficaForDocx(data, data._azienda_row));
 
     if (!templateArrayBuffer || !templateArrayBuffer.byteLength) {
       throw new Error('Template Word vuoto o non scaricato');
@@ -452,6 +455,9 @@
     }
 
     const outZip = doc.getZip();
+    if (window.GEN_STRESS_DOCX_GRUPPI_612?.applyGruppiOmogenei612ToZip) {
+      window.GEN_STRESS_DOCX_GRUPPI_612.applyGruppiOmogenei612ToZip(outZip, data);
+    }
     if (window.GEN_STRESS_DOCX_COLOR?.applyRiskLevelCellShadingToZip) {
       window.GEN_STRESS_DOCX_COLOR.applyRiskLevelCellShadingToZip(outZip, data);
     }
@@ -473,7 +479,6 @@
     nome: NOME,
     VALUTAZIONE_APPROFONDITA_DEFAULT,
     CONCLUSIONI_DEFAULT,
-    GRUPPI_OMOGENEI_PIE_TESTO,
     GRUPPI_OMOGENEI_GENERALE_DEFAULT,
     buildSezione612GruppiOmogenei,
     tuttiRischiBassi,

@@ -4657,11 +4657,12 @@
 
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520c');
+                await loadScriptOnce(base + 'stress-docx-gruppi-612.js?v=20260520a');
                 await loadScriptOnce(base + 'stress-docx-color.js?v=20260520d');
                 await loadScriptOnce(base + 'pianificazione-misure.js?v=20260520a');
             }
 
-            const adapterVer = codice === 'MOD_STRESS_LC' ? '20260520stress17' : '20260520c';
+            const adapterVer = codice === 'MOD_STRESS_LC' ? '20260520stress20' : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }
 

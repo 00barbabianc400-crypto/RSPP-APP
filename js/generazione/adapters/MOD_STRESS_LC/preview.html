@@ -179,10 +179,9 @@
 
     <h2 class="doc-section">§6.1.2 — Modalità di individuazione dei gruppi omogenei</h2>
     <p class="hint-str">
-      Sostituisci nel Word <strong>tutto il corpo</strong> del §6.1.2 (da «Il personale della…» fino al paragrafo
-      sull’organigramma) con un solo tag:
-      <code>{{SEZIONE_612_GRUPPI_OMOGENEI}}</code>.
-      Il titolo «6.1.2 INDIVIDUAZIONE…» può restare fisso sopra il tag.
+      Nel Word: <code>{{SEZIONE_612_GRUPPI_OMOGENEI}}</code>, poi «Gruppi omogenei afferenti…» (fisso),
+      poi <code>{{GRUPPI_OMOGENEI_TESTO}}</code> nella cella blu. In «senza distinzione», titolo e cella
+      sono rimossi da <code>stress-docx-gruppi-612.js</code>.
     </p>
     <div class="gruppi-mode">
       <label>
@@ -197,16 +196,14 @@
     <div id="wrapGruppiElenco">
       <p class="hint-str">Elenco (modificabile; precompilato dai profili associati):</p>
       <textarea id="inpGruppiElenco" class="gruppi-textarea" placeholder="Una mansione per riga…"></textarea>
-      <p class="hint-str" style="margin-top:6px;">
-        Se in §6.2 resta una cella tabella solo per l’elenco:
-        <code>{{GRUPPI_OMOGENEI_TESTO}}</code>
-      </p>
+      <p class="hint-str" style="margin-top:6px;">Contenuto cella blu (una mansione per riga, grassetto nero centrato nel Word):</p>
+      <div id="pGruppiCella" class="gruppi-pre field-auto">—</div>
     </div>
     <div id="wrapGruppiGenerale" style="display:none;">
       <p class="hint-str">Testo centrale (modificabile):</p>
       <textarea id="inpGruppiGenerale" class="gruppi-textarea"></textarea>
     </div>
-    <p class="hint-str" style="margin-top:10px;">Anteprima corpo §6.1.2 nel documento:</p>
+    <p class="hint-str" style="margin-top:10px;">Anteprima paragrafi <code>{{SEZIONE_612_GRUPPI_OMOGENEI}}</code> (senza elenco in cella):</p>
     <div id="pSezione612" class="gruppi-preview-sezione field-auto">—</div>
 
     <h2 class="doc-section">§6.1.3 — Cronoprogramma</h2>
@@ -751,6 +748,17 @@
     );
     el.textContent = testo || '—';
     el.classList.toggle('field-missing', !String(testo || '').trim());
+    const cell = document.getElementById('pGruppiCella');
+    if (cell) {
+      if (mod === 'elenco') {
+        const elenco = String(WIZARD.gruppi_omogenei_elenco || '').trim();
+        cell.textContent = elenco || '—';
+        cell.classList.toggle('field-missing', !elenco);
+      } else {
+        cell.textContent = '(cella non usata in modalità «senza distinzione»)';
+        cell.classList.remove('field-missing');
+      }
+    }
   }
 
   function syncGruppiOmogeneiUIFromData(data) {

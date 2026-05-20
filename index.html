@@ -4640,21 +4640,27 @@
         async function loadAdapter(codice) {
             if (window.GEN_ADAPTERS?.[codice]) return;
             const base = 'js/generazione/adapters/' + codice + '/';
-            try {
+
+            if (codice === 'MOD_VDT_ILLUMINAMENTO') {
                 await loadScriptOnce(base + 'uni-options.js');
-            } catch (_) { /* modulo senza catalogo UNI */ }
-            try {
                 await loadScriptOnce(base + 'vdt-texts.js');
-            } catch (_) { /* opzionale */ }
-            try {
-                await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
-            } catch (_) { /* helper logo opzionale */ }
+            }
+
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO'];
+            if (withLogoDocx.includes(codice)) {
+                try {
+                    await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
+                } catch (_) { /* helper logo opzionale */ }
+            }
+
             await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260520a');
+
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520c');
                 await loadScriptOnce(base + 'stress-docx-color.js?v=20260520d');
                 await loadScriptOnce(base + 'pianificazione-misure.js?v=20260520a');
             }
+
             const adapterVer = codice === 'MOD_STRESS_LC' ? '20260520stress15' : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

@@ -4471,6 +4471,15 @@
 
         // ─── GENERAZIONE DOCX — preview inline + iframe ───────────────────────────
 
+        function previewHtmlSrc(codice) {
+            const v = {
+                MOD_STRESS_LC: '20260520stress11',
+                MOD_MICROCLIMA: '20260520c',
+                MOD_VDT_ILLUMINAMENTO: '20260520d',
+            };
+            return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
+        }
+
         async function openGeneraDocPreview(codice, aziendaId) {
             // Carica adapter se non ancora presente
             await loadAdapter(codice);
@@ -4553,8 +4562,10 @@
                 + '<button class="btn" onclick="document.getElementById(\'gen-preview-' + attrEsc(codice) + '\')?.remove()">✕ Chiudi</button>'
                 + '</div>'
                 + '<div style="height:700px;overflow:hidden;">'
+                + '<p class="hint" style="padding:6px 16px;margin:0;font-size:12px;border-bottom:1px solid var(--sp-border,#333);">'
+                + 'Nella barra nera sotto: <strong>Compila</strong> · <strong>Anteprima Word</strong> · Genera DOCX</p>'
                 + '<iframe id="gen-iframe-' + attrEsc(codice) + '"'
-                + ' src="js/generazione/adapters/' + attrEsc(codice) + '/preview.html?v=20260520stress10"'
+                + ' src="' + attrEsc(previewHtmlSrc(codice)) + '"'
                 + ' style="width:100%;height:100%;border:none;"'
                 + ' title="Anteprima documento"></iframe>'
                 + '</div>'
@@ -4638,12 +4649,14 @@
             try {
                 await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
             } catch (_) { /* helper logo opzionale */ }
+            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260520a');
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520a');
                 await loadScriptOnce(base + 'stress-docx-color.js?v=20260520a');
                 await loadScriptOnce(base + 'pianificazione-misure.js?v=20260520a');
             }
-            await loadScriptOnce(base + 'adapter.js?v=20260520stress9');
+            const adapterVer = codice === 'MOD_STRESS_LC' ? '20260520stress10' : '20260520c';
+            await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }
 
         async function downloadModelloTemplate(codice) {

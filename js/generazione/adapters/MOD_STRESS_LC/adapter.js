@@ -339,18 +339,30 @@
       throw new Error('Template Word vuoto o non scaricato');
     }
 
-    const zip = new window.PizZip(templateArrayBuffer);
-    const doc = new DocxtemplaterCtor(zip, {
-      paragraphLoop: true,
-      linebreaks: true,
-    });
+    const repair = window.GEN_DOCX_REPAIR;
+    const issuesBefore = repair?.inspectDocxTemplate
+      ? repair.inspectDocxTemplate(templateArrayBuffer)
+      : [];
+    if (issuesBefore.length) {
+      console.warn('[MOD_STRESS_LC] Tag spezzati nel template:', issuesBefore.length, issuesBefore.slice(0, 5));
+    }
+
+    let zip = new window.PizZip(templateArrayBuffer);
+    if (repair?.repairDocxTemplateZip) {
+      zip = repair.repairDocxTemplateZip(zip, []);
+    }
+
+    const docOpts = repair?.DOCXTEMPLATER_OPTIONS || { paragraphLoop: true, linebreaks: true };
+    const doc = new DocxtemplaterCtor(zip, { ...docOpts });
     doc.setData(templateData);
     try {
       doc.render();
     } catch (err) {
-      const msg = err.properties?.errors
-        ? err.properties.errors.map((e) => e.message).join('; ')
-        : err.message;
+      const msg = repair?.formatDocxtemplaterErrors
+        ? repair.formatDocxtemplaterErrors(err)
+        : (err.properties?.errors
+          ? err.properties.errors.map((e) => e.message).join('; ')
+          : err.message);
       throw new Error('Errore rendering template stress: ' + msg);
     }
 
@@ -381,5 +393,6 @@
     applyWizard,
     validate,
     generateDocx,
+    inspectDocxTemplate: (buf) => window.GEN_DOCX_REPAIR?.inspectDocxTemplate?.(buf) || [],
   };
 })();

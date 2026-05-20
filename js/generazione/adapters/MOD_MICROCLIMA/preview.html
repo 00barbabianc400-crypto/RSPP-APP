@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Microclima</title>
+<script src="uni-options.js"></script>
+<script src="adapter.js?v=20260521a"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge {
+    background: #e74c3c; color: #fff; padding: 3px 10px; border-radius: 4px;
+    font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; }
+  #toolbar .ok-badge {
+    background: #27ae60; color: #fff; padding: 3px 10px; border-radius: 4px;
+    font-size: 12px; display: none;
+  }
+  #toolbar .ok-badge.visible { display: inline-block; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc;
+    padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page {
+    background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2);
+    margin-bottom: 20px;
+  }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; min-width: 280px; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  textarea.inline-ta { width: 100%; margin-top: 6px; padding: 8px; font-size: 10pt; min-height: 72px; }
+
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+
+  /* Tabella §2.7 • risultati microclima */
+  .micro-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .micro-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #3498db;
+    background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .micro-actions button.secondary { border-color: #999; background: #f4f4f4; color: #333; font-weight: 500; }
+  .meas-micro-table {
+    width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-top: 10px;
+    table-layout: fixed;
+  }
+  .meas-micro-table th {
+    background: #2c3e50; color: #fff; padding: 4px 3px; text-align: center; vertical-align: bottom;
+    line-height: 1.25; font-weight: 600;
+  }
+  .meas-micro-table td { border: 1px solid #bbb; padding: 2px; vertical-align: middle; }
+  .meas-micro-table td input {
+    width: 100%; box-sizing: border-box; border: none; background: transparent; font-size: 8.5pt;
+    text-align: center; padding: 3px 1px;
+  }
+  .meas-micro-table td input:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .meas-micro-table tbody tr:nth-child(even) { background: #f8fafb; }
+  .meas-micro-table .micro-col-remove { width: 28px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">MOD_MICROCLIMA — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Analisi condizioni microclimatiche</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Caricare <code>MOD_MICROCLIMA.docx</code> nel bucket <code>modelli</code> (dopo aver inserito i tag con
+        <code>scripts/insert_mod_microclima_placeholders.py</code> sul modello Word).
+      </p>
+
+      <h2 class="doc-section">Dati e attività (inizio compilazione)</h2>
+      <p><strong>Ragione sociale</strong> (copertina / intestazione): <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Modulo n.</strong> (come catalogo): <span id="pMod" class="field-auto">—</span></p>
+      <p><strong>Data emissione</strong>: <span id="pData" class="field-auto">—</span></p>
+      <p>
+        <strong>Macrocategoria UNI EN 12464-1</strong> (solo etichetta attività, es. «Uffici» — senza valori lx):<br>
+        <select id="uniSelect" class="inline-select" onchange="setUni(this.value)">
+          <option value="">— Seleziona —</option>
+        </select>
+      </p>
+
+      <h2 class="doc-section">1. Premessa (anteprima)</h2>
+      <p>
+        …sede ubicata in <span id="pPremessaSede" class="field-auto">—</span>, allo scopo sono stati presi in considerazione…
+      </p>
+      <p>
+        …ai sensi del D.lgs. 81/08 (<strong>Modulo <span id="pPremessaMod" class="field-auto">—</span></strong> allegato al DVR)…
+      </p>
+      <p id="pPremessaCiclo" class="field-missing" style="margin-top:10px;">Seleziona la macrocategoria UNI per generare il paragrafo sul ciclo di lavoro.</p>
+      <p class="hint-str" style="margin-top:12px;">
+        Opzionale: sostituisci interamente il paragrafo «ciclo di lavoro» (sovrascrive il testo automatico da UNI).
+      </p>
+      <textarea id="taCicloOverride" class="inline-ta" placeholder="Lascia vuoto per usare il testo automatico da UNI…"
+        oninput="setCicloOverride(this.value)"></textarea>
+
+      <p style="margin-top:16px;"><strong>Sede (anagrafica)</strong>: <span id="pSede" class="field-auto">—</span></p>
+      <p><strong>Luogo (firma)</strong>: <span id="pLuogo" class="field-auto">—</span></p>
+
+      <h2 class="doc-section">§ 2.7 — Tabella 1 · Risultati rilevazioni microclimatiche</h2>
+      <p class="hint-str" style="margin-bottom: 6px;">
+        Collegamento ai tipi rilevamento <strong>«Microclima — …»</strong> sul DB (temperature est/inver., UR, velocità aria):
+        gli stessi dati sono pre-aggregati per <strong>Zona</strong> + giorno (puoi modificarli o aggiungere righe vuote).
+        Campi TG, MET, CLO, PMV, PPD vanno compilati quando necessario (misura / calcolo fuori dall’anagrafica base).
+      </p>
+      <div class="micro-actions">
+        <button type="button" onclick="addMicroRiga()">+ Aggiungi riga</button>
+        <button type="button" class="secondary" onclick="reloadMicroFromDb()">Ricarica da rilevamenti</button>
+      </div>
+      <table class="meas-micro-table" aria-label="Risultati microclima">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Postazione</th>
+            <th>Data</th>
+            <th>Ora</th>
+            <th>VA</th>
+            <th>TG</th>
+            <th>T °C</th>
+            <th>TR</th>
+            <th>RH</th>
+            <th>MET</th>
+            <th>CLO</th>
+            <th>PMV</th>
+            <th>PPD</th>
+            <th class="micro-col-remove"></th>
+          </tr>
+        </thead>
+        <tbody id="microRigheBody"></tbody>
+      </table>
+
+      <h2 class="doc-section">§ 3 — Conclusioni · PMV / PPD</h2>
+      <p class="hint-str" style="margin-bottom: 8px;">
+        Il documento usa i valori <strong>PMV</strong> e <strong>PPD</strong> della tabella (range ottimale: &#8211;0,5 &lt; PMV &lt; +0,5 e PPD &lt; 10).
+        Se almeno una riga con numeri esce dall’intervallo, in §3 compare <em>«non pienamente conformi»</em> e il blocco discostamenti con la giustificazione scelta sotto.
+      </p>
+      <p>
+        Esito automatico da tabella: <span id="pConformitaEsito" class="field-auto">—</span>
+      </p>
+      <p>
+        <strong>Giustificazione</strong> (predefinite o testo libero se «Personalizzato»; usata solo quando serve il blocco discostamenti):<br>
+        <select id="selGiustConcl" class="inline-select" style="margin-top:6px;" onchange="setGiustConcl(this.value)">
+          <option value="settaggio">Settaggio impianto / preferenze lavoratori</option>
+          <option value="manutenzione">Manutenzione / funzionamento impianto</option>
+          <option value="personalizzato">Personalizzato…</option>
+        </select>
+      </p>
+      <textarea id="taGiustConclCustom" class="inline-ta" style="min-height: 56px;"
+        placeholder="Solo se scegli «Personalizzato»: testo completo della giustificazione…"
+        oninput="setGiustConclCustom(this.value)"></textarea>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost" class="page-wrap" style="background:#fff;padding:20px;">
+    <p style="text-align:center;color:#888;">Passa a questa scheda per l’anteprima Word.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_MICROCLIMA'];
+  let DATA = null;
+  const MICRO_FIELDS =
+    ['postazione', 'data', 'ora', 'va', 'tg', 't', 'tr', 'rh', 'met', 'clo', 'pmv', 'ppd'];
+
+  let WIZARD = {
+    uni_tabella_num: null,
+    descrizione_ciclo_lavoro: undefined,
+    righe_microclima: null,
+    conclusioni_giustificazione: 'settaggio',
+    conclusioni_giustificazione_custom: '',
+  };
+  let activeView = 'compile';
+  let previewTimer = null;
+  let microTypingTimer = null;
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function getUniGroups() {
+    if (ADAPTER?.getUniTableGroups) return ADAPTER.getUniTableGroups();
+    return [];
+  }
+
+  function populateUniSelect() {
+    const sel = document.getElementById('uniSelect');
+    sel.innerHTML = '<option value="">— Seleziona tabella UNI (macrocategoria) —</option>';
+    const groups = getUniGroups();
+    if (!groups.length) {
+      const op = document.createElement('option');
+      op.disabled = true;
+      op.textContent = '(catalogo UNI non caricato)';
+      sel.appendChild(op);
+      return;
+    }
+    groups.forEach(g => {
+      const op = document.createElement('option');
+      op.value = String(g.tabella_num);
+      op.textContent = 'Tab. ' + g.tabella_num + ' — ' + (g.tabella_titolo || g.label);
+      sel.appendChild(op);
+    });
+  }
+
+  /** Legge dalla tabella e aggiorna WIZARD.righe_microclima. */
+  function syncWizardRigheFromTable() {
+    const tbody = document.getElementById('microRigheBody');
+    if (!tbody || !ADAPTER?.emptyRigaMicroclima) return;
+    const rows = tbody.querySelectorAll('tr');
+    /** @type {Record<string,string>[]} */
+    const got = [];
+    rows.forEach((tr) => {
+      const obj = {};
+      MICRO_FIELDS.forEach((k) => {
+        const el = tr.querySelector('input[name="' + k + '"]');
+        obj[k] = el ? el.value : '';
+      });
+      got.push(ADAPTER.normalizeWizardRiga(obj));
+    });
+    WIZARD.righe_microclima = got;
+  }
+
+  function buildMerged() {
+    syncWizardRigheFromTable();
+    if (!DATA || !ADAPTER?.applyWizard) return {};
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  function cloneRigheMicro(arr) {
+    if (!arr || !ADAPTER?.normalizeWizardRiga) return [];
+    return arr.map(r => ({ ...ADAPTER.normalizeWizardRiga(r) }));
+  }
+
+  /** Ricostruisce il DOM tabella dalla copia wizard. */
+  function renderMicroTable() {
+    const tbody = document.getElementById('microRigheBody');
+    if (!tbody || !ADAPTER?.emptyRigaMicroclima) return;
+    const rig = Array.isArray(WIZARD.righe_microclima) && WIZARD.righe_microclima.length
+      ? WIZARD.righe_microclima
+      : [ADAPTER.emptyRigaMicroclima()];
+    tbody.innerHTML = '';
+    rig.forEach((row, ix) => {
+      const nr = ix + 1;
+      const r = ADAPTER.normalizeWizardRiga(row);
+      const tr = document.createElement('tr');
+      const cells =
+        '<td>' + nr + '</td>'
+        + MICRO_FIELDS.map(function (k) {
+          const vAttr = attrEscHtml(r[k] || '');
+          return '<td><input type="text" name="' + k + '" autocomplete="off" value="' + vAttr + '" oninput="onMicroCellInput()" /></td>';
+        }).join('')
+        + '<td class="micro-col-remove"><button type="button" style="padding:2px 6px;font-size:9pt;color:#922b21;border:1px solid #ccc;background:#fafafa;cursor:pointer" onclick="removeMicroRiga(' + ix + ')">−</button></td>';
+      tr.innerHTML = cells;
+      tbody.appendChild(tr);
+    });
+  }
+
+  /** escape per attributo HTML input value */
+  function attrEscHtml(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  window.onMicroCellInput = function () {
+    syncWizardRigheFromTable();
+    clearTimeout(microTypingTimer);
+    microTypingTimer = setTimeout(function () {
+      sendUpdate();
+    }, 350);
+  };
+
+  window.addMicroRiga = function () {
+    syncWizardRigheFromTable();
+    if (!ADAPTER?.emptyRigaMicroclima) return;
+    const next = cloneRigheMicro(WIZARD.righe_microclima || []);
+    next.push(ADAPTER.emptyRigaMicroclima());
+    WIZARD.righe_microclima = next;
+    renderMicroTable();
+    sendUpdate();
+  };
+
+  window.removeMicroRiga = function (index) {
+    syncWizardRigheFromTable();
+    const arr = [...(WIZARD.righe_microclima || [])];
+    arr.splice(index, 1);
+    if (!arr.length && ADAPTER?.emptyRigaMicroclima) arr.push(ADAPTER.emptyRigaMicroclima());
+    WIZARD.righe_microclima = arr;
+    renderMicroTable();
+    sendUpdate();
+  };
+
+  window.reloadMicroFromDb = function () {
+    syncWizardRigheFromTable();
+    if (!ADAPTER?.suggestRigheDaRilevamenti) return;
+    if (!confirm(
+      'Sostituire tutte le righe con rilevamenti salvati?\n(Zona per postazione — aggregati sullo stesso giorno.)'
+    )) return;
+    const sug = ADAPTER.suggestRigheDaRilevamenti(DATA._rilevamenti_microclima || []);
+    WIZARD.righe_microclima =
+      sug.length ? cloneRigheMicro(sug) : [ADAPTER.emptyRigaMicroclima()];
+    renderMicroTable();
+    sendUpdate();
+  };
+
+  function refreshConclusioniPreview(merged) {
+    const el = document.getElementById('pConformitaEsito');
+    if (!el || !ADAPTER?.conformitaBenessereOttimaleDaRighe) return;
+    const rig = merged._righe_microclima || [];
+    const ok = ADAPTER.conformitaBenessereOttimaleDaRighe(rig);
+    el.textContent = ok
+      ? 'Range ottimale (benessere) — frase «pienamente conformi».'
+      : 'Fuori range ottimale — frase «non pienamente conformi» + blocco discostamenti.';
+    el.className = 'field-auto';
+  }
+
+  function refreshPremessaPreview(merged) {
+    const m = merged || buildMerged();
+    const sede = m.SEDE_OPERATIVA || '';
+    const mod = m.MODULO_NUMERO || '—';
+    document.getElementById('pPremessaSede').textContent = sede || '—';
+    document.getElementById('pPremessaSede').className = sede ? 'field-auto' : 'field-missing';
+    document.getElementById('pPremessaMod').textContent = mod;
+    const cicloEl = document.getElementById('pPremessaCiclo');
+    const t = (m.PREMESSA_CICLO_LAVORO || '').trim();
+    if (t) {
+      cicloEl.className = '';
+      cicloEl.textContent = t;
+    } else {
+      cicloEl.className = 'field-missing';
+      cicloEl.textContent = 'Seleziona la macrocategoria UNI (o compila il testo personalizzato sotto).';
+    }
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    refreshPremessaPreview(merged);
+    refreshConclusioniPreview(merged);
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: errors.length === 0, errors }, '*');
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) document.getElementById('stopBadge').title = errors.join('\n');
+    if (activeView === 'docx' && errors.length === 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 600);
+    }
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_MICROCLIMA — Compila' : 'MOD_MICROCLIMA — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima dal modello Word…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || typeof window.JSZip.loadAsync !== 'function') {
+      host.innerHTML = '<p style="color:#c0392c;padding:20px;">JSZip non caricato.</p>';
+      return;
+    }
+    if (!window.docx || !window.docx.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392c;padding:20px;">docx-preview non caricata.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392c;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  window.setUni = function (tabNum) {
+    WIZARD.uni_tabella_num = tabNum ? Number(tabNum) : null;
+    sendUpdate();
+  };
+
+  window.setCicloOverride = function (v) {
+    WIZARD.descrizione_ciclo_lavoro = v;
+    sendUpdate();
+  };
+
+  window.setGiustConcl = function (v) {
+    WIZARD.conclusioni_giustificazione = v || 'settaggio';
+    var ta = document.getElementById('taGiustConclCustom');
+    if (ta) ta.style.display = v === 'personalizzato' ? 'block' : 'none';
+    sendUpdate();
+  };
+
+  window.setGiustConclCustom = function (v) {
+    WIZARD.conclusioni_giustificazione_custom = v;
+    sendUpdate();
+  };
+
+  function initFromData() {
+    populateUniSelect();
+    if (!DATA) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pMod').textContent = DATA.MODULO_NUMERO || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+
+    if (DATA._uni_tabella_num != null) {
+      WIZARD.uni_tabella_num = DATA._uni_tabella_num;
+      document.getElementById('uniSelect').value = String(DATA._uni_tabella_num);
+    }
+    if (DATA._descrizione_ciclo_override) {
+      WIZARD.descrizione_ciclo_lavoro = DATA._descrizione_ciclo_override;
+      document.getElementById('taCicloOverride').value = DATA._descrizione_ciclo_override;
+    }
+
+    /* Righe §2.7 — come restituito da buildData.applyWizard (fallback se dati più vecchi). */
+    if (DATA._righe_microclima && DATA._righe_microclima.length && ADAPTER?.normalizeWizardRiga) {
+      WIZARD.righe_microclima = cloneRigheMicro(DATA._righe_microclima);
+    } else if (ADAPTER?.emptyRigaMicroclima && ADAPTER.suggestRigheDaRilevamenti) {
+      const sug = ADAPTER.suggestRigheDaRilevamenti(DATA._rilevamenti_microclima || []);
+      WIZARD.righe_microclima =
+        sug.length ? cloneRigheMicro(sug) : [ADAPTER.emptyRigaMicroclima()];
+    } else {
+      WIZARD.righe_microclima = ADAPTER?.emptyRigaMicroclima ? [ADAPTER.emptyRigaMicroclima()] : [];
+    }
+    renderMicroTable();
+
+    if (DATA._conclusioni_giustificazione != null && String(DATA._conclusioni_giustificazione).trim()) {
+      WIZARD.conclusioni_giustificazione = String(DATA._conclusioni_giustificazione).trim();
+    }
+    if (DATA._conclusioni_giustificazione_custom != null) {
+      WIZARD.conclusioni_giustificazione_custom = String(DATA._conclusioni_giustificazione_custom);
+    }
+    document.getElementById('selGiustConcl').value = WIZARD.conclusioni_giustificazione || 'settaggio';
+    document.getElementById('taGiustConclCustom').value = WIZARD.conclusioni_giustificazione_custom || '';
+    const taG = document.getElementById('taGiustConclCustom');
+    if (taG) taG.style.display = WIZARD.conclusioni_giustificazione === 'personalizzato' ? 'block' : 'none';
+
+    sendUpdate();
+  }
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  populateUniSelect();
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

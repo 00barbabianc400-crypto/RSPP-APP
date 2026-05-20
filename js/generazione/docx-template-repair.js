@@ -8,6 +8,9 @@
     delimiters: { start: '{{', end: '}}' },
     paragraphLoop: true,
     linebreaks: true,
+    nullGetter: function () {
+      return '';
+    },
   };
 
   function getDocxtemplaterCtor() {
@@ -79,10 +82,9 @@
     return xml.replace(re, (block) => mergeWtInBlock(block));
   }
 
+  /** Solo paragrafo: unire w:tc interi può fondere etichetta + tag e peggiorare lo spezzamento. */
   function consolidatePlaceholderParagraphs(xml) {
-    let out = consolidatePlaceholderBlocks(xml, 'w:p');
-    out = consolidatePlaceholderBlocks(out, 'w:tc');
-    return out;
+    return consolidatePlaceholderBlocks(xml, 'w:p');
   }
 
   function mergeAdjacentSplitPlaceholderRuns(xml) {
@@ -167,6 +169,19 @@
     return issues;
   }
 
+  function inspectDocxZip(zip) {
+    const issues = [];
+    Object.keys(zip.files || {}).forEach((path) => {
+      if (!/^word\/.*\.xml$/i.test(path)) return;
+      const file = zip.file(path);
+      if (!file || file.dir) return;
+      try {
+        issues.push(...findBrokenPlaceholderRunsInXml(file.asText(), path));
+      } catch (_) { /* skip */ }
+    });
+    return issues;
+  }
+
   function repairDocxTemplateZip(zip, modules) {
     let fixedCount = 0;
     const paths = Object.keys(zip.files || {}).filter((p) => /^word\/.*\.xml$/i.test(p));
@@ -192,12 +207,20 @@
     }
 
     const mods = modules || [];
-    for (let pass = 0; pass < 5; pass += 1) {
+    let lastIssueCount = Infinity;
+    for (let pass = 0; pass < 10; pass += 1) {
       fixedCount += repairAllXml();
+      const issues = inspectDocxZip(zip);
       const compileErr = tryCompileDocxtemplater(zip, mods);
-      if (!compileErr) break;
-      if (pass === 4) {
-        console.warn('[GEN_DOCX_REPAIR] Template ancora non compilabile dopo 5 passaggi');
+      if (!compileErr && issues.length === 0) break;
+      if (issues.length >= lastIssueCount && pass > 2) break;
+      lastIssueCount = issues.length;
+      if (pass === 9) {
+        console.warn(
+          '[GEN_DOCX_REPAIR] Template ancora con tag spezzati:',
+          issues.length,
+          issues.slice(0, 6)
+        );
       }
     }
 

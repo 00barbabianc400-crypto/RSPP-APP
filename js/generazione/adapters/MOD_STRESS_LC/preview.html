@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <script src="stress-questionario-xlsx.js?v=20260520c"></script>
 <script src="pianificazione-misure.js?v=20260520a"></script>
-<script src="adapter.js?v=20260520stress10"></script>
+<script src="adapter.js?v=20260520stress16"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
@@ -52,6 +52,18 @@
     margin-top: 8px; padding: 10px 12px; background: #f4f8fb; border: 1px solid #c5d9e8;
     border-radius: 4px; font-size: 10.5pt; line-height: 1.5; white-space: pre-line;
     text-align: center; min-height: 48px;
+  }
+  .gruppi-mode { margin: 10px 0 12px; }
+  .gruppi-mode label { display: block; margin: 6px 0; font-size: 10.5pt; cursor: pointer; }
+  .gruppi-mode input { margin-right: 8px; }
+  .gruppi-textarea {
+    width: 100%; min-height: 120px; font-size: 10.5pt; padding: 8px 10px;
+    border: 1px solid #bbb; border-radius: 4px; line-height: 1.45; font-family: inherit; resize: vertical;
+  }
+  .gruppi-preview-sezione {
+    margin-top: 10px; padding: 12px; background: #f4f6f8; border: 1px solid #ccd6e0;
+    border-radius: 4px; font-size: 10pt; line-height: 1.5; white-space: pre-line;
+    max-height: 240px; overflow-y: auto;
   }
   .comitato-table { width: 100%; border-collapse: collapse; font-size: 10.5pt; margin-top: 8px; }
   .comitato-table th, .comitato-table td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
@@ -165,9 +177,37 @@
       </tbody>
     </table>
 
-    <h2 class="doc-section">§6.1.2 / §6.2 — Gruppi omogenei</h2>
-    <p class="hint-str">Profili di rischio associati all’azienda (Profili), uno per riga nel Word.</p>
-    <div id="pGruppi" class="gruppi-pre field-auto">—</div>
+    <h2 class="doc-section">§6.1.2 — Modalità di individuazione dei gruppi omogenei</h2>
+    <p class="hint-str">
+      Sostituisci nel Word <strong>tutto il corpo</strong> del §6.1.2 (da «Il personale della…» fino al paragrafo
+      sull’organigramma) con un solo tag:
+      <code>{{SEZIONE_612_GRUPPI_OMOGENEI}}</code>.
+      Il titolo «6.1.2 INDIVIDUAZIONE…» può restare fisso sopra il tag.
+    </p>
+    <div class="gruppi-mode">
+      <label>
+        <input type="radio" name="gruppiModalita" value="elenco" checked>
+        Elenco mansioni / gruppi omogenei (profili azienda, una riga per cella tabella)
+      </label>
+      <label>
+        <input type="radio" name="gruppiModalita" value="generale">
+        Analisi senza distinzione specifica tra gruppi omogenei
+      </label>
+    </div>
+    <div id="wrapGruppiElenco">
+      <p class="hint-str">Elenco (modificabile; precompilato dai profili associati):</p>
+      <textarea id="inpGruppiElenco" class="gruppi-textarea" placeholder="Una mansione per riga…"></textarea>
+      <p class="hint-str" style="margin-top:6px;">
+        Se in §6.2 resta una cella tabella solo per l’elenco:
+        <code>{{GRUPPI_OMOGENEI_TESTO}}</code>
+      </p>
+    </div>
+    <div id="wrapGruppiGenerale" style="display:none;">
+      <p class="hint-str">Testo centrale (modificabile):</p>
+      <textarea id="inpGruppiGenerale" class="gruppi-textarea"></textarea>
+    </div>
+    <p class="hint-str" style="margin-top:10px;">Anteprima corpo §6.1.2 nel documento:</p>
+    <div id="pSezione612" class="gruppi-preview-sezione field-auto">—</div>
 
     <h2 class="doc-section">§6.1.3 — Cronoprogramma</h2>
     <p class="hint-str">Compila tutte le date nella colonna «Data attuazione» (anno, data o testo libero, es. <em>Non applicabile</em>).</p>
@@ -271,6 +311,9 @@
     valutazione_approfondita_testo: '',
     conclusioni_testo: '',
     pianificazione_misure: null,
+    gruppi_omogenei_modalita: 'elenco',
+    gruppi_omogenei_elenco: '',
+    gruppi_omogenei_generale_testo: '',
   };
   let activeView = 'compile';
   let previewTimer = null;
@@ -683,6 +726,80 @@
     sendUpdate();
   };
 
+  function gruppiGeneraleDefault() {
+    return ADAPTER?.GRUPPI_OMOGENEI_GENERALE_DEFAULT || '';
+  }
+
+  function updateGruppiModalitaPanels() {
+    const elenco = WIZARD.gruppi_omogenei_modalita !== 'generale';
+    const wrapE = document.getElementById('wrapGruppiElenco');
+    const wrapG = document.getElementById('wrapGruppiGenerale');
+    if (wrapE) wrapE.style.display = elenco ? '' : 'none';
+    if (wrapG) wrapG.style.display = elenco ? 'none' : '';
+  }
+
+  function refreshSezione612Preview() {
+    const el = document.getElementById('pSezione612');
+    if (!el || !ADAPTER?.buildSezione612GruppiOmogenei || !DATA) return;
+    const rs = DATA.RAGIONE_SOCIALE || '';
+    const mod = WIZARD.gruppi_omogenei_modalita === 'generale' ? 'generale' : 'elenco';
+    const testo = ADAPTER.buildSezione612GruppiOmogenei(
+      rs,
+      mod,
+      WIZARD.gruppi_omogenei_elenco,
+      WIZARD.gruppi_omogenei_generale_testo || gruppiGeneraleDefault()
+    );
+    el.textContent = testo || '—';
+    el.classList.toggle('field-missing', !String(testo || '').trim());
+  }
+
+  function syncGruppiOmogeneiUIFromData(data) {
+    const d = data || {};
+    const defElenco = d._gruppi_omogenei_elenco_default || '';
+    WIZARD.gruppi_omogenei_modalita = d._gruppi_omogenei_modalita === 'generale' ? 'generale' : 'elenco';
+    WIZARD.gruppi_omogenei_elenco = String(d.GRUPPI_OMOGENEI_TESTO || defElenco || '').trim();
+    if (!WIZARD.gruppi_omogenei_generale_testo) {
+      WIZARD.gruppi_omogenei_generale_testo = gruppiGeneraleDefault();
+    }
+    document.querySelectorAll('input[name="gruppiModalita"]').forEach((inp) => {
+      inp.checked = inp.value === WIZARD.gruppi_omogenei_modalita;
+    });
+    const taE = document.getElementById('inpGruppiElenco');
+    const taG = document.getElementById('inpGruppiGenerale');
+    if (taE) taE.value = WIZARD.gruppi_omogenei_elenco || '';
+    if (taG) taG.value = WIZARD.gruppi_omogenei_generale_testo || '';
+    updateGruppiModalitaPanels();
+    refreshSezione612Preview();
+  }
+
+  function initGruppiOmogeneiHandlers() {
+    document.querySelectorAll('input[name="gruppiModalita"]').forEach((inp) => {
+      inp.addEventListener('change', () => {
+        if (!inp.checked) return;
+        WIZARD.gruppi_omogenei_modalita = inp.value === 'generale' ? 'generale' : 'elenco';
+        updateGruppiModalitaPanels();
+        refreshSezione612Preview();
+        sendUpdate();
+      });
+    });
+    const taE = document.getElementById('inpGruppiElenco');
+    const taG = document.getElementById('inpGruppiGenerale');
+    if (taE) {
+      taE.addEventListener('input', () => {
+        WIZARD.gruppi_omogenei_elenco = taE.value;
+        refreshSezione612Preview();
+        sendUpdate();
+      });
+    }
+    if (taG) {
+      taG.addEventListener('input', () => {
+        WIZARD.gruppi_omogenei_generale_testo = taG.value;
+        refreshSezione612Preview();
+        sendUpdate();
+      });
+    }
+  }
+
   function initFromData() {
     if (!DATA) return;
     document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
@@ -701,10 +818,7 @@
     document.getElementById('pRspp').textContent = DATA.RSPP || '—';
     document.getElementById('pRls').textContent = DATA.RLS || '—';
     document.getElementById('pMedico').textContent = DATA.MEDICO_COMPETENTE || '—';
-    const gruppi = (DATA.GRUPPI_OMOGENEI_TESTO || '').trim();
-    const elGruppi = document.getElementById('pGruppi');
-    elGruppi.textContent = gruppi || '—';
-    elGruppi.classList.toggle('field-missing', !gruppi);
+    syncGruppiOmogeneiUIFromData(DATA);
     syncCronoprogrammaInputsFromData(DATA);
     if (WIZARD.valutazione_approfondita_testo == null) {
       WIZARD.valutazione_approfondita_testo = DATA._valutazione_approfondita_auto
@@ -778,6 +892,7 @@
   } else {
     buildCronoprogrammaTable();
     buildMisureEditor();
+    initGruppiOmogeneiHandlers();
   }
 
   document.getElementById('inpValApprofondita').addEventListener('input', (e) => {

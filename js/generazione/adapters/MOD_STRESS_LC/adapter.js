@@ -63,7 +63,19 @@
     return String(n).padStart(2, '0');
   }
 
-  /** Nomi profilo associati all'azienda → elenco multiriga per tabella §6.1.2 / §6.2 */
+  const GRUPPI_OMOGENEI_PIE_TESTO =
+    'Per quanto concerne lo studio dei parametri oggettivi rilevanti ai fini della valutazione del rischio SLC '
+    + 'l\'organigramma aziendale è stato riesaminato per verificare l\'opportunità di individuare Classi Omogenee '
+    + 'di lavoratori esposti a livelli di rischio differenti. Ai fini della presente valutazione non si è resa '
+    + 'necessaria una distinzione fra gruppi omogenei di lavoratori.';
+
+  const GRUPPI_OMOGENEI_GENERALE_DEFAULT =
+    'Si è ritenuto valido operare l\'analisi del rischio stress lavoro-correlato senza definire specificamente '
+    + 'gruppi omogenei di lavoratori distinti, in considerazione dell\'omogeneità delle mansioni svolte, '
+    + 'delle modalità organizzative dell\'unità produttiva e dell\'esposizione complessiva ai fattori di rischio '
+    + 'psicosociale oggetto della presente valutazione.';
+
+  /** Nomi profilo → elenco multiriga (cella tabella / modalità elenco). */
   function testoGruppiOmogenei(profiliNomi) {
     const list = (profiliNomi || [])
       .map((n) => String(n).trim())
@@ -73,13 +85,70 @@
     return uniq.join('\n');
   }
 
+  /** Corpo §6.1.2 (senza titolo «6.1.2») per {{SEZIONE_612_GRUPPI_OMOGENEI}}. */
+  function buildSezione612GruppiOmogenei(ragioneSociale, modalita, elencoTesto, generaleTesto) {
+    const rs = String(ragioneSociale || '').trim();
+    const footer = GRUPPI_OMOGENEI_PIE_TESTO;
+    if (modalita === 'generale') {
+      const intro =
+        'Il personale della ' + rs + ' è stato considerato nel suo complesso ai fini della presente '
+        + 'valutazione del rischio stress lavoro-correlato.';
+      const mid = String(generaleTesto || GRUPPI_OMOGENEI_GENERALE_DEFAULT).trim();
+      return intro + '\n\n' + mid + '\n\n' + footer;
+    }
+    const intro =
+      'Il personale della ' + rs + ' è distribuito nelle differenti mansioni di seguito specificate. '
+      + 'Il personale viene suddiviso con lo scopo di individuare dei gruppi omogenei di lavoratori, '
+      + 'sulla base delle mansioni svolte alla luce del loro inquadramento, per i quali è ragionevole supporre '
+      + 'lo stesso genere di rischi occupazionali (incidenti e/o malattie professionali).';
+    const lista = String(elencoTesto || '').trim();
+    return intro + '\n\nGruppi omogenei afferenti all\'Unità Produttiva\n' + lista + '\n\n' + footer;
+  }
+
+  function gruppiOmogeneiFields(wizard, base) {
+    const w = wizard || {};
+    const b = base || {};
+    const modalita = w.gruppi_omogenei_modalita === 'generale' ? 'generale' : 'elenco';
+    const profiliDefault = testoGruppiOmogenei(b._profili_nomi);
+    const elenco =
+      w.gruppi_omogenei_elenco != null
+        ? String(w.gruppi_omogenei_elenco).trim()
+        : String(b.GRUPPI_OMOGENEI_TESTO || profiliDefault).trim();
+    const generale =
+      w.gruppi_omogenei_generale_testo != null
+        ? String(w.gruppi_omogenei_generale_testo).trim()
+        : GRUPPI_OMOGENEI_GENERALE_DEFAULT;
+    const rs = b.RAGIONE_SOCIALE || '';
+    return {
+      GRUPPI_OMOGENEI_TESTO: modalita === 'elenco' ? elenco : '',
+      SEZIONE_612_GRUPPI_OMOGENEI: buildSezione612GruppiOmogenei(rs, modalita, elenco, generale),
+      _gruppi_omogenei_modalita: modalita,
+      _gruppi_omogenei_elenco_default: profiliDefault,
+    };
+  }
+
+  function pickAziendaField(azienda, snake, pascal) {
+    const a = azienda || {};
+    const f = a.fields || {};
+    for (const key of [snake, pascal]) {
+      const v = a[key] != null ? a[key] : f[key];
+      if (v != null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  }
+
   function campiAnagraficaComitato(azienda) {
     return {
-      DATORE_LAVORO: azienda?.datore_lavoro || '',
-      RSPP: azienda?.rspp || '',
-      RLS: azienda?.rls || '',
-      MEDICO_COMPETENTE: azienda?.medico_competente || '',
+      DATORE_LAVORO: pickAziendaField(azienda, 'datore_lavoro', 'DatoreLavoro'),
+      RSPP: pickAziendaField(azienda, 'rspp', 'RSPP'),
+      RLS: pickAziendaField(azienda, 'rls', 'RLS'),
+      MEDICO_COMPETENTE: pickAziendaField(azienda, 'medico_competente', 'MedicoCompetente'),
     };
+  }
+
+  function templateValue(v) {
+    if (v == null || v === undefined) return '';
+    return String(v);
   }
 
   function questionarioVuotoFields() {
@@ -227,7 +296,14 @@
       RAGIONE_SOCIALE: azienda?.ragione_sociale || '',
       SEDE_OPERATIVA: azienda?.sede_operativa || '',
       ...campiAnagraficaComitato(azienda),
-      GRUPPI_OMOGENEI_TESTO: testoGruppiOmogenei(profiliNomi),
+      ...gruppiOmogeneiFields(
+        {
+          gruppi_omogenei_modalita: w.gruppi_omogenei_modalita || 'elenco',
+          gruppi_omogenei_elenco: w.gruppi_omogenei_elenco,
+          gruppi_omogenei_generale_testo: w.gruppi_omogenei_generale_testo,
+        },
+        { RAGIONE_SOCIALE: azienda?.ragione_sociale || '', _profili_nomi: profiliNomi }
+      ),
       ...cronoprogrammaTemplateFields(w, null),
       ...questionarioVuotoFields(),
       VALUTAZIONE_APPROFONDITA_TESTO: '',
@@ -280,6 +356,7 @@
           ? String(w.testo_direzione_proprietario).trim()
           : base.TESTO_DIREZIONE_PROPRIETARIO || 'della società',
       ...cronoprogrammaTemplateFields(w, base),
+      ...gruppiOmogeneiFields(w, withValutazione),
       _stress_wizard: { ...w },
     };
   }
@@ -310,6 +387,12 @@
     if (!data._conclusioni_auto && !String(data.CONCLUSIONI_TESTO || '').trim()) {
       errors.push('Conclusioni: compila il testo (rischio medio/alto)');
     }
+    if (!String(data.SEZIONE_612_GRUPPI_OMOGENEI || '').trim()) {
+      errors.push('§6.1.2: individuazione gruppi omogenei non compilata');
+    }
+    if (data._gruppi_omogenei_modalita === 'elenco' && !String(data.GRUPPI_OMOGENEI_TESTO || '').trim()) {
+      errors.push('§6.1.2: inserire almeno una mansione/gruppo omogeneo (modalità elenco)');
+    }
     return errors;
   }
 
@@ -332,8 +415,10 @@
     for (const [k, v] of Object.entries(data)) {
       if (k.startsWith('_')) continue;
       if (k === 'LOGO_PREVIEW_URL') continue;
-      templateData[k] = v;
+      templateData[k] = templateValue(v);
     }
+    const comitato = campiAnagraficaComitato(data);
+    Object.assign(templateData, comitato);
 
     if (!templateArrayBuffer || !templateArrayBuffer.byteLength) {
       throw new Error('Template Word vuoto o non scaricato');
@@ -388,6 +473,9 @@
     nome: NOME,
     VALUTAZIONE_APPROFONDITA_DEFAULT,
     CONCLUSIONI_DEFAULT,
+    GRUPPI_OMOGENEI_PIE_TESTO,
+    GRUPPI_OMOGENEI_GENERALE_DEFAULT,
+    buildSezione612GruppiOmogenei,
     tuttiRischiBassi,
     CRONOPROGRAMMA_ROWS,
     getCronoprogrammaRows,

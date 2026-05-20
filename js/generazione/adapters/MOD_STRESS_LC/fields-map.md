@@ -29,19 +29,28 @@
 | `{{RLS}}` | `rls` | Dopo «Rappresentante dei lavoratori per la sicurezza:» |
 | `{{MEDICO_COMPETENTE}}` | `medico_competente` | Dopo «Medico Competente:» (può essere vuoto) |
 
-## §6.1.2 e §6.2 — Gruppi omogenei (profili azienda)
+## §6.1.2 — Individuazione gruppi omogenei (compilazione operatore)
 
-| Tag Word | Origine |
-|----------|---------|
-| `{{GRUPPI_OMOGENEI_TESTO}}` | Profili associati in **Profili** (`aziende_profili` → `nome_profilo`, solo `attivo`) |
+**Titolo sezione in anteprima Compila:** «§6.1.2 — Modalità di individuazione dei gruppi omogenei».
 
-- Un profilo per riga (`\n`); ordine alfabetico.
-- Stesso tag in **§6.1.2** (cella elenco mansioni) e in **§6.2** se l’elenco è identico.
-- In Word: formattare la **cella** (non il tag) con allineamento orizzontale e verticale al centro; Docxtemplater con `linebreaks: true` rispetta gli a capo.
+| Scelta operatore | Contenuto nel Word |
+|------------------|-------------------|
+| **Elenco mansioni** | Intro + «Gruppi omogenei afferenti…» + elenco (profili, modificabile) + paragrafo organigramma |
+| **Analisi senza distinzione** | Intro sintetica + testo standard (modificabile) + stesso paragrafo finale |
+
+| Tag Word | Uso |
+|----------|-----|
+| `{{SEZIONE_612_GRUPPI_OMOGENEI}}` | **Sostituisce tutto il corpo** del §6.1.2 (da «Il personale della…» fino al paragrafo sull’organigramma). Il titolo «6.1.2 INDIVIDUAZIONE…» resta fisso nel modello. |
+| `{{GRUPPI_OMOGENEI_TESTO}}` | Solo in **modalità elenco**: elenco multiriga per eventuale cella tabella (§6.1.2 o §6.2). Vuoto in modalità «senza distinzione». |
+
+- Elenco: un profilo/mansione per riga (`\n`); ordine alfabetico; precompilato dai profili associati all’azienda.
+- Cella tabella elenco: allineamento orizzontale e verticale **centrato** (formattazione cella Word).
 
 ## Inserimento manuale nel `.docx`
 
 ### Tabella COMITATO (6.1.1)
+
+Ogni tag (`{{RSPP}}`, `{{RLS}}`, …) deve stare in **un unico blocco di testo** in Word: non applicare grassetto/colore solo su parte del tag, non premere Invio dentro le graffe. Se in console compaiono `split-run` o `{{` / `}}` orfani, riscrivere il tag (incolla da Blocco note) o ricarica il template riparato.
 
 Nelle celle valore (a destra delle etichette), al posto dei nomi fissi:
 
@@ -52,15 +61,19 @@ Rappresentante dei lavoratori …:         →  {{RLS}}
 Medico Competente:                       →  {{MEDICO_COMPETENTE}}
 ```
 
-### Cella elenco gruppi (6.1.2 e 6.2)
+### §6.1.2 — corpo sezione (sostituire tutti i paragrafi dinamici)
 
-Eliminare l’elenco statico (OPERAIO, INSTALLATORE, …) e lasciare **solo**:
+```
+{{SEZIONE_612_GRUPPI_OMOGENEI}}
+```
+
+### Cella elenco (solo se modalità «elenco» e tabella separata)
 
 ```
 {{GRUPPI_OMOGENEI_TESTO}}
 ```
 
-Centratura: proprietà tabella/cella → allineamento orizzontale **Centrato**, verticale **Centrato**.
+Centratura cella: orizzontale **Centrato**, verticale **Centrato**.
 
 ## §6.1.3 — Cronoprogramma (operatore)
 

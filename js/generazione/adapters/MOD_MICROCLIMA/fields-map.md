@@ -20,6 +20,10 @@ Inserimento tag nel Word desktop: `scripts/insert_mod_microclima_placeholders.py
 
 (copia il file in `*_patched.docx`, backup `.bak-micro`).
 
+### Rilevamenti (dashboard)
+
+Per i quattro tipi *Microclima — temperatura …* si salva **un solo record** per sessione con `dettaglio_microclima` (`riquadri[]`: zona, data/ora, VA/TG/T/TR/RH/MET/CLO/PMV/PPD). Solo TG / TR / T (secondo il tipo scelto) è confrontato col limite (`fn_valuta_rilevamento`); gli altri campi sono indicazioni per il modulo §2.7.
+
 
 
 ## Placeholder documento (copertina / premessa / header)
@@ -126,7 +130,7 @@ Dopo `insert_mod_microclima_placeholders.py` il §3 usa tag Docxtemplater (non u
 
 |-----|---------|
 
-| `{{FRASE_VALORI_PMV_CONCLUSIONI}}` | **«pienamente conformi»** se ogni riga con dati ha PMV **strettamente** tra −0,5 e +0,5 (`−0,5 < PMV < +0,5`) e PPD **strettamente minore di** 10 (`PPD < 10`): ai limiti (−0,5; +0,5; 10) si considera **fuori** ottimale. |
+| `{{FRASE_VALORI_PMV_CONCLUSIONI}}` | **«pienamente conformi»** se ogni riga con dati ha PMV nell’intervallo **inclusivo** `−0,5 ≤ PMV ≤ +0,5` e PPD **`≤ 10`**. Fuori ottimale se PMV `< −0,5` o `> +0,5`, oppure PPD `> 10`. |
 
 | `{{#MOSTRA_DISCOSTAMENTI}}` … `{{/MOSTRA_DISCOSTAMENTI}}` | Sezione visibile solo se almeno una riga viola il range ottimale sopra. Contiene `{{INTRO_DISCOSTAMENTI_PAR}}` (fissa) e `{{TESTO_GIUSTIFICAZIONE_CONCLUSIONI}}`. |
 

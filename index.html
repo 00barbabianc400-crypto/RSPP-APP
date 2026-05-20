@@ -3124,11 +3124,16 @@
         }
 
         function renderRilevamentoRow(r) {
+            const det = r.dettaglio_microclima?.riquadri?.length > 0;
+            const sum = det ? formatMicroDettaglioSummary(r) : '';
+            const valoreCell = det
+                ? `<span style="font-size:12px;line-height:1.35;" title="${esc(sum)}">${esc(sum.slice(0, 220))}${sum.length > 220 ? '…' : ''}</span>`
+                : `${r.valore_misurato ?? '—'} ${esc(r.unita_misura || '')}`;
             return `
                 <tr>
                     <td>${esc(r.azienda?.ragione_sociale || '—')}</td>
                     <td>${esc(r.tipo_rilevamento?.nome_tipo || '—')}</td>
-                    <td>${r.valore_misurato ?? '—'} ${esc(r.unita_misura || '')}</td>
+                    <td>${valoreCell}</td>
                     <td>${r.limite_legge_applicato ?? '—'}</td>
                     <td><span class="badge ${r.esito === 'Conforme' ? 'success' : r.esito === 'Non conforme' ? 'error' : 'warning'}">${esc(r.esito || '—')}</span></td>
                     <td>${esc(formatDateTimeForDisplay(r.data_rilevamento))}</td>
@@ -3148,18 +3153,60 @@
             tbody.innerHTML = renderRilevamentiRows(mode, aziendaId);
         }
 
-        /** Schede microclima multi-colonna → più INSERT su rilevamenti_ambientali (tipi catalogo Microclima — …). */
-        const MICRO_BULK_CAMPI = [
-            { key: 'va', label: 'VA (m/s)', short: 'VA', tipoNome: 'Microclima — velocita aria' },
-            { key: 'tg', label: 'TG (°C)', short: 'TG', tipoNome: 'Microclima — temperatura globo (TG)' },
-            { key: 't', label: 'T (°C)', short: 'T', tipoNome: 'Microclima — temperatura estiva' },
-            { key: 'tr', label: 'TR (°C)', short: 'TR', tipoNome: 'Microclima — temperatura radiante (TR)' },
-            { key: 'rh', label: 'RH (%)', short: 'RH', tipoNome: 'Microclima — umidita relativa' },
-            { key: 'met', label: 'MET', short: 'MET', tipoNome: 'Microclima — MET' },
-            { key: 'clo', label: 'CLO', short: 'CLO', tipoNome: 'Microclima — CLO' },
-            { key: 'pmv', label: 'PMV', short: 'PMV', tipoNome: 'Microclima — PMV' },
-            { key: 'ppd', label: 'PPD (%)', short: 'PPD', tipoNome: 'Microclima — PPD' },
+        /** I 4 tipi «sessione tabellare»: un record + dettaglio_microclima. */
+        const MICRO_QUATTRO_NOMI_ESATTI = [
+            'Microclima — temperatura estiva',
+            'Microclima — temperatura invernale',
+            'Microclima — temperatura globo (TG)',
+            'Microclima — temperatura radiante (TR)',
         ];
+
+        function isMicroTabellareNome(name) {
+            return MICRO_QUATTRO_NOMI_ESATTI.includes(String(name || '').trim());
+        }
+
+        /** Campi supplementari tabella modulo (nessun confronto limite per colonna). */
+        const MICRO_MEASURE_FIELDS = [
+            { key: 'va', label: 'VA (m/s)' },
+            { key: 'tg', label: 'TG (°C)' },
+            { key: 't', label: 'T (°C)' },
+            { key: 'tr', label: 'TR (°C)' },
+            { key: 'rh', label: 'RH (%)' },
+            { key: 'met', label: 'MET' },
+            { key: 'clo', label: 'CLO' },
+            { key: 'pmv', label: 'PMV' },
+            { key: 'ppd', label: 'PPD (%)' },
+        ];
+
+        function microPrimaryFieldForTipo(nomeTipo) {
+            const n = String(nomeTipo || '');
+            if (n.includes('globo')) return 'tg';
+            if (n.includes('radiante')) return 'tr';
+            return 't';
+        }
+
+        function microPrimaryLabel(nomeTipo) {
+            const k = microPrimaryFieldForTipo(nomeTipo);
+            if (k === 'tg') return 'TG (°C)';
+            if (k === 'tr') return 'TR (°C)';
+            return 'T (°C)';
+        }
+
+        function formatMicroDettaglioSummary(r) {
+            const det = r?.dettaglio_microclima;
+            const rqlist = det?.riquadri;
+            if (!Array.isArray(rqlist) || !rqlist.length) return '';
+            return rqlist.map((rq, i) => {
+                const head = rqlist.length > 1 ? `#${i + 1} ` : '';
+                const bits = [];
+                if (rq.zona) bits.push(String(rq.zona));
+                MICRO_MEASURE_FIELDS.forEach(({ key, label }) => {
+                    const v = rq[key];
+                    if (v != null && v !== '') bits.push(`${label}: ${v}`);
+                });
+                return head + bits.join(' · ');
+            }).join(' — ');
+        }
 
         function parseNumITOptional(s) {
             if (s == null || String(s).trim() === '') return null;
@@ -3167,25 +3214,28 @@
             return Number.isFinite(n) ? n : null;
         }
 
-        function findTipoRilevamentoIdEsatto(nomeTipo) {
-            const t = (STATE.data.tipiRilevamento || []).find(x => String(x.nome_tipo || '').trim() === nomeTipo);
-            return t?.id || null;
-        }
-
-        window.syncRileModalModeUI = function () {
-            const mode = document.querySelector('#rilevamentoModal input[name="rile_modal_mode"]:checked')?.value || 'classic';
-            const c = document.getElementById('rileModalClassicWrap');
-            const m = document.getElementById('rileModalMicroWrap');
-            if (c) c.style.display = mode === 'classic' ? 'block' : 'none';
-            if (m) m.style.display = mode === 'micro' ? 'block' : 'none';
-        };
-
-        window.submitRilevamentoModalForm = function () {
-            const mode = document.querySelector('#rilevamentoModal input[name="rile_modal_mode"]:checked')?.value || 'classic';
-            if (mode === 'micro') {
-                document.getElementById('rilevamentoMicroBatchForm')?.requestSubmit();
-            } else {
-                document.getElementById('rilevamentoForm')?.requestSubmit();
+        window.applyMicroModalTipoVisibility = function () {
+            const modal = document.getElementById('rilevamentoModal');
+            if (!modal) return;
+            const sel = modal.querySelector('select[name="tipo_rilevamento_id"]');
+            if (!sel) return;
+            const tipo = (STATE.data.tipiRilevamento || []).find(x => x.id === sel.value);
+            const nome = tipo?.nome_tipo || '';
+            const micro = isMicroTabellareNome(nome);
+            const classic = modal.querySelector('#rileClassicMeasureFields');
+            const microW = modal.querySelector('#rileMicroPanelsWrap');
+            if (classic) classic.style.display = micro ? 'none' : '';
+            if (microW) microW.style.display = micro ? 'block' : 'none';
+            const valInp = modal.querySelector('input[name="valore_misurato"]');
+            const dtInp = modal.querySelector('input[name="data_rilevamento"]');
+            const zonaInp = modal.querySelector('#rileClassicMeasureFields input[name="zona"]');
+            const umInp = modal.querySelector('input[name="unita_misura"]');
+            if (valInp) valInp.required = !micro;
+            if (dtInp) dtInp.required = !micro;
+            if (zonaInp) zonaInp.required = false;
+            if (umInp) umInp.required = !micro;
+            if (micro && microW && !microW.querySelector('.micro-bulk-row')) {
+                resetMicroBulkRowsInit();
             }
         };
 
@@ -3210,10 +3260,11 @@
             const host = document.getElementById('microBulkRowsHost');
             if (!host) return;
             const pr = preset || {};
-            const fieldsHtml = MICRO_BULK_CAMPI.map(({ key, label }) => `
+            const dtVal = pr.data_rilevamento != null ? formatDateTimeForInput(pr.data_rilevamento) : '';
+            const fieldsHtml = MICRO_MEASURE_FIELDS.map(({ key, label }) => `
                                 <div class="form-field micro-bulk-num">
                                     <label>${label}</label>
-                                    <input type="text" inputmode="decimal" data-mk="${key}" value="${esc(pr[key] || '')}" placeholder="—">
+                                    <input type="text" inputmode="decimal" data-mk="${key}" value="${esc(pr[key] !== undefined && pr[key] !== null && String(pr[key]).trim() !== '' ? String(pr[key]) : '')}" placeholder="—">
                                 </div>
                             `).join('');
             const div = document.createElement('div');
@@ -3230,7 +3281,7 @@
                         </div>
                         <div class="form-field">
                             <label>Data e ora rilevamento</label>
-                            <input type="datetime-local" data-mk="data_rilevamento" required value="${esc(pr.data_rilevamento || '')}">
+                            <input type="datetime-local" data-mk="data_rilevamento" required value="${esc(dtVal)}">
                         </div>
                     </div>
                     <div class="form-grid micro-bulk-measures">${fieldsHtml}</div>
@@ -3246,92 +3297,107 @@
             appendMicroBulkRow({});
         }
 
-        async function saveRilevamentoMicroBatch(event) {
+        const _esitoRank = { 'Non conforme': 3, 'Da verificare': 2, 'Conforme': 1 };
+
+        function bumpEsitoMicro(worst, next) {
+            if (_esitoRank[next] > _esitoRank[worst]) return next;
+            return worst;
+        }
+
+        async function saveMicroclimaTabellareRecord(formEl, editId) {
             if (!canMutateData()) {
                 showToast('Permessi insufficienti: sola lettura', 'warning');
                 return;
             }
-            event.preventDefault();
-            const fd = new FormData(event.target);
-            const descrizione = String(fd.get('mb_descrizione_rilevamento') || '').trim();
-            const aziendaId = fd.get('mb_azienda_id');
-            const strumento = String(fd.get('mb_strumento') || '').trim() || null;
-            const laboratorio = String(fd.get('mb_laboratorio_esterno') || '').trim() || null;
-            const note = String(fd.get('mb_note') || '').trim() || null;
+            const fd = new FormData(formEl);
+            const descrizione = String(fd.get('descrizione_rilevamento') || '').trim();
+            const aziendaId = fd.get('azienda_id');
+            const tipoId = fd.get('tipo_rilevamento_id');
+            const strumento = String(fd.get('strumento') || '').trim() || null;
+            const laboratorio = String(fd.get('laboratorio_esterno') || '').trim() || null;
+            const note = String(fd.get('note') || '').trim() || null;
             if (!descrizione) {
-                showToast('Inserisci la descrizione della sessione di rilevamento.', 'warning');
+                showToast('Inserisci la descrizione del rilevamento.', 'warning');
                 return;
             }
             if (!aziendaId) {
                 showToast('Seleziona l\'azienda.', 'warning');
                 return;
             }
+            const tipoRow = (STATE.data.tipiRilevamento || []).find(x => x.id === tipoId);
+            const tipoNome = tipoRow?.nome_tipo || '';
+            const pk = microPrimaryFieldForTipo(tipoNome);
+            const unita = tipoRow?.unita_misura || '°C';
+            const limDef = tipoRow?.limite_legge_default;
+            const limite = limDef != null && limDef !== '' ? Number(limDef) : null;
+
             const rowEls = [...document.querySelectorAll('#microBulkRowsHost .micro-bulk-row')];
-            const inserts = [];
-            for (let i = 0; i < rowEls.length; i++) {
-                const rowEl = rowEls[i];
+            const riquadri = [];
+            let worstEsito = 'Conforme';
+
+            for (const rowEl of rowEls) {
                 const zona = rowEl.querySelector('[data-mk=zona]')?.value?.trim();
                 const dt = rowEl.querySelector('[data-mk=data_rilevamento]')?.value;
                 if (!zona || !dt) {
                     showToast('Compila zona / postazione e data per ogni riquadro.', 'error');
                     return;
                 }
-                const rowSuffix = rowEls.length > 1 ? ` [${i + 1}/${rowEls.length}]` : '';
-                for (const { key, short, tipoNome } of MICRO_BULK_CAMPI) {
+                const rq = { zona, data_rilevamento: dt };
+                for (const { key } of MICRO_MEASURE_FIELDS) {
                     const raw = rowEl.querySelector(`[data-mk="${key}"]`)?.value;
                     const num = parseNumITOptional(raw);
-                    if (num === null) continue;
-                    const tipoId = findTipoRilevamentoIdEsatto(tipoNome);
-                    if (!tipoId) {
-                        showToast('Tipo mancante nel database: "' + tipoNome + '". Esegui aggiornamento tipi (seed / SQL microclima).', 'error');
+                    rq[key] = num !== null ? num : null;
+                }
+                const primVal = rq[pk];
+                if (primVal == null || !Number.isFinite(primVal)) {
+                    showToast('Per ogni riquadro indica ' + microPrimaryLabel(tipoNome) + ' (confronto con limite di legge sul tipo selezionato).', 'warning');
+                    return;
+                }
+                let esito = 'Da verificare';
+                if (limite != null && Number.isFinite(limite)) {
+                    const { data: esitoData, error: esitoError } = await supabaseClient.rpc('fn_valuta_rilevamento', {
+                        p_valore_misurato: primVal,
+                        p_limite_legge: limite,
+                    });
+                    if (esitoError) {
+                        showToast('Errore calcolo esito: ' + esitoError.message, 'error');
                         return;
                     }
-                    const tipoRow = (STATE.data.tipiRilevamento || []).find(x => x.id === tipoId);
-                    const unita = tipoRow?.unita_misura || '—';
-                    const limDef = tipoRow?.limite_legge_default;
-                    const limite = limDef != null && limDef !== '' ? Number(limDef) : null;
-
-                    let esito = 'Da verificare';
-                    if (limite != null && Number.isFinite(limite)) {
-                        const { data: esitoData, error: esitoError } = await supabaseClient.rpc('fn_valuta_rilevamento', {
-                            p_valore_misurato: num,
-                            p_limite_legge: limite
-                        });
-                        if (esitoError) {
-                            showToast('Errore calcolo esito: ' + esitoError.message, 'error');
-                            return;
-                        }
-                        esito = esitoData;
-                    }
-
-                    inserts.push({
-                        descrizione_rilevamento: `${descrizione}${rowSuffix} — ${short}`,
-                        azienda_id: aziendaId,
-                        tipo_rilevamento_id: tipoId,
-                        valore_misurato: num,
-                        unita_misura: unita,
-                        limite_legge_applicato: limite != null && Number.isFinite(limite) ? limite : null,
-                        esito,
-                        zona,
-                        data_rilevamento: dt,
-                        strumento,
-                        laboratorio_esterno: laboratorio,
-                        note,
-                        created_by: STATE.account?.id || null,
-                    });
+                    esito = esitoData;
                 }
+                worstEsito = bumpEsitoMicro(worstEsito, esito);
+                riquadri.push(rq);
             }
-            if (!inserts.length) {
-                showToast('Inserisci almeno un valore nelle colonne VA, TG, T, TR, RH, MET, CLO, PMV o PPD.', 'warning');
-                return;
+
+            const payload = {
+                descrizione_rilevamento: descrizione,
+                azienda_id: aziendaId,
+                tipo_rilevamento_id: tipoId,
+                valore_misurato: riquadri[0][pk],
+                unita_misura: unita,
+                limite_legge_applicato: limite != null && Number.isFinite(limite) ? limite : null,
+                esito: worstEsito,
+                zona: riquadri[0].zona,
+                data_rilevamento: riquadri[0].data_rilevamento,
+                strumento,
+                laboratorio_esterno: laboratorio,
+                note,
+                dettaglio_microclima: { riquadri },
+            };
+
+            let error;
+            if (editId) {
+                ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).update(payload).eq('id', editId));
+            } else {
+                payload.created_by = STATE.account?.id || null;
+                ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).insert(payload));
             }
-            const { error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).insert(inserts);
             if (error) {
-                showToast('Errore salvataggio rilevamenti: ' + error.message, 'error');
+                showToast('Errore salvataggio: ' + error.message, 'error');
                 return;
             }
             closeModal('rilevamentoModal');
-            showToast(inserts.length === 1 ? 'Rilevamento salvato' : inserts.length + ' record salvati (dashboard)', 'success');
+            showToast('Rilevamento salvato', 'success');
             await renderRilevamenti();
         }
 
@@ -3350,6 +3416,104 @@
             modal.id = 'rilevamentoModal';
 
             if (isEdit) {
+                const editMicro = item?.dettaglio_microclima?.riquadri?.length > 0
+                    && isMicroTabellareNome(item?.tipo_rilevamento?.nome_tipo);
+
+                if (editMicro) {
+                    modal.innerHTML = `
+                <div class="modal modal--rile-wide" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <div class="modal-title">Modifica Rilevamento</div>
+                        <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="rilevamentoForm" onsubmit="saveRilevamento(event, '${item.id}')">
+                            <div class="form-grid">
+                                <div class="form-field full">
+                                    <label>Descrizione Rilevamento</label>
+                                    <input type="text" name="descrizione_rilevamento" value="${esc(item?.descrizione_rilevamento || '')}" required>
+                                </div>
+                                <div class="form-field">
+                                    <label>Azienda</label>
+                                    <select name="azienda_id" required>
+                                        <option value="">— Seleziona —</option>
+                                        ${aziende.map(a => `<option value="${a.id}" ${item?.azienda_id === a.id ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Tipo Rilevamento</label>
+                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyMicroModalTipoVisibility();">
+                                        <option value="">— Seleziona —</option>
+                                        ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}" ${item?.tipo_rilevamento_id === t.id ? 'selected' : ''}>${esc(t.nome_tipo || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="rileClassicMeasureFields" class="form-grid" style="display:none">
+                                <div class="form-field">
+                                    <label>Valore Misurato</label>
+                                    <input type="number" step="0.001" name="valore_misurato" value="${item?.valore_misurato ?? ''}">
+                                </div>
+                                <div class="form-field">
+                                    <label>Unita Misura</label>
+                                    <input type="text" name="unita_misura" value="${esc(item?.unita_misura || '')}">
+                                </div>
+                                <div class="form-field">
+                                    <label>Limite Legge Applicato</label>
+                                    <input type="number" step="0.001" name="limite_legge_applicato" value="${item?.limite_legge_applicato ?? ''}">
+                                </div>
+                                <div class="form-field">
+                                    <label>Data Rilevamento</label>
+                                    <input type="datetime-local" name="data_rilevamento" value="${formatDateTimeForInput(item?.data_rilevamento)}">
+                                </div>
+                                <div class="form-field">
+                                    <label>Zona</label>
+                                    <input type="text" name="zona" value="${esc(item?.zona || '')}">
+                                </div>
+                            </div>
+                            <div id="rileMicroPanelsWrap" style="display:block">
+                                <p class="hint" style="margin-bottom:12px;line-height:1.4;">
+                                    Per ogni riquadro compila zona, data/ora e le misure da riportare nel modulo.
+                                    VA, RH, MET, CLO, PMV e PPD sono dettagli per il modulo; il confronto col limite è sul tipo selezionato (colonna principale TG / TR / T).
+                                </p>
+                                <div id="microBulkRowsHost"></div>
+                                <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendMicroBulkRow()">+ Aggiungi altro rilevamento (riquadro)</button>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label>Strumento</label>
+                                    <input type="text" name="strumento" value="${esc(item?.strumento || '')}">
+                                </div>
+                                <div class="form-field">
+                                    <label>Laboratorio Esterno</label>
+                                    <input type="text" name="laboratorio_esterno" value="${esc(item?.laboratorio_esterno || '')}">
+                                </div>
+                                <div class="form-field full">
+                                    <label>Note</label>
+                                    <textarea name="note">${esc(item?.note || '')}</textarea>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('rilevamentoForm').requestSubmit()">Salva</button>
+                    </div>
+                </div>
+            `;
+                    document.body.appendChild(modal);
+                    setTimeout(() => {
+                        modal.classList.add('show');
+                        const host = document.getElementById('microBulkRowsHost');
+                        if (host) {
+                            host.innerHTML = '';
+                            (item.dettaglio_microclima.riquadri || []).forEach((rq) => appendMicroBulkRow(rq));
+                        }
+                        applyMicroModalTipoVisibility();
+                    }, 10);
+                    modal.onclick = () => closeModal('rilevamentoModal');
+                    return;
+                }
+
                 modal.innerHTML = `
                 <div class="modal" onclick="event.stopPropagation()">
                     <div class="modal-header">
@@ -3372,7 +3536,7 @@
                                 </div>
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
-                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value)">
+                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyMicroModalTipoVisibility();">
                                         <option value="">— Seleziona —</option>
                                         ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}" ${item?.tipo_rilevamento_id === t.id ? 'selected' : ''}>${esc(t.nome_tipo || '')}</option>`).join('')}
                                     </select>
@@ -3431,105 +3595,76 @@
                         <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <div class="rile-mode-switch">
-                            <label><input type="radio" name="rile_modal_mode" value="classic" checked onchange="syncRileModalModeUI()"> Singolo rilevamento (classico)</label>
-                            <label><input type="radio" name="rile_modal_mode" value="micro" onchange="syncRileModalModeUI()"> Microclima tabellare (più colonne · più riquadri)</label>
-                        </div>
-                        <div id="rileModalClassicWrap">
-                            <form id="rilevamentoForm" onsubmit="saveRilevamento(event, null)">
-                                <div class="form-grid">
-                                    <div class="form-field full">
-                                        <label>Descrizione Rilevamento</label>
-                                        <input type="text" name="descrizione_rilevamento" value="" required>
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Azienda</label>
-                                        <select name="azienda_id" required>
-                                            <option value="">— Seleziona —</option>
-                                            ${aziende.map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Tipo Rilevamento</label>
-                                        <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value)">
-                                            <option value="">— Seleziona —</option>
-                                            ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}">${esc(t.nome_tipo || '')}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Valore Misurato</label>
-                                        <input type="number" step="0.001" name="valore_misurato" value="" required>
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Unita Misura</label>
-                                        <input type="text" name="unita_misura" value="" required>
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Limite Legge Applicato</label>
-                                        <input type="number" step="0.001" name="limite_legge_applicato" value="">
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Data Rilevamento</label>
-                                        <input type="datetime-local" name="data_rilevamento" value="" required>
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Zona</label>
-                                        <input type="text" name="zona" value="">
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Strumento</label>
-                                        <input type="text" name="strumento" value="">
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Laboratorio Esterno</label>
-                                        <input type="text" name="laboratorio_esterno" value="">
-                                    </div>
-                                    <div class="form-field full">
-                                        <label>Note</label>
-                                        <textarea name="note"></textarea>
-                                    </div>
+                        <form id="rilevamentoForm" onsubmit="saveRilevamento(event, null)">
+                            <div class="form-grid">
+                                <div class="form-field full">
+                                    <label>Descrizione Rilevamento</label>
+                                    <input type="text" name="descrizione_rilevamento" value="" required>
                                 </div>
-                            </form>
-                        </div>
-                        <div id="rileModalMicroWrap" style="display:none">
-                            <p class="hint" style="margin-bottom:12px;line-height:1.4;">
-                                Ogni cella compilata (VA, TG, T, …) diventa un record in elenco rilevamenti, come in inserimento classico.
-                                Stessi zona e data/ora per le celle di un riquadro. Usa più riquadri per un’altra postazione o orario.
-                            </p>
-                            <form id="rilevamentoMicroBatchForm" onsubmit="saveRilevamentoMicroBatch(event)">
-                                <div class="form-grid">
-                                    <div class="form-field full">
-                                        <label>Descrizione sessione</label>
-                                        <input type="text" name="mb_descrizione_rilevamento" required placeholder="es. Microclima — campagna gennaio 2026">
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Azienda</label>
-                                        <select name="mb_azienda_id" required>
-                                            <option value="">— Seleziona —</option>
-                                            ${aziende.map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                        </select>
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Strumento</label>
-                                        <input type="text" name="mb_strumento" placeholder="opzionale">
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Laboratorio esterno</label>
-                                        <input type="text" name="mb_laboratorio_esterno" placeholder="opzionale">
-                                    </div>
-                                    <div class="form-field full">
-                                        <label>Note</label>
-                                        <textarea name="mb_note" placeholder="opzionale"></textarea>
-                                    </div>
+                                <div class="form-field">
+                                    <label>Azienda</label>
+                                    <select name="azienda_id" required>
+                                        <option value="">— Seleziona —</option>
+                                        ${aziende.map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
+                                    </select>
                                 </div>
+                                <div class="form-field">
+                                    <label>Tipo Rilevamento</label>
+                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyMicroModalTipoVisibility();">
+                                        <option value="">— Seleziona —</option>
+                                        ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}">${esc(t.nome_tipo || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="rileClassicMeasureFields" class="form-grid">
+                                <div class="form-field">
+                                    <label>Valore Misurato</label>
+                                    <input type="number" step="0.001" name="valore_misurato" value="">
+                                </div>
+                                <div class="form-field">
+                                    <label>Unita Misura</label>
+                                    <input type="text" name="unita_misura" value="" required>
+                                </div>
+                                <div class="form-field">
+                                    <label>Limite Legge Applicato</label>
+                                    <input type="number" step="0.001" name="limite_legge_applicato" value="">
+                                </div>
+                                <div class="form-field">
+                                    <label>Data Rilevamento</label>
+                                    <input type="datetime-local" name="data_rilevamento" value="">
+                                </div>
+                                <div class="form-field">
+                                    <label>Zona</label>
+                                    <input type="text" name="zona" value="">
+                                </div>
+                            </div>
+                            <div id="rileMicroPanelsWrap" style="display:none">
+                                <p class="hint" style="margin-bottom:12px;line-height:1.4;">
+                                    Se scegli un tipo Microclima (TG / TR / T estiva o invernale), compila uno o più riquadri con zona e data/ora.
+                                    VA, RH, MET, CLO, PMV e PPD sono solo dati di dettaglio per il modulo; il confronto col limite è sulla colonna principale indicata dal tipo selezionato.
+                                </p>
                                 <div id="microBulkRowsHost"></div>
                                 <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendMicroBulkRow()">+ Aggiungi altro rilevamento (riquadro)</button>
-                            </form>
-                        </div>
+                            </div>
+                            <div class="form-grid">
+                                <div class="form-field">
+                                    <label>Strumento</label>
+                                    <input type="text" name="strumento" value="">
+                                </div>
+                                <div class="form-field">
+                                    <label>Laboratorio Esterno</label>
+                                    <input type="text" name="laboratorio_esterno" value="">
+                                </div>
+                                <div class="form-field full">
+                                    <label>Note</label>
+                                    <textarea name="note"></textarea>
+                                </div>
+                            </div>
+                        </form>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
-                        <button type="button" class="btn btn-primary" onclick="submitRilevamentoModalForm()">Salva</button>
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('rilevamentoForm').requestSubmit()">Salva</button>
                     </div>
                 </div>
             `;
@@ -3537,7 +3672,7 @@
             setTimeout(() => {
                 modal.classList.add('show');
                 resetMicroBulkRowsInit();
-                syncRileModalModeUI();
+                applyMicroModalTipoVisibility();
             }, 10);
             modal.onclick = () => closeModal('rilevamentoModal');
         }
@@ -3562,6 +3697,15 @@
             }
             event.preventDefault();
             const formData = new FormData(event.target);
+            const tipoId = formData.get('tipo_rilevamento_id');
+            const tipoRow = (STATE.data.tipiRilevamento || []).find(t => t.id === tipoId);
+            const tipoNome = tipoRow?.nome_tipo || '';
+
+            if (isMicroTabellareNome(tipoNome)) {
+                await saveMicroclimaTabellareRecord(event.target, itemId || null);
+                return;
+            }
+
             const valore = formData.get('valore_misurato') ? Number(formData.get('valore_misurato')) : null;
             const limite = formData.get('limite_legge_applicato') ? Number(formData.get('limite_legge_applicato')) : null;
             const { data: esitoData, error: esitoError } = await supabaseClient.rpc('fn_valuta_rilevamento', {
@@ -3585,7 +3729,8 @@
                 data_rilevamento: formData.get('data_rilevamento'),
                 strumento: formData.get('strumento') || null,
                 laboratorio_esterno: formData.get('laboratorio_esterno') || null,
-                note: formData.get('note') || null
+                note: formData.get('note') || null,
+                dettaglio_microclima: null,
             };
 
             let error;
@@ -4448,7 +4593,7 @@
             try {
                 await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
             } catch (_) { /* helper logo opzionale */ }
-            await loadScriptOnce(base + 'adapter.js?v=20260522a');
+            await loadScriptOnce(base + 'adapter.js?v=20260520b');
         }
 
         async function downloadModelloTemplate(codice) {

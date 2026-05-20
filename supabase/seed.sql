@@ -59,12 +59,6 @@ values
 ('Microclima — temperatura invernale', '°C', 20, 'UNI EN ISO 7730', true),
 ('Microclima — temperatura globo (TG)', '°C', 26, 'UNI EN ISO 7730', true),
 ('Microclima — temperatura radiante (TR)', '°C', 26, 'UNI EN ISO 7730', true),
-('Microclima — umidita relativa', '%', 50, 'UNI EN ISO 7730', true),
-('Microclima — velocita aria', 'm/s', 0.15, 'UNI EN ISO 7730', true),
-('Microclima — MET', 'met', null, 'UNI EN ISO 7730', true),
-('Microclima — CLO', 'clo', null, 'UNI EN ISO 7730', true),
-('Microclima — PMV', 'PMV', null, 'UNI EN ISO 7730', true),
-('Microclima — PPD', '%', null, 'UNI EN ISO 7730', true),
 ('Vibrazioni — sistema mano-braccio', 'm/s²', 2.5, 'UNI EN ISO 5349', true),
 ('Vibrazioni — corpo intero', 'm/s²', 0.5, 'ISO 2631-1', true),
 ('Gas Radon', 'Bq/m³', 300, 'D.Lgs. 101/2020', true)

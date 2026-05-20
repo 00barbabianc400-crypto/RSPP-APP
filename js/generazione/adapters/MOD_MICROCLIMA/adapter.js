@@ -5,9 +5,21 @@
 (function () {
   'use strict';
 
-  /** Seed DB: tipi «Microclima — …» (anche TG/TR/MET/CLO/PMV/PPD per tabella §2.7). */
-  function isTipoMicroclimaCatalogo(nomeTipo) {
+  /** Tipi catalogo «sessione tabellare»: una riga DB + JSON riquadri. */
+  const MICRO_TABELLARE_NOMI_LOWER = new Set([
+    'microclima — temperatura estiva',
+    'microclima — temperatura invernale',
+    'microclima — temperatura globo (tg)',
+    'microclima — temperatura radiante (tr)',
+  ]);
+
+  function isTipoMicroclimaCatalogo(nomeTipo, rowOpt) {
+    if (rowOpt && Array.isArray(rowOpt.dettaglio_microclima?.riquadri) && rowOpt.dettaglio_microclima.riquadri.length) {
+      return true;
+    }
     const n = String(nomeTipo || '').trim().toLowerCase();
+    if (MICRO_TABELLARE_NOMI_LOWER.has(n)) return true;
+    /* Compat: vecchi record creati come più INSERT su tipi supplementari */
     if (!n.includes('microclima')) return false;
     return (
       n.includes('temperatura estiva')
@@ -26,7 +38,7 @@
 
   function filterRilevamentiMicroclima(rilevamenti) {
     return (rilevamenti || []).filter(r =>
-      isTipoMicroclimaCatalogo(r.tipo_rilevamento?.nome_tipo)
+      isTipoMicroclimaCatalogo(r.tipo_rilevamento?.nome_tipo, r)
     );
   }
 
@@ -82,13 +94,49 @@
     return { dataDdMmYyyy, oraHhMm };
   }
 
-  /** Aggrega letture giornaliere per postazione (`zona` + giorno ISO). */
+  function misuraCellDaRiquadroJson(rq, key, unitHint) {
+    const v = rq[key];
+    if (v == null || v === '') return '';
+    const raw = typeof v === 'number' ? v : parseFloat(String(v).replace(',', '.'));
+    if (!Number.isFinite(raw)) return String(v);
+    return formatItalianoMisura(raw, unitHint);
+  }
+
+  /** Un riquadro in `dettaglio_microclima.riquadri[]` → riga tabella wizard §2.7. */
+  function riquadroJsonToWizardRow(rq) {
+    const row = emptyRigaMicroclima();
+    row.postazione = String(rq.zona || '').trim();
+    const spl = splitDataOraItalian(rq.data_rilevamento);
+    row.data = spl.dataDdMmYyyy;
+    row.ora = spl.oraHhMm;
+    row.va = misuraCellDaRiquadroJson(rq, 'va', 'm/s');
+    row.tg = misuraCellDaRiquadroJson(rq, 'tg', '°C');
+    row.t = misuraCellDaRiquadroJson(rq, 't', '°C');
+    row.tr = misuraCellDaRiquadroJson(rq, 'tr', '°C');
+    row.rh = misuraCellDaRiquadroJson(rq, 'rh', '%');
+    row.met = misuraCellDaRiquadroJson(rq, 'met', 'met');
+    row.clo = misuraCellDaRiquadroJson(rq, 'clo', 'clo');
+    row.pmv = misuraCellDaRiquadroJson(rq, 'pmv', '');
+    row.ppd = misuraCellDaRiquadroJson(rq, 'ppd', '%');
+    return row;
+  }
+
+  /** Righe §2.7: da JSON tabellare + aggregazione legacy (vecchio multi-insert). */
   function suggestRigheDaRilevamenti(rilevamenti) {
-    const micro = filterRilevamentiMicroclima(rilevamenti || []);
-    if (!micro.length) return [];
-    /** @type {Map<string,{ postazione:string, day:string, lista:typeof micro }>} */
+    const fromJson = [];
+    for (const r of rilevamenti || []) {
+      const rqlist = r.dettaglio_microclima?.riquadri;
+      if (!Array.isArray(rqlist) || !rqlist.length) continue;
+      rqlist.forEach((rq) => fromJson.push(riquadroJsonToWizardRow(rq)));
+    }
+
+    const legacySource = filterRilevamentiMicroclima(rilevamenti || []).filter(
+      (r) => !Array.isArray(r.dettaglio_microclima?.riquadri) || !r.dettaglio_microclima.riquadri.length
+    );
+
+    /** @type {Map<string,{ postazione:string, day:string, dataLabel:string, lista:typeof legacySource }>} */
     const groups = new Map();
-    micro.forEach((r) => {
+    legacySource.forEach((r) => {
       const zona = (r.zona != null ? String(r.zona) : '').trim();
       const { dataDdMmYyyy } = splitDataOraItalian(r.data_rilevamento);
       const dayKeyRaw = dataDdMmYyyy.replace(/\//g, '-');
@@ -105,7 +153,7 @@
       }
       g.lista.push(r);
     });
-    const out = [];
+    const fromLegacy = [];
     groups.forEach((g) => {
       const lista = [...g.lista].sort((a, b) => (
         String(a.data_rilevamento).localeCompare(String(b.data_rilevamento))
@@ -113,7 +161,6 @@
       const row = emptyRigaMicroclima();
       row.postazione = g.postazione;
       row.data = g.dataLabel;
-      /** prima ora nell’insieme ordinato */
       const firstTs = lista[0]?.data_rilevamento;
       row.ora = splitDataOraItalian(firstTs).oraHhMm;
       lista.forEach((ril) => {
@@ -138,8 +185,12 @@
           row.ppd = vm;
         }
       });
-      out.push(row);
+      fromLegacy.push(row);
     });
+
+    if (!fromJson.length && !fromLegacy.length) return [];
+
+    const out = [...fromJson, ...fromLegacy];
     out.sort((a, b) => (String(a.postazione)).localeCompare(String(b.postazione), 'it')
       || String(a.data).localeCompare(String(b.data), 'it'));
     return out;
@@ -198,20 +249,19 @@
     return Number.isFinite(n) ? n : null;
   }
 
-  /** Range benessere termico ottimale (coerente con frase nel modulo). */
-  /** Range ottimale come nel modulo: −0,5 < PMV < +0,5 e PPD < 10 (strict); ai limiti ±0,5 e 10 si è fuori ottimale. */
+  /** Range ottimale modulare: −0,5 ≤ PMV ≤ +0,5 e PPD ≤ 10 (limiti inclusivi). */
   const PMV_OTTIM_MIN = -0.5;
   const PMV_OTTIM_MAX = 0.5;
   const PPD_OTTIM_MAX = 10;
 
   function pmvFuoriRangeOttimale(pmv) {
     if (pmv == null || !Number.isFinite(pmv)) return false;
-    return !(pmv > PMV_OTTIM_MIN && pmv < PMV_OTTIM_MAX);
+    return pmv < PMV_OTTIM_MIN || pmv > PMV_OTTIM_MAX;
   }
 
   function ppdFuoriRangeOttimale(ppd) {
     if (ppd == null || !Number.isFinite(ppd)) return false;
-    return ppd >= PPD_OTTIM_MAX;
+    return ppd > PPD_OTTIM_MAX;
   }
 
   function rigaViolazioneBenessereOttimale(r) {
@@ -278,9 +328,9 @@
       + 'tabella risultano ';
     const suff = conformeOttimale
       ? 'pienamente conformi in relazione al range di valori di riferimento che attestano il '
-        + 'benessere termico (-0.5 <PMV < +0.5 e PPD< 10%). '
+        + 'benessere termico (\u22120,5 \u2264 PMV \u2264 +0,5 e PPD \u2264 10%). '
       : 'non pienamente conformi in relazione al range di valori di riferimento che attestano il '
-        + 'benessere termico (-0.5 <PMV < +0.5 e PPD< 10%). ';
+        + 'benessere termico (\u22120,5 \u2264 PMV \u2264 +0,5 e PPD \u2264 10%). ';
     return base + suff;
   }
 
@@ -557,11 +607,25 @@
     return issues;
   }
 
+  /** Se Word ha mangiato `{{/RIGHE_MICROCLIMA}}`, Docxtemplater associa erroneamente `{{/MOSTRA_DISCOSTAMENTI}}`. */
+  function injectMissingRigheMicroclimaClose(xml) {
+    const open = '{{#RIGHE_MICROCLIMA}}';
+    const close = '{{/RIGHE_MICROCLIMA}}';
+    const mostraOpen = '{{#MOSTRA_DISCOSTAMENTI}}';
+    const io = xml.indexOf(open);
+    const im = xml.indexOf(mostraOpen);
+    if (io < 0 || im < 0 || im <= io) return xml;
+    const between = xml.slice(io + open.length, im);
+    if (between.includes(close)) return xml;
+    return xml.slice(0, im) + close + xml.slice(im);
+  }
+
   function fixSplitPlaceholdersInXml(xml) {
     let out = reuniteSplitDelimiters(xml);
     out = mergeAdjacentSplitPlaceholderRuns(out);
     out = consolidatePlaceholderParagraphs(out);
     out = mergeAdjacentSplitPlaceholderRuns(out);
+    out = injectMissingRigheMicroclimaClose(out);
     out = out.replace(/\{\{LOGO\}\}/g, '{%LOGO}');
     return out;
   }

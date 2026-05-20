@@ -1,8 +1,5 @@
 /**
- * §6.1.2 — Pulizia DOCX dopo Docxtemplater:
- * - rimuove sempre il vecchio paragrafo «organigramma» (testo fisso nel modello);
- * - generale: rimuove titolo «Gruppi omogenei…» + cella/tabella elenco;
- * - elenco: rimuove duplicato titolo+mansione fuori dalla tabella (prima occorrenza).
+ * §6.1.2 — Pulizia DOCX dopo Docxtemplater (solo rimozioni mirate, XML bilanciato).
  */
 (function () {
   'use strict';
@@ -25,86 +22,134 @@
     return ORGANIGRAMMA_RE.test(paragraphPlainText(pXml));
   }
 
-  function removeMatchingParagraphs(xml, testFn) {
-    return xml.replace(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/gi, (p) => (testFn(p) ? '' : p));
-  }
-
-  /** Titolo + paragrafo o tabella subito sotto (modalità generale). */
-  function removeTitoloAndFollowingBlock(xml) {
-    return xml.replace(
-      /(<w:p\b[^>]*>[\s\S]*?<\/w:p>)(\s*)(<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>|<w:p\b[^>]*>[\s\S]*?<\/w:p>)?/gi,
-      (full, pBlock) => {
-        if (!isTitoloGruppiParagraph(pBlock)) return full;
-        return '';
-      }
-    );
-  }
-
-  function splitByTables(xml) {
-    const parts = [];
-    const re = /<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/gi;
-    let last = 0;
-    let m;
-    while ((m = re.exec(xml)) !== null) {
-      if (m.index > last) parts.push({ type: 'out', xml: xml.slice(last, m.index) });
-      parts.push({ type: 'tbl', xml: m[0] });
-      last = m.index + m[0].length;
-    }
-    if (last < xml.length) parts.push({ type: 'out', xml: xml.slice(last) });
-    return parts;
-  }
-
-  function listParagraphs(segmentXml) {
+  function collectParagraphRanges(xml) {
     const list = [];
     const re = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/gi;
     let m;
-    while ((m = re.exec(segmentXml)) !== null) {
-      list.push({ full: m[0], index: m.index, len: m[0].length });
+    while ((m = re.exec(xml)) !== null) {
+      list.push({ start: m.index, end: m.index + m[0].length, xml: m[0] });
     }
     return list;
   }
 
-  /** Prima coppia titolo + mansione (testo breve) fuori dalle tabelle, se il titolo compare più volte. */
-  function removeDuplicatePlainTitoloOutsideTables(outsideXml) {
-    const paras = listParagraphs(outsideXml);
-    const titoloIdx = [];
-    for (let i = 0; i < paras.length; i++) {
-      if (isTitoloGruppiParagraph(paras[i].full)) titoloIdx.push(i);
-    }
-    if (titoloIdx.length < 2) return outsideXml;
+  function isInsideOpenTable(xml, index) {
+    const before = xml.slice(0, index);
+    const opens = (before.match(/<w:tbl\b/gi) || []).length;
+    const closes = (before.match(/<\/w:tbl>/gi) || []).length;
+    return opens > closes;
+  }
 
-    const first = titoloIdx[0];
-    const next = paras[first + 1];
-    if (!next) return outsideXml;
-    const nextText = paragraphPlainText(next.full);
-    if (isTitoloGruppiParagraph(next.full) || isOrganigrammaParagraph(next.full)) {
-      return outsideXml;
-    }
-    if (nextText.length > 220) return outsideXml;
+  function extractBalancedTable(xml, fromIndex) {
+    const start = xml.indexOf('<w:tbl', fromIndex);
+    if (start === -1) return null;
 
-    let out = outsideXml;
-    out = out.replace(next.full, '');
-    out = out.replace(paras[first].full, '');
+    const tagRe = /<(\/?)(w:tbl)\b/gi;
+    tagRe.lastIndex = start;
+    let depth = 0;
+    let m;
+    while ((m = tagRe.exec(xml)) !== null) {
+      if (m[1] === '/') depth--;
+      else depth++;
+      if (depth === 0) {
+        const end = m.index + m[0].length;
+        return { start, end, xml: xml.slice(start, end) };
+      }
+    }
+    return null;
+  }
+
+  function isSmallElencoTable(tblXml) {
+    const rows = (tblXml.match(/<w:tr\b/gi) || []).length;
+    const text = paragraphPlainText(tblXml);
+    return rows > 0 && rows <= 4 && text.length < 900;
+  }
+
+  function removeRanges(xml, ranges) {
+    const uniq = [];
+    const seen = new Set();
+    for (const r of ranges) {
+      const key = r.start + ':' + r.end;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      uniq.push(r);
+    }
+    uniq.sort((a, b) => b.start - a.start);
+    let out = xml;
+    for (const r of uniq) {
+      if (r.start >= 0 && r.end > r.start && r.end <= out.length) {
+        out = out.slice(0, r.start) + out.slice(r.end);
+      }
+    }
     return out;
   }
 
-  function applyToDocumentXml(xml, modalita) {
-    let out = removeMatchingParagraphs(xml, isOrganigrammaParagraph);
+  function rangesForOrganigramma(xml) {
+    const ranges = [];
+    for (const p of collectParagraphRanges(xml)) {
+      if (isOrganigrammaParagraph(p.xml)) ranges.push({ start: p.start, end: p.end });
+    }
+    return ranges;
+  }
 
-    if (modalita === 'generale') {
-      out = removeTitoloAndFollowingBlock(out);
-      out = removeMatchingParagraphs(out, isTitoloGruppiParagraph);
-    } else {
-      const parts = splitByTables(out);
-      out = parts
-        .map((p) =>
-          p.type === 'tbl' ? p.xml : removeDuplicatePlainTitoloOutsideTables(p.xml)
-        )
-        .join('');
+  function rangesForGenerale(xml) {
+    const ranges = [];
+    const paras = collectParagraphRanges(xml);
+
+    for (let i = 0; i < paras.length; i++) {
+      const p = paras[i];
+      if (!isTitoloGruppiParagraph(p.xml)) continue;
+
+      ranges.push({ start: p.start, end: p.end });
+
+      let scan = p.end;
+      const gap = xml.slice(scan, scan + 80);
+      if (/^\s*$/.test(gap) || gap.trim() === '') {
+        scan = p.end + (gap.match(/^\s*/)?.[0].length || 0);
+      }
+
+      const tbl = extractBalancedTable(xml, scan);
+      if (tbl && isSmallElencoTable(tbl.xml)) {
+        ranges.push({ start: tbl.start, end: tbl.end });
+      }
     }
 
-    out = out.replace(/<w:p\b[^>]*>\s*<w:pPr[\s\S]*?<\/w:pPr>\s*<\/w:p>/gi, '');
-    return out;
+    return ranges;
+  }
+
+  function rangesForElencoDuplicate(xml) {
+    const ranges = [];
+    const paras = collectParagraphRanges(xml);
+    const titoli = paras.filter(
+      (p) => isTitoloGruppiParagraph(p.xml) && !isInsideOpenTable(xml, p.start)
+    );
+    if (titoli.length < 2) return ranges;
+
+    const first = titoli[0];
+    const idx = paras.findIndex((p) => p.start === first.start);
+    const next = paras[idx + 1];
+    if (!next || isInsideOpenTable(xml, next.start)) return ranges;
+    const nextText = paragraphPlainText(next.xml);
+    if (
+      isTitoloGruppiParagraph(next.xml) ||
+      isOrganigrammaParagraph(next.xml) ||
+      nextText.length > 220
+    ) {
+      return ranges;
+    }
+
+    ranges.push({ start: first.start, end: first.end });
+    ranges.push({ start: next.start, end: next.end });
+    return ranges;
+  }
+
+  function applyToDocumentXml(xml, modalita) {
+    const ranges = rangesForOrganigramma(xml);
+    if (modalita === 'generale') {
+      ranges.push(...rangesForGenerale(xml));
+    } else {
+      ranges.push(...rangesForElencoDuplicate(xml));
+    }
+    return removeRanges(xml, ranges);
   }
 
   function applyGruppiOmogenei612ToZip(zip, data) {
@@ -114,8 +159,21 @@
     if (!file) return zip;
 
     const modalita = data._gruppi_omogenei_modalita === 'generale' ? 'generale' : 'elenco';
-    const xml = applyToDocumentXml(file.asText(), modalita);
-    zip.file('word/document.xml', xml);
+    const before = file.asText();
+    const after = applyToDocumentXml(before, modalita);
+
+    if (after.length < before.length * 0.55) {
+      console.error(
+        '[GEN_STRESS_DOCX_GRUPPI_612] Pulizia §6.1.2 annullata: XML accorciato troppo (' +
+          before.length +
+          ' → ' +
+          after.length +
+          ')'
+      );
+      return zip;
+    }
+
+    zip.file('word/document.xml', after);
     return zip;
   }
 

@@ -51,7 +51,7 @@ Gruppi omogenei afferenti all'Unità Produttiva
 {{GRUPPI_OMOGENEI_TESTO}}    ← nella cella blu
 ```
 
-Post-generazione (`stress-docx-gruppi-612.js`): rimuove sempre il vecchio paragrafo «Per quanto concerne lo studio dei parametri…» se è ancora nel modello come testo fisso; in «senza distinzione» rimuove anche titolo + cella elenco; in «elenco» rimuove un eventuale duplicato titolo+mansione fuori dalla tabella.
+Post-generazione (`stress-docx-gruppi-612.js`): rimuove paragrafi organigramma/titolo per intero `w:p` e, solo in «senza distinzione», la tabella piccola sotto il titolo (conteggio `w:tbl` bilanciato, mai troncamento di tabelle grandi). Se l’XML si accorcia troppo, la pulizia viene annullata.
 
 - Elenco: un profilo/mansione per riga (`\n`); ordine alfabetico; precompilato dai profili associati all’azienda.
 - Cella tabella elenco: allineamento orizzontale e verticale **centrato** (formattazione cella Word).

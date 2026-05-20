@@ -38,11 +38,11 @@ Inserimento tag nel Word desktop: `scripts/insert_mod_microclima_placeholders.py
 
 | `{{SEDE_OPERATIVA}}` | Anagrafica — premessa («sede ubicata in …») |
 
-| `{{PREMESSA_CICLO_LAVORO}}` | Testo intero ultimo paragrafo premessa: default da **macro UNI** (etichetta tabella, es. «Uffici») con formula fissa ufficio/VDT leggero; override opzionale `wizard.descrizione_ciclo_lavoro` |
+| `{{PREMESSA_CICLO_LAVORO}}` | Paragrafo fisso ciclo di lavoro con virgolettato da **`wizard.micro_tipo_attivita`** (iframe: campo «Tipo di attività», default **Uffici**); override testo intero con `wizard.descrizione_ciclo_lavoro` |
+
+| `{{UNI_ATTIVITA_MACRO}}` | Copia dell’etichetta tipo attività (stesso valore effettivo della premessa), per eventuali tag legacy nel Word — **non** richiede più scelta tabella UNI |
 
 | `{{LUOGO}}` | Derivato dall’anagrafica (sigla provincia da fine `sede_operativa`; fallback `Roma`) — utile firma/footer se inserito nel Word |
-
-
 
 ## Intestazioni e piè di pagina (Word)
 
@@ -52,7 +52,7 @@ Nell’header/footer del modello spesso compaiono sequenze **`XXXXXXXXXXXXXXX`**
 
 
 
-Campi interni (non nel template): `_uni_tabella_num`, `_descrizione_ciclo_override`, `_righe_microclima`, `_rilevamenti_microclima`, `_conclusioni_giustificazione`, `_conclusioni_giustificazione_custom`, `_logo_buffer`, `_logo_path`, `LOGO_PREVIEW_URL`.
+Campi interni (non nel template): `_micro_tipo_attivita`, `_uni_tabella_num` (legacy / ignorato per premessa), `_descrizione_ciclo_override`, `_righe_microclima`, `_rilevamenti_microclima`, `_conclusioni_giustificazione`, `_conclusioni_giustificazione_custom`, `_logo_buffer`, `_logo_path`, `LOGO_PREVIEW_URL`.
 
 
 
@@ -126,7 +126,7 @@ Dopo `insert_mod_microclima_placeholders.py` il §3 usa tag Docxtemplater (non u
 
 |-----|---------|
 
-| `{{FRASE_VALORI_PMV_CONCLUSIONI}}` | **«pienamente conformi»** se ogni riga tabella §2.7 con dati ha **−0,5 < PMV < +0,5** e **PPD < 10** (numeri parsati dalla tabella; PPD in tabella come intero già in punti percento); altrimenti **«non pienamente conformi»**. |
+| `{{FRASE_VALORI_PMV_CONCLUSIONI}}` | **«pienamente conformi»** se ogni riga con dati ha PMV **strettamente** tra −0,5 e +0,5 (`−0,5 < PMV < +0,5`) e PPD **strettamente minore di** 10 (`PPD < 10`): ai limiti (−0,5; +0,5; 10) si considera **fuori** ottimale. |
 
 | `{{#MOSTRA_DISCOSTAMENTI}}` … `{{/MOSTRA_DISCOSTAMENTI}}` | Sezione visibile solo se almeno una riga viola il range ottimale sopra. Contiene `{{INTRO_DISCOSTAMENTI_PAR}}` (fissa) e `{{TESTO_GIUSTIFICAZIONE_CONCLUSIONI}}`. |
 
@@ -134,7 +134,7 @@ Dopo `insert_mod_microclima_placeholders.py` il §3 usa tag Docxtemplater (non u
 
 | `{{TESTO_GIUSTIFICAZIONE_CONCLUSIONI}}` | Scelta in anteprima: settaggio vs manutenzione (testi predefiniti) oppure **personalizzato** (textarea). |
 
-| `{{PARAGRAFO_IMPIANTO_CONCLUSIONI}}` | Paragrafo «Andando a valutare…»: termina con **solo il punto** dopo «…stanze esaminate.» se la macro UNI è **Uffici** / **attività sedentarie** (etichetta tabella con «uffic» o «sedentar»); altrimenti aggiunge «… alle caratteristiche del ciclo di lavoro ed alle condizioni ambientali.». |
+| `{{PARAGRAFO_IMPIANTO_CONCLUSIONI}}` | Paragrafo «Andando a valutare…»: termina con **solo il punto** dopo «…stanze esaminate.» se il **tipo di attività** (campo premessa) contiene «uffic» o «sedentar»; altrimenti aggiunge «… alle caratteristiche del ciclo di lavoro ed alle condizioni ambientali.». |
 
 
 
@@ -158,13 +158,11 @@ Dopo `insert_mod_microclima_placeholders.py` il §3 usa tag Docxtemplater (non u
 
 
 
-## UNI (solo macro — senza lx)
+## Tipo attività premessa (senza catalogo UNI)
 
 
 
-Stesso catalogo `uni-options.js` del modulo illuminamento: l’utente sceglie la **macrocategoria** (`uni_tabella_num`).  
-
-In microclima si usa solo `UNI_ATTIVITA_MACRO` / costruzione `PREMESSA_CICLO_LAVORO` (nessun `UNI_EM_REQ` ecc. in questa fase).
+Il modulo **non** richiede più la scelta della tabella UNI EN 12464-1: il virgolettato nel paragrafo ciclo di lavoro è **`wizard.micro_tipo_attivita`** (default **Uffici**). Il catalogo `uni-options.js` resta nel repo solo per altri adapter / compatibilità opzionale.
 
 
 
@@ -174,9 +172,7 @@ In microclima si usa solo `UNI_ATTIVITA_MACRO` / costruzione `PREMESSA_CICLO_LAV
 
 - Ragione sociale e sede obbligatorie.
 
-- Macrocategoria UNI obbligatoria.
-
-- `PREMESSA_CICLO_LAVORO` non vuoto (generato da UNI o da override).
+- `PREMESSA_CICLO_LAVORO` non vuoto (paragrafo fisso + tipo attività, oppure override testo).
 
 - Almeno **una riga** della tabella §2.7 con almeno un campo compilato (`postazione` o una misura / indice), per evitare documenti vuoti.
 

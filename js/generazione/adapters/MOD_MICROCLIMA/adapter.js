@@ -5,16 +5,22 @@
 (function () {
   'use strict';
 
-  /** Seed DB: solo i 4 tipi «Microclima — …» (temperature est/inver., UR, velocità aria). */
+  /** Seed DB: tipi «Microclima — …» (anche TG/TR/MET/CLO/PMV/PPD per tabella §2.7). */
   function isTipoMicroclimaCatalogo(nomeTipo) {
     const n = String(nomeTipo || '').trim().toLowerCase();
     if (!n.includes('microclima')) return false;
     return (
       n.includes('temperatura estiva')
       || n.includes('temperatura invernale')
+      || n.includes('temperatura globo')
+      || n.includes('temperatura radiante')
       || n.includes('umidita')
       || n.includes('velocita')
       || /velocit[\s\u00e0.]+\s*aria/.test(n)
+      || n.includes('microclima — met')
+      || (n.includes('microclima') && /\bclo\b/.test(n))
+      || n.includes('microclima — pmv')
+      || n.includes('microclima — ppd')
     );
   }
 
@@ -116,10 +122,20 @@
         const vm = vu;
         if (tipo.includes('velocita') && tipo.includes('aria')) row.va = vm;
         else if (tipo.includes('umidita')) row.rh = vm;
+        else if (tipo.includes('temperatura') && tipo.includes('globo')) row.tg = vm;
+        else if (tipo.includes('temperatura') && tipo.includes('radiante')) row.tr = vm;
         else if (tipo.includes('temperatura') && tipo.includes('estiva')) {
           row.t = row.t ? (row.t + ' / Est.\u202f' + vm) : vm;
         } else if (tipo.includes('temperatura') && tipo.includes('invernale')) {
           row.t = row.t ? (row.t + ' / Inv.\u202f' + vm) : vm;
+        } else if (tipo.includes('microclima') && tipo.includes('met') && !tipo.includes('umid')) {
+          row.met = vm;
+        } else if (tipo.includes('microclima') && /\bclo\b/.test(tipo)) {
+          row.clo = vm;
+        } else if (tipo.includes('microclima') && tipo.includes('pmv')) {
+          row.pmv = vm;
+        } else if (tipo.includes('microclima') && tipo.includes('ppd')) {
+          row.ppd = vm;
         }
       });
       out.push(row);
@@ -183,17 +199,28 @@
   }
 
   /** Range benessere termico ottimale (coerente con frase nel modulo). */
+  /** Range ottimale come nel modulo: −0,5 < PMV < +0,5 e PPD < 10 (strict); ai limiti ±0,5 e 10 si è fuori ottimale. */
   const PMV_OTTIM_MIN = -0.5;
   const PMV_OTTIM_MAX = 0.5;
   const PPD_OTTIM_MAX = 10;
+
+  function pmvFuoriRangeOttimale(pmv) {
+    if (pmv == null || !Number.isFinite(pmv)) return false;
+    return !(pmv > PMV_OTTIM_MIN && pmv < PMV_OTTIM_MAX);
+  }
+
+  function ppdFuoriRangeOttimale(ppd) {
+    if (ppd == null || !Number.isFinite(ppd)) return false;
+    return ppd >= PPD_OTTIM_MAX;
+  }
 
   function rigaViolazioneBenessereOttimale(r) {
     const n = normalizeWizardRiga(r);
     if (!rigaMicroclimaHaContenuto(n)) return false;
     const pmv = parseNumeroItaliano(n.pmv);
     const ppd = parseNumeroItaliano(n.ppd);
-    if (pmv != null && (pmv <= PMV_OTTIM_MIN || pmv >= PMV_OTTIM_MAX)) return true;
-    if (ppd != null && ppd >= PPD_OTTIM_MAX) return true;
+    if (pmvFuoriRangeOttimale(pmv)) return true;
+    if (ppdFuoriRangeOttimale(ppd)) return true;
     return false;
   }
 
@@ -217,16 +244,20 @@
     + 'aspetto la Direzione Aziendale ha gi\u00e0 previsto un approfondimento tecnico finalizzato alla '
     + 'programmazione di un intervento di manutenzione.';
 
+  const DEFAULT_MICRO_TIPO_ATTIVITA = 'Uffici';
+
+  /** Etichetta «tipo di attività» nel paragrafo premessa (es. Uffici); se vuota → default. */
+  function tipoAttivitaPremessaFromWizard(wizard) {
+    const raw = wizard && wizard.micro_tipo_attivita != null ? String(wizard.micro_tipo_attivita).trim() : '';
+    return raw || DEFAULT_MICRO_TIPO_ATTIVITA;
+  }
+
   /**
-   * Profilo «ufficio / sedentario» per chiusura paragrafo impianto (solo punto finale vs suffisso ciclo).
-   * Allineato alle macro UNI EN 12464-1 (etichetta tabella).
+   * Profilo «ufficio / sedentario» per chiusura paragrafo impianto (punto finale vs suffisso ciclo).
+   * Basato sul testo «tipo attività» compilato dall’operatore (non più su tabella UNI).
    */
   function isProfiloUfficioSedentarioUni(wizard) {
-    const label = (
-      macroLabelFromWizard(wizard || {})
-      || (resolveUniFromWizard(wizard || {}).group?.label)
-      || ''
-    ).toLowerCase();
+    const label = tipoAttivitaPremessaFromWizard(wizard || {}).toLowerCase();
     return label.includes('uffic') || label.includes('sedentar');
   }
 
@@ -283,7 +314,7 @@
     return parts.length > 1 ? parts[parts.length - 1].trim() : 'Roma';
   }
 
-  // ── UNI EN 12464-1:2021 — solo macrocategoria (etichetta attività per premessa) ──
+  // ── Opzionale: catalogo UNI (altri moduli / compat); premessa microclima usa solo micro_tipo_attivita ──
   function getUniOptions() {
     return window.UNI_EN_12464_1_OPTIONS || [];
   }
@@ -356,16 +387,15 @@
   }
 
   /**
-   * Paragrafo premessa «ciclo di lavoro» (attività = etichetta macro UNI, es. «Uffici»).
-   * Override: wizard.descrizione_ciclo_lavoro (testo intero paragrafo).
+   * Paragrafo premessa «ciclo di lavoro»: testo fisso con tipo attività da `wizard.micro_tipo_attivita` (default «Uffici»).
+   * Override testo intero: `wizard.descrizione_ciclo_lavoro`.
    */
   function buildPremessaCicloLavoro(wizard) {
     const w = wizard || {};
     const override = (w.descrizione_ciclo_lavoro && String(w.descrizione_ciclo_lavoro).trim())
       || (w.premessa_ciclo_lavoro && String(w.premessa_ciclo_lavoro).trim());
     if (override) return override;
-    const label = macroLabelFromWizard(w);
-    if (!label) return '';
+    const label = tipoAttivitaPremessaFromWizard(w);
     return 'Il ciclo di lavoro considerato comprende unicamente attivit\u00e0 del tipo \u201c'
       + label
       + '\u201d che si esplica attraverso l\u2019utilizzo di apparecchiature per l\u2019elaborazione dati in ambienti climatizzati.';
@@ -619,7 +649,7 @@
     })();
 
     const premessaCiclo = buildPremessaCicloLavoro(w);
-    const uniMacro = macroLabelFromWizard(w);
+    const uniMacro = tipoAttivitaPremessaFromWizard(w);
 
     /** Righe §2.7: da wizard se già salvate (esterni), altrimenti suggerimento da DB. */
     const fromDbRows = suggestRigheDaRilevamenti(rilevamenti);
@@ -658,6 +688,9 @@
       _conclusioni_giustificazione_custom: w.conclusioni_giustificazione_custom != null
         ? String(w.conclusioni_giustificazione_custom)
         : '',
+      _micro_tipo_attivita: w.micro_tipo_attivita != null && String(w.micro_tipo_attivita).trim()
+        ? String(w.micro_tipo_attivita).trim()
+        : null,
     };
   }
 
@@ -685,7 +718,7 @@
       ...mergedWiz,
       descrizione_ciclo_lavoro: overrideSrc || '',
     });
-    const uniMacro = macroLabelFromWizard(mergedWiz);
+    const uniMacro = tipoAttivitaPremessaFromWizard(mergedWiz);
 
     const rigbez = Array.isArray(w.righe_microclima)
       ? w.righe_microclima.map(normalizeWizardRiga)
@@ -715,6 +748,9 @@
       _conclusioni_giustificazione_custom: w.conclusioni_giustificazione_custom !== undefined
         ? String(w.conclusioni_giustificazione_custom || '')
         : (base._conclusioni_giustificazione_custom ?? ''),
+      _micro_tipo_attivita: w.micro_tipo_attivita !== undefined
+        ? (String(w.micro_tipo_attivita || '').trim() || null)
+        : base._micro_tipo_attivita,
     };
   }
 
@@ -722,11 +758,8 @@
     const errors = [];
     if (!data.RAGIONE_SOCIALE) errors.push('Ragione Sociale mancante');
     if (!data.SEDE_OPERATIVA) errors.push('Sede Operativa mancante');
-    if (data._uni_tabella_num == null || Number.isNaN(data._uni_tabella_num)) {
-      errors.push('Selezionare la macrocategoria UNI EN 12464-1 (tipo di attività / ambiente)');
-    }
     if (!data.PREMESSA_CICLO_LAVORO || !String(data.PREMESSA_CICLO_LAVORO).trim()) {
-      errors.push('Testo ciclo di lavoro (premessa) mancante: completare la scelta UNI o il testo personalizzato');
+      errors.push('Testo ciclo di lavoro (premessa) mancante');
     }
     const rg = data._righe_microclima;
     if (!Array.isArray(rg) || !rg.some(rigaMicroclimaHaContenuto)) {
@@ -799,6 +832,7 @@
     getUniOptions,
     getUniTableGroups,
     macroLabelFromWizard,
+    tipoAttivitaPremessaFromWizard,
     buildPremessaCicloLavoro,
     buildCampiConclusioni,
     conformitaBenessereOttimaleDaRighe,

@@ -4,8 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Microclima</title>
-<script src="uni-options.js"></script>
-<script src="adapter.js?v=20260521a"></script>
+<script src="adapter.js?v=20260522a"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -106,10 +105,10 @@
       <p><strong>Modulo n.</strong> (come catalogo): <span id="pMod" class="field-auto">—</span></p>
       <p><strong>Data emissione</strong>: <span id="pData" class="field-auto">—</span></p>
       <p>
-        <strong>Macrocategoria UNI EN 12464-1</strong> (solo etichetta attività, es. «Uffici» — senza valori lx):<br>
-        <select id="uniSelect" class="inline-select" onchange="setUni(this.value)">
-          <option value="">— Seleziona —</option>
-        </select>
+        <strong>Tipo di attività</strong> (solo la parte tra virgolette nel paragrafo ciclo di lavoro; default «Uffici»):<br>
+        <input type="text" id="inpMicroTipoAttivita" class="inline-select" style="width:100%;max-width:520px;margin-top:6px;"
+          placeholder="Uffici" autocomplete="off"
+          oninput="setMicroTipoAttivita(this.value)">
       </p>
 
       <h2 class="doc-section">1. Premessa (anteprima)</h2>
@@ -119,11 +118,11 @@
       <p>
         …ai sensi del D.lgs. 81/08 (<strong>Modulo <span id="pPremessaMod" class="field-auto">—</span></strong> allegato al DVR)…
       </p>
-      <p id="pPremessaCiclo" class="field-missing" style="margin-top:10px;">Seleziona la macrocategoria UNI per generare il paragrafo sul ciclo di lavoro.</p>
+      <p id="pPremessaCiclo" class="field-auto" style="margin-top:10px;"></p>
       <p class="hint-str" style="margin-top:12px;">
-        Opzionale: sostituisci interamente il paragrafo «ciclo di lavoro» (sovrascrive il testo automatico da UNI).
+        Opzionale: sostituisci <strong>interamente</strong> il paragrafo «ciclo di lavoro» (sovrascrive il testo automatico sopra).
       </p>
-      <textarea id="taCicloOverride" class="inline-ta" placeholder="Lascia vuoto per usare il testo automatico da UNI…"
+      <textarea id="taCicloOverride" class="inline-ta" placeholder="Lascia vuoto per usare il paragrafo fisso con il tipo di attività indicato sopra…"
         oninput="setCicloOverride(this.value)"></textarea>
 
       <p style="margin-top:16px;"><strong>Sede (anagrafica)</strong>: <span id="pSede" class="field-auto">—</span></p>
@@ -163,7 +162,7 @@
 
       <h2 class="doc-section">§ 3 — Conclusioni · PMV / PPD</h2>
       <p class="hint-str" style="margin-bottom: 8px;">
-        Il documento usa i valori <strong>PMV</strong> e <strong>PPD</strong> della tabella (range ottimale: &#8211;0,5 &lt; PMV &lt; +0,5 e PPD &lt; 10).
+        Il documento usa i valori <strong>PMV</strong> e <strong>PPD</strong> della tabella (range ottimale del modulo: &#8211;0,5 &lt; PMV &lt; +0,5 e PPD &lt; 10; ai limiti &#8211;0,5 / +0,5 / 10 si considera fuori ottimale).
         Se almeno una riga con numeri esce dall’intervallo, in §3 compare <em>«non pienamente conformi»</em> e il blocco discostamenti con la giustificazione scelta sotto.
       </p>
       <p>
@@ -200,7 +199,7 @@
     ['postazione', 'data', 'ora', 'va', 'tg', 't', 'tr', 'rh', 'met', 'clo', 'pmv', 'ppd'];
 
   let WIZARD = {
-    uni_tabella_num: null,
+    micro_tipo_attivita: '',
     descrizione_ciclo_lavoro: undefined,
     righe_microclima: null,
     conclusioni_giustificazione: 'settaggio',
@@ -212,30 +211,6 @@
 
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  function getUniGroups() {
-    if (ADAPTER?.getUniTableGroups) return ADAPTER.getUniTableGroups();
-    return [];
-  }
-
-  function populateUniSelect() {
-    const sel = document.getElementById('uniSelect');
-    sel.innerHTML = '<option value="">— Seleziona tabella UNI (macrocategoria) —</option>';
-    const groups = getUniGroups();
-    if (!groups.length) {
-      const op = document.createElement('option');
-      op.disabled = true;
-      op.textContent = '(catalogo UNI non caricato)';
-      sel.appendChild(op);
-      return;
-    }
-    groups.forEach(g => {
-      const op = document.createElement('option');
-      op.value = String(g.tabella_num);
-      op.textContent = 'Tab. ' + g.tabella_num + ' — ' + (g.tabella_titolo || g.label);
-      sel.appendChild(op);
-    });
   }
 
   /** Legge dalla tabella e aggiorna WIZARD.righe_microclima. */
@@ -366,7 +341,7 @@
       cicloEl.textContent = t;
     } else {
       cicloEl.className = 'field-missing';
-      cicloEl.textContent = 'Seleziona la macrocategoria UNI (o compila il testo personalizzato sotto).';
+      cicloEl.textContent = 'Compila il tipo di attività oppure il paragrafo personalizzato nella scheda compilazione.';
     }
   }
 
@@ -442,8 +417,8 @@
     }
   }
 
-  window.setUni = function (tabNum) {
-    WIZARD.uni_tabella_num = tabNum ? Number(tabNum) : null;
+  window.setMicroTipoAttivita = function (v) {
+    WIZARD.micro_tipo_attivita = v;
     sendUpdate();
   };
 
@@ -465,7 +440,6 @@
   };
 
   function initFromData() {
-    populateUniSelect();
     if (!DATA) return;
     document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
     document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
@@ -473,13 +447,19 @@
     document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
     document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
 
-    if (DATA._uni_tabella_num != null) {
-      WIZARD.uni_tabella_num = DATA._uni_tabella_num;
-      document.getElementById('uniSelect').value = String(DATA._uni_tabella_num);
+    if (DATA._micro_tipo_attivita != null && String(DATA._micro_tipo_attivita).trim()) {
+      WIZARD.micro_tipo_attivita = String(DATA._micro_tipo_attivita).trim();
+      document.getElementById('inpMicroTipoAttivita').value = WIZARD.micro_tipo_attivita;
+    } else {
+      WIZARD.micro_tipo_attivita = '';
+      document.getElementById('inpMicroTipoAttivita').value = '';
     }
     if (DATA._descrizione_ciclo_override) {
       WIZARD.descrizione_ciclo_lavoro = DATA._descrizione_ciclo_override;
       document.getElementById('taCicloOverride').value = DATA._descrizione_ciclo_override;
+    } else {
+      WIZARD.descrizione_ciclo_lavoro = undefined;
+      document.getElementById('taCicloOverride').value = '';
     }
 
     /* Righe §2.7 — come restituito da buildData.applyWizard (fallback se dati più vecchi). */
@@ -515,7 +495,6 @@
     window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
   });
 
-  populateUniSelect();
   if (!ADAPTER) {
     document.getElementById('stopBadge').classList.add('visible');
     document.getElementById('stopBadge').textContent = 'Adapter mancante';

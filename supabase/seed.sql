@@ -57,8 +57,14 @@ values
 ('Rumore — picco Ppeak', 'Pa', 112, 'D.Lgs. 81/08 Tit. VIII Capo II', true),
 ('Microclima — temperatura estiva', '°C', 26, 'UNI EN ISO 7730', true),
 ('Microclima — temperatura invernale', '°C', 20, 'UNI EN ISO 7730', true),
+('Microclima — temperatura globo (TG)', '°C', 26, 'UNI EN ISO 7730', true),
+('Microclima — temperatura radiante (TR)', '°C', 26, 'UNI EN ISO 7730', true),
 ('Microclima — umidita relativa', '%', 50, 'UNI EN ISO 7730', true),
 ('Microclima — velocita aria', 'm/s', 0.15, 'UNI EN ISO 7730', true),
+('Microclima — MET', 'met', null, 'UNI EN ISO 7730', true),
+('Microclima — CLO', 'clo', null, 'UNI EN ISO 7730', true),
+('Microclima — PMV', 'PMV', null, 'UNI EN ISO 7730', true),
+('Microclima — PPD', '%', null, 'UNI EN ISO 7730', true),
 ('Vibrazioni — sistema mano-braccio', 'm/s²', 2.5, 'UNI EN ISO 5349', true),
 ('Vibrazioni — corpo intero', 'm/s²', 0.5, 'ISO 2631-1', true),
 ('Gas Radon', 'Bq/m³', 300, 'D.Lgs. 101/2020', true)
@@ -68,19 +74,26 @@ set unita_misura = excluded.unita_misura,
     normativa_rif = excluded.normativa_rif,
     attivo = excluded.attivo;
 
+-- Profili catalogo Standard: il DB può avere unique solo su (nome_profilo, tipo_profilo)
+-- (es. constraint profili_standard_nome_unique). INSERT ripetibile senza errore 23505:
 insert into public.profili (nome_profilo, tipo_personale, tipo_profilo, attivo)
-values
-('Impiegato VDT', 'Personale amministrativo e di accoglienza', 'Standard', true),
-('Manutentore', 'Personale tecnico di manutenzione', 'Standard', true),
-('Addetto alle pulizie', 'Personale addetto alla pulizia e igiene', 'Standard', true),
-('Governante', 'Personale di coordinamento e supervisione', 'Standard', true),
-('Autista / addetto agli spostamenti', 'Personale con mansioni esterne su strada', 'Standard', true),
-('Operaio generico', 'Personale operativo non specializzato', 'Standard', true),
-('Magazziniere', 'Personale addetto al magazzino e stoccaggio', 'Standard', true),
-('Operatore sanitario', 'Personale sanitario e di assistenza', 'Standard', true),
-('Addetto alla ristorazione', 'Personale di cucina e sala', 'Standard', true),
-('Vigilanza e sicurezza', 'Personale addetto alla sorveglianza', 'Standard', true)
-on conflict (nome_profilo, tipo_profilo, azienda_proprietaria_id) do nothing;
+select v.nome_profilo, v.tipo_personale, v.tipo_profilo, v.attivo
+from (values
+  ('Impiegato VDT', 'Personale amministrativo e di accoglienza', 'Standard'::public.tipo_profilo_enum, true),
+  ('Manutentore', 'Personale tecnico di manutenzione', 'Standard'::public.tipo_profilo_enum, true),
+  ('Addetto alle pulizie', 'Personale addetto alla pulizia e igiene', 'Standard'::public.tipo_profilo_enum, true),
+  ('Governante', 'Personale di coordinamento e supervisione', 'Standard'::public.tipo_profilo_enum, true),
+  ('Autista / addetto agli spostamenti', 'Personale con mansioni esterne su strada', 'Standard'::public.tipo_profilo_enum, true),
+  ('Operaio generico', 'Personale operativo non specializzato', 'Standard'::public.tipo_profilo_enum, true),
+  ('Magazziniere', 'Personale addetto al magazzino e stoccaggio', 'Standard'::public.tipo_profilo_enum, true),
+  ('Operatore sanitario', 'Personale sanitario e di assistenza', 'Standard'::public.tipo_profilo_enum, true),
+  ('Addetto alla ristorazione', 'Personale di cucina e sala', 'Standard'::public.tipo_profilo_enum, true),
+  ('Vigilanza e sicurezza', 'Personale addetto alla sorveglianza', 'Standard'::public.tipo_profilo_enum, true)
+) as v(nome_profilo, tipo_personale, tipo_profilo, attivo)
+where not exists (
+  select 1 from public.profili p
+  where p.nome_profilo = v.nome_profilo and p.tipo_profilo = v.tipo_profilo
+);
 
 insert into public.documenti_catalogo (codice, categoria, nome, default_attivo, attivo, ordine)
 values

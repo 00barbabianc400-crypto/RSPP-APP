@@ -577,11 +577,23 @@
       w.vdt_text_overrides || base._vdt_text_overrides
     );
 
+    const modNum = (() => {
+      if (w.modulo_numero !== undefined) {
+        const raw = String(w.modulo_numero ?? '').trim();
+        if (raw === '') return '';
+        const n = parseInt(raw, 10);
+        if (Number.isFinite(n) && n >= 0) return String(n).padStart(2, '0');
+        return '';
+      }
+      return base.MODULO_NUMERO || '01';
+    })();
+
     return {
       ...base,
       _logo_buffer: base._logo_buffer || w.logo_buffer || null,
       _logo_path: base._logo_path || w.logo_path || '',
       LOGO_PREVIEW_URL: base.LOGO_PREVIEW_URL || w.logo_url || '',
+      MODULO_NUMERO: modNum,
       DESCRIZIONE_CICLO_LAVORO: descrizioneCicloLavoro,
       DESCRIZIONE_LOCALI: descrizioneLocali,
       STRUMENTO_LUXMETRO: strumento,
@@ -605,6 +617,9 @@
     const errors = [];
     if (!data.RAGIONE_SOCIALE)  errors.push('Ragione Sociale mancante');
     if (!data.SEDE_OPERATIVA)   errors.push('Sede Operativa mancante');
+    if (!data.MODULO_NUMERO || !String(data.MODULO_NUMERO).trim()) {
+      errors.push('Numero modulo (titolo documento) mancante o non valido');
+    }
     if (data._has_vdt === null || data._has_vdt === undefined)
       errors.push('Indicare se sono presenti lavoratori VDT sistematici (≥20 h/sett.)');
     if (!data.UNI_TABELLA_RIF)

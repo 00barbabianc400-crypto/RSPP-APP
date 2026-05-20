@@ -34,7 +34,7 @@ Per i quattro tipi *Microclima — temperatura …* si salva **un solo record** 
 
 |-----|---------|
 
-| `{{MODULO_NUMERO}}` | `documenti_catalogo.ordine` → `buildData` / wizard (2 cifre, es. `70`) |
+| `{{MODULO_NUMERO}}` | Numero indicato dall’operatore in anteprima compilazione (suggerimento iniziale dall’`ordine` del catalogo documenti); nel DOCX a 2 cifre. |
 
 | `{{RAGIONE_SOCIALE}}` | Anagrafica |
 

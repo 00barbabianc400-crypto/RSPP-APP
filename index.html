@@ -670,6 +670,27 @@
         .badge.error { background: #FDE7E9; color: var(--sp-error); }
         .badge.info { background: #DEECF9; color: var(--sp-primary); }
         
+        /* Rilevamenti — valore microclima tabellare (dashboard) */
+        .rile-val-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            align-items: flex-start;
+            max-width: 300px;
+        }
+        .rile-val-main {
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .badge.micro-detail-tag {
+            cursor: help;
+            font-weight: 500;
+            font-size: 11px;
+            line-height: 1.3;
+            white-space: normal;
+            text-align: left;
+        }
+        
         /* ───── TOOLBAR ───── */
         .toolbar {
             display: flex;
@@ -3124,11 +3145,25 @@
         }
 
         function renderRilevamentoRow(r) {
-            const det = r.dettaglio_microclima?.riquadri?.length > 0;
+            const rq = r.dettaglio_microclima?.riquadri;
+            const det = Array.isArray(rq) && rq.length > 0;
             const sum = det ? formatMicroDettaglioSummary(r) : '';
-            const valoreCell = det
-                ? `<span style="font-size:12px;line-height:1.35;" title="${esc(sum)}">${esc(sum.slice(0, 220))}${sum.length > 220 ? '…' : ''}</span>`
-                : `${r.valore_misurato ?? '—'} ${esc(r.unita_misura || '')}`;
+            const unita = esc(r.unita_misura || '');
+            let valoreCell;
+            if (det) {
+                const n = rq.length;
+                const vm = r.valore_misurato != null && r.valore_misurato !== '' ? String(r.valore_misurato) : '—';
+                const hint = n === 1
+                    ? 'Tabella modulo · 1 riquadro'
+                    : `Tabella modulo · ${n} riquadri`;
+                valoreCell = `
+                    <div class="rile-val-cell">
+                        <span class="rile-val-main">${esc(vm)} ${unita}</span>
+                        <span class="badge info micro-detail-tag" title="${esc(sum)}">${esc(hint)} · passa il mouse per il dettaglio</span>
+                    </div>`;
+            } else {
+                valoreCell = `${r.valore_misurato ?? '—'} ${unita}`;
+            }
             return `
                 <tr>
                     <td>${esc(r.azienda?.ragione_sociale || '—')}</td>
@@ -4509,7 +4544,7 @@
                 + '</div>'
                 + '<div style="height:700px;overflow:hidden;">'
                 + '<iframe id="gen-iframe-' + attrEsc(codice) + '"'
-                + ' src="js/generazione/adapters/' + attrEsc(codice) + '/preview.html?v=20260522a"'
+                + ' src="js/generazione/adapters/' + attrEsc(codice) + '/preview.html?v=20260520c"'
                 + ' style="width:100%;height:100%;border:none;"'
                 + ' title="Anteprima documento"></iframe>'
                 + '</div>'
@@ -4593,7 +4628,7 @@
             try {
                 await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
             } catch (_) { /* helper logo opzionale */ }
-            await loadScriptOnce(base + 'adapter.js?v=20260520b');
+            await loadScriptOnce(base + 'adapter.js?v=20260520c');
         }
 
         async function downloadModelloTemplate(codice) {

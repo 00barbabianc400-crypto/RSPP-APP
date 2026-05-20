@@ -766,10 +766,12 @@
       : base._uni_tabella_num;
 
     const modNum = (() => {
-      if (w.modulo_numero != null && w.modulo_numero !== '') {
-        const raw = String(w.modulo_numero).trim();
+      if (w.modulo_numero !== undefined) {
+        const raw = String(w.modulo_numero ?? '').trim();
+        if (raw === '') return '';
         const n = parseInt(raw, 10);
         if (Number.isFinite(n) && n >= 0) return String(n).padStart(2, '0');
+        return '';
       }
       return base.MODULO_NUMERO || '01';
     })();
@@ -822,6 +824,9 @@
     const errors = [];
     if (!data.RAGIONE_SOCIALE) errors.push('Ragione Sociale mancante');
     if (!data.SEDE_OPERATIVA) errors.push('Sede Operativa mancante');
+    if (!data.MODULO_NUMERO || !String(data.MODULO_NUMERO).trim()) {
+      errors.push('Numero modulo (copertina / premessa) mancante o non valido');
+    }
     if (!data.PREMESSA_CICLO_LAVORO || !String(data.PREMESSA_CICLO_LAVORO).trim()) {
       errors.push('Testo ciclo di lavoro (premessa) mancante');
     }

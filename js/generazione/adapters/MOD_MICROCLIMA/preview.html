@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Microclima</title>
-<script src="adapter.js?v=20260520b"></script>
+<script src="adapter.js?v=20260520c"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -102,7 +102,15 @@
 
       <h2 class="doc-section">Dati e attività (inizio compilazione)</h2>
       <p><strong>Ragione sociale</strong> (copertina / intestazione): <span id="pRagSoc" class="field-auto">—</span></p>
-      <p><strong>Modulo n.</strong> (come catalogo): <span id="pMod" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong> (copertina e premessa, es. «Modulo <span id="pPremessaModInline" class="field-auto">—</span>»):<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6" style="width:120px;margin-top:6px;"
+          placeholder="es. 70" autocomplete="off"
+          oninput="setModuloNumero(this.value)">
+      </p>
+      <p class="hint-str" style="margin-top:-4px;margin-bottom:10px;">
+        Inserisci solo il numero che deve comparire sul documento (nel Word viene formattato a due cifre, es. 7 → 07). Suggerimento iniziale dal catalogo documenti, se presente.
+      </p>
       <p><strong>Data emissione</strong>: <span id="pData" class="field-auto">—</span></p>
       <p>
         <strong>Tipo di attività</strong> (solo la parte tra virgolette nel paragrafo ciclo di lavoro; default «Uffici»):<br>
@@ -199,6 +207,7 @@
     ['postazione', 'data', 'ora', 'va', 'tg', 't', 'tr', 'rh', 'met', 'clo', 'pmv', 'ppd'];
 
   let WIZARD = {
+    modulo_numero: '',
     micro_tipo_attivita: '',
     descrizione_ciclo_lavoro: undefined,
     righe_microclima: null,
@@ -327,6 +336,13 @@
     el.className = 'field-auto';
   }
 
+  function displayModuloInputFromPadded(padded) {
+    const s = String(padded || '').trim();
+    if (!s) return '';
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? String(n) : s;
+  }
+
   function refreshPremessaPreview(merged) {
     const m = merged || buildMerged();
     const sede = m.SEDE_OPERATIVA || '';
@@ -334,6 +350,11 @@
     document.getElementById('pPremessaSede').textContent = sede || '—';
     document.getElementById('pPremessaSede').className = sede ? 'field-auto' : 'field-missing';
     document.getElementById('pPremessaMod').textContent = mod;
+    const inline = document.getElementById('pPremessaModInline');
+    if (inline) {
+      inline.textContent = mod;
+      inline.className = mod && mod !== '—' ? 'field-auto' : 'field-missing';
+    }
     const cicloEl = document.getElementById('pPremessaCiclo');
     const t = (m.PREMESSA_CICLO_LAVORO || '').trim();
     if (t) {
@@ -417,6 +438,11 @@
     }
   }
 
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
   window.setMicroTipoAttivita = function (v) {
     WIZARD.micro_tipo_attivita = v;
     sendUpdate();
@@ -443,7 +469,10 @@
     if (!DATA) return;
     document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
     document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
-    document.getElementById('pMod').textContent = DATA.MODULO_NUMERO || '—';
+    const inMod = document.getElementById('inpModuloNumero');
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    inMod.value = pref;
+    WIZARD.modulo_numero = pref;
     document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
     document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
 

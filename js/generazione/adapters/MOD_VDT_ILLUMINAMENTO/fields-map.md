@@ -26,7 +26,7 @@ Script per inserire i tag nel `.docx`: `scripts/insert_vdt_placeholders.py` (tes
 
 | Placeholder | Origine | Note |
 |-------------|---------|------|
-| `{{MODULO_NUMERO}}` | `documenti_catalogo.ordine` o numero progressivo run | Titolo documento: `MODULO {{MODULO_NUMERO}}` |
+| `{{MODULO_NUMERO}}` | Numero indicato dall’operatore in anteprima compilazione (suggerimento iniziale dall’`ordine` catalogo); nel DOCX a 2 cifre. |
 | `{{DATA_EMISSIONE}}` | Data generazione run (`new Date()`) | Formato: `DD/MM/YYYY` |
 
 ### 2.3 Campi da input wizard (obbligatori)

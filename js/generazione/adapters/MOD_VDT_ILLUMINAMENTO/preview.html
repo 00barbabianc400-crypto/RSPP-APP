@@ -6,7 +6,7 @@
 <title>Anteprima — Modulo Illuminamento</title>
 <script src="uni-options.js"></script>
 <script src="vdt-texts.js"></script>
-<script src="adapter.js?v=20260520f"></script>
+<script src="adapter.js?v=20260520c"></script>
 <!-- docx-preview richiede JSZip globale (loadAsync) -->
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
@@ -317,6 +317,12 @@
   <!-- Cover -->
   <p style="text-align:center; font-size:9pt; color:#666;">DOCUMENTO DI VALUTAZIONE DEI RISCHI</p>
   <h1 class="doc-title" id="modTitle">MODULO —</h1>
+  <p style="text-align:center; font-size:10pt; margin-top:6px;">
+    <label for="inpModuloNumero">Numero modulo</label>
+    <input id="inpModuloNumero" type="text" class="inline-input" inputmode="numeric" maxlength="6" style="width:72px;margin-left:8px;text-align:center;"
+      placeholder="es. 70" autocomplete="off" oninput="setModuloNumero(this.value)">
+  </p>
+  <p class="hint-str" style="text-align:center; margin:4px 0 0;">Suggerimento iniziale dal catalogo documenti; modificabile. Nel Word il numero è a due cifre (es. 7 → 07).</p>
   <p style="text-align:center; font-size:10pt;">
     <strong id="docSubtitle">—</strong>
   </p>
@@ -475,6 +481,7 @@
   // ── Stato locale ──────────────────────────────────────────────────────────
   let DATA = null;       // oggetto dati ricevuto dal parent
   let WIZARD = {
+    modulo_numero:        '',
     has_vdt:              null,
     uni_tabella_num:      null,
     strumento_luxmetro:   '',
@@ -547,6 +554,8 @@
 
   function sendUpdate() {
     const merged = buildMerged();
+    const mn = merged.MODULO_NUMERO;
+    document.getElementById('modTitle').textContent = mn ? ('MODULO ' + mn) : 'MODULO —';
     if (WIZARD.has_vdt != null) refreshVdtDocSections();
     const errors = ADAPTER ? ADAPTER.validate(merged) : [];
     window.parent.postMessage({
@@ -560,6 +569,13 @@
       clearTimeout(previewTimer);
       previewTimer = setTimeout(requestPreviewDocx, 600);
     }
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const s = String(padded || '').trim();
+    if (!s) return '';
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? String(n) : s;
   }
 
   function buildMerged() {
@@ -594,8 +610,11 @@
     setText('pLuogo',        DATA.LUOGO,            'auto');
     setText('pDataFirma',    DATA.DATA_EMISSIONE,   'auto');
 
-    // Modulo e sottotitolo
-    document.getElementById('modTitle').textContent = 'MODULO ' + (DATA.MODULO_NUMERO || '—');
+    // Modulo — numero inserito dall'operatore (titolo aggiornato in sendUpdate)
+    const inMod = document.getElementById('inpModuloNumero');
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    inMod.value = pref;
+    WIZARD.modulo_numero = pref;
 
     if (DATA._has_vdt === true || DATA._has_vdt === false) {
       setVdt(DATA._has_vdt);
@@ -638,6 +657,11 @@
   }
 
   // ── Setter wizard ─────────────────────────────────────────────────────────
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
   window.setVdt = function (val) {
     WIZARD.has_vdt = val;
     document.getElementById('btnVdtSi').classList.toggle('active', val === true);

@@ -1,3 +1,6 @@
 # GitHub Pages / Jekyll — SPA statica: non generare pagine dai file di documentazione interna
+# I fields-map contengono tag Docxtemplater ({%LOGO%}, {{TAG}}) che Liquid interpreta come sintassi Jekyll.
 exclude:
   - js/generazione/adapters/MOD_VDT_ILLUMINAMENTO/fields-map.md
+  - js/generazione/adapters/MOD_MICROCLIMA/fields-map.md
+  - js/generazione/adapters/MOD_STRESS_LC/fields-map.md

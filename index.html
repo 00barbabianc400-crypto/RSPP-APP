@@ -2135,10 +2135,11 @@
                                 </div>
                                 <div class="form-field">
                                     <label>Tipo Profilo <span class="required">*</span></label>
-                                    <select name="TipoProfilo" required onchange="toggleAziendaProprietariaField(this.value)">
+                                    <select name="TipoProfilo" required onchange="toggleAziendaProprietariaField(this.value)" ${isEdit && f.TipoProfilo === 'Standard' ? 'disabled' : ''}>
                                         <option value="Standard" ${f.TipoProfilo === 'Standard' ? 'selected' : ''}>Standard</option>
                                         <option value="Custom" ${f.TipoProfilo === 'Custom' ? 'selected' : ''}>Custom</option>
                                     </select>
+                                    ${isEdit && f.TipoProfilo === 'Standard' ? '<input type="hidden" name="TipoProfilo" value="Standard">' : ''}
                                 </div>
                                 <div class="form-field" id="aziendaProprietariaField" style="${(f.TipoProfilo === 'Custom') ? '' : 'display:none;'}">
                                     <label>Azienda Proprietaria</label>
@@ -2182,7 +2183,7 @@
                         </form>
                     </div>
                     <div class="modal-footer">
-                        ${isEdit ? '<button class="btn btn-danger" onclick="deleteProfilo(\'' + itemId + '\')">Elimina</button>' : ''}
+                        ${isEdit && f.TipoProfilo !== 'Standard' ? '<button class="btn btn-danger" onclick="deleteProfilo(\'' + itemId + '\')">Elimina</button>' : ''}
                         <button class="btn" onclick="closeModal('profiloModal')">Annulla</button>
                         <button class="btn btn-primary" onclick="document.getElementById('profiloForm').requestSubmit()">
                             ${isEdit ? 'Salva Modifiche' : 'Crea Profilo'}
@@ -2229,7 +2230,11 @@
                 if (itemId) {
                     const existing = STATE.data.profili.find(p => p.id == itemId);
                     if (existing?.fields?.TipoProfilo === 'Standard') {
-                        throw new Error('I profili Standard non sono modificabili');
+                        if (!canMutateData()) {
+                            throw new Error('I profili Standard non sono modificabili (serve ruolo editor o superiore)');
+                        }
+                        payload.tipo_profilo = 'Standard';
+                        payload.azienda_proprietaria_id = null;
                     }
                     const { error } = await supabaseClient
                         .from(CONFIG.tables.profili)
@@ -4476,7 +4481,7 @@
                 MOD_STRESS_LC: '20260520stress16',
                 MOD_MICROCLIMA: '20260520c',
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
-                MOD_CHIMICO: '20260520e',
+                MOD_CHIMICO: '20260520f',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -4676,7 +4681,7 @@
 
             const adapterVer =
                 codice === 'MOD_STRESS_LC' ? '20260520stress22'
-                : codice === 'MOD_CHIMICO' ? '20260520e'
+                : codice === 'MOD_CHIMICO' ? '20260520f'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Agenti chimici</title>
-<script src="adapter.js?v=20260520e"></script>
+<script src="adapter.js?v=20260520f"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -338,7 +338,8 @@
     return ADAPTER.applyWizard(DATA, WIZARD);
   }
 
-  function sendUpdate() {
+  function sendUpdate(opts) {
+    const o = opts || {};
     const merged = buildMerged();
     const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
     window.parent.postMessage({
@@ -356,7 +357,11 @@
     }
     refreshSorveglianzaStato();
     refreshCicloTextarea();
-    renderSostanzeGruppi();
+    if (o.refreshSostanze) {
+      renderSostanzeGruppi();
+    } else if (o.refreshEsitiPreview !== false) {
+      refreshEsitiPreview();
+    }
     if (activeView === 'docx' && errors.length === 0) {
       clearTimeout(previewTimer);
       previewTimer = setTimeout(requestPreviewDocx, 600);
@@ -367,7 +372,7 @@
     if (!WIZARD.gruppi_chimici[idx]) return;
     WIZARD.gruppi_chimici[idx].selezionato = !!checked;
     syncCicloModeFromCount();
-    sendUpdate();
+    sendUpdate({ refreshSostanze: true });
   };
 
   window.setAttivita = function (idx, v) {
@@ -414,15 +419,13 @@
       frasi_h: '',
       impiego_prodotto: '',
     });
-    renderSostanzeGruppi();
-    sendUpdate();
+    sendUpdate({ refreshSostanze: true });
   };
 
   window.removeSostanzaRow = function (gruppoIdx, sostanzaIdx) {
     ensureSostanzeArray(gruppoIdx);
     WIZARD.gruppi_chimici[gruppoIdx].sostanze.splice(sostanzaIdx, 1);
-    renderSostanzeGruppi();
-    sendUpdate();
+    sendUpdate({ refreshSostanze: true });
   };
 
   window.setSostanzaField = function (gruppoIdx, sostanzaIdx, field, value) {
@@ -438,7 +441,7 @@
     ) {
       list[sostanzaIdx][field] = value;
     }
-    sendUpdate();
+    sendUpdate({ refreshSostanze: false });
   };
 
   window.showView = function (view) {
@@ -503,7 +506,7 @@
 
     renderGruppiTable();
     syncCicloModeFromCount();
-    sendUpdate();
+    sendUpdate({ refreshSostanze: true });
   }
 
   window.addEventListener('message', (e) => {

@@ -54,14 +54,14 @@ Nella **riga dati** sotto l’intestazione (non nella riga titolo), inserire il 
 
 | Colonna 1 | Colonna 2 |
 |-----------|-----------|
-| `{#gruppi_chimici}{nome}{/gruppi_chimici}` | `{#gruppi_chimici}{attivita}{/gruppi_chimici}` |
+| `{{#gruppi_chimici}}{{nome}}{{/gruppi_chimici}}` | `{{#gruppi_chimici}}{{attivita}}{{/gruppi_chimici}}` |
 
 Oppure, se preferisci un solo blocco riga:
 
 ```
-{#gruppi_chimici}
-{nome}    {attivita}
-{/gruppi_chimici}
+{{#gruppi_chimici}}
+{{nome}}    {{attivita}}
+{{/gruppi_chimici}}
 ```
 
 (Word: una riga modello tra `{#` e `{/`.)
@@ -103,7 +103,7 @@ Sostituire il titolo fisso «IMPIEGATO VDT» con il tag gruppo.
 **Riga 0 — titolo gruppo** (prima cella, o cella unita):
 
 ```
-{#censimento_gruppi}{gruppo_nome}
+{{#censimento_gruppi}}{{gruppo_nome}}
 ```
 
 **Riga 1 — intestazione** (testo fisso, una sola volta per blocco):
@@ -117,15 +117,15 @@ La quinta colonna resta **vuota** (pittogrammi gestiti a mano nel Word).
 
 | Colonna 1 | Colonna 2 | Colonna 3 | Colonna 4 | Colonna 5 |
 |-----------|-----------|-----------|-----------|-----------|
-| `{#sostanze}{sostanza}` | `{tipo}` | `{cas}` | `{frasi_h}` | (vuota) |
-| chiusura in ultima cella dati: `{/sostanze}{/censimento_gruppi}` | | | | |
+| `{{#sostanze}}{{sostanza}}` | `{{tipo}}` | `{{cas}}` | `{{frasi_h}}` | (vuota) |
+| chiusura in ultima cella dati: `{{/sostanze}}{{/censimento_gruppi}}` | | | | |
 
 Variante equivalente (chiusure in cella 4):
 
 ```
-{#sostanze}
-{sostanza}    {tipo}    {cas}    {frasi_h}{/sostanze}
-{/censimento_gruppi}
+{{#sostanze}}
+{{sostanza}}    {{tipo}}    {{cas}}    {{frasi_h}}{{/sostanze}}
+{{/censimento_gruppi}}
 ```
 
 (tutto nella stessa riga tabella, tra `{#sostanze}` e `{/sostanze}`.)
@@ -162,10 +162,10 @@ Struttura nel modello attuale: **Tabella 17** = 2 righe titolo/sottotitolo (+ op
 **1. Paragrafo «Analisi…»** — sostituire il paragrafo fisso `Analisi sostanze pericolose per: IMPIEGATO VDT` con un blocco ripetuto per gruppo:
 
 ```
-{#esiti_gruppi}
-Analisi sostanze pericolose per: {gruppo_nome}
+{{#esiti_gruppi}}
+Analisi sostanze pericolose per: {{gruppo_nome}}
 
-{#esposizioni}
+{{#esposizioni}}
 ```
 
 (subito sotto, la **tabella modello** 2+1 righe)
@@ -174,18 +174,18 @@ Analisi sostanze pericolose per: {gruppo_nome}
 
 | Riga | Contenuto cella (tipicamente unita) |
 |------|-------------------------------------|
-| R1 | `Esposizione alla sostanza: {sostanza_nome}` |
-| R2 | `Prodotto usato per: ({impiego_prodotto})` |
+| R1 | `Esposizione alla sostanza: {{sostanza_nome}}` |
+| R2 | `Prodotto usato per: ({{impiego_prodotto}})` |
 | R3 | *(vuota — separatore tra un prodotto e il successivo)* |
 
 Tag loop (esempio chiusure in R2):
 
 ```
-{#esposizioni}
-Esposizione alla sostanza: {sostanza_nome}
-Prodotto usato per: ({impiego_prodotto})
-{/esposizioni}
-{/esiti_gruppi}
+{{#esposizioni}}
+Esposizione alla sostanza: {{sostanza_nome}}
+Prodotto usato per: ({{impiego_prodotto}})
+{{/esposizioni}}
+{{/esiti_gruppi}}
 ```
 
 Se usi **tabella** Word invece di paragrafi, apri `{#esposizioni}` in R1 e chiudi `{/esposizioni}` in R2 o R3; il blocco `{#esiti_gruppi}…{/esiti_gruppi}` deve includere **paragrafo Analisi + tabella** ripetuti per ogni gruppo omogeneo selezionato in §3.
@@ -236,7 +236,7 @@ gruppi omogenei di lavoratori il rischio chimico viene classificato
 
 | Colonna 1 | Colonna 2 | Colonna 3 |
 |-----------|-----------|-----------|
-| `{#gruppi_chimici}{nome}` | `{rischio_salute}` | `{rischio_sicurezza}{/gruppi_chimici}` |
+| `{{#gruppi_chimici}}{{nome}}` | `{{rischio_salute}}` | `{{rischio_sicurezza}}{{/gruppi_chimici}}` |
 
 - `{nome}` → profili selezionati in Compila.
 - `{rischio_salute}` e `{rischio_sicurezza}` → **sempre vuoti** in generazione; l’operatore compila a mano dopo Excel/valutazione.
@@ -244,13 +244,15 @@ gruppi omogenei di lavoratori il rischio chimico viene classificato
 Variante (celle separate):
 
 ```
-{#gruppi_chimici}
-{nome}    {rischio_salute}    {rischio_sicurezza}
-{/gruppi_chimici}
+{{#gruppi_chimici}}
+{{nome}}    {{rischio_salute}}    {{rischio_sicurezza}}
+{{/gruppi_chimici}}
 ```
 
 Subito dopo la tabella: paragrafo **Conclusioni** (fisso, non tag).
 
 ## Regole tag
 
+- **Doppia graffa ovunque** (`{{nome}}`, `{{#loop}}`, `{{/loop}}`), come negli altri moduli. Eccezione logo: `{%LOGO}` (una graffa + `%`).
 - Tag in un unico run; incollare da Blocco note se Word spezza le graffe.
+- In generazione l’app converte automaticamente `{#tag}` → `{{#tag}}` e unisce run spezzati, ma è meglio usare già `{{` nel modello.

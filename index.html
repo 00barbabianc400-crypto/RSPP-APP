@@ -4481,7 +4481,7 @@
                 MOD_STRESS_LC: '20260520stress16',
                 MOD_MICROCLIMA: '20260520c',
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
-                MOD_CHIMICO: '20260520f',
+                MOD_CHIMICO: '20260521f',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -4670,7 +4670,7 @@
                 } catch (_) { /* helper logo opzionale */ }
             }
 
-            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260521d');
+            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260521f');
 
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520c');
@@ -4681,7 +4681,7 @@
 
             const adapterVer =
                 codice === 'MOD_STRESS_LC' ? '20260520stress22'
-                : codice === 'MOD_CHIMICO' ? '20260520f'
+                : codice === 'MOD_CHIMICO' ? '20260521f'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }
@@ -4699,7 +4699,11 @@
             if (adapter?.inspectDocxTemplate) {
                 const issues = adapter.inspectDocxTemplate(buf);
                 if (issues.length) {
-                    console.warn('[Generazione] Tag spezzati nel file scaricato:', issues);
+                    console.warn(
+                        '[Generazione] Template grezzo: ' + issues.length +
+                        ' paragrafi con tag spezzati (in generazione si riparano automaticamente):',
+                        issues.slice(0, 3)
+                    );
                 } else {
                     console.info('[Generazione] Template OK (nessun tag spezzato rilevato)');
                 }

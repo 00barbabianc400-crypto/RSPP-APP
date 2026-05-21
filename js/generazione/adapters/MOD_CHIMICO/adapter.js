@@ -373,16 +373,9 @@
     }
 
     const repair = window.GEN_DOCX_REPAIR;
-    if (repair?.inspectDocxTemplate) {
-      const issuesBefore = repair.inspectDocxTemplate(templateArrayBuffer);
-      if (issuesBefore.length) {
-        console.warn('[MOD_CHIMICO] Tag spezzati nel template:', issuesBefore.length, issuesBefore.slice(0, 5));
-      }
-    }
-
     let zip = new window.PizZip(templateArrayBuffer);
     if (repair?.repairDocxTemplateZip) {
-      zip = repair.repairDocxTemplateZip(zip, []);
+      zip = repair.repairDocxTemplateZip(zip);
     }
 
     const docOpts = repair?.DOCXTEMPLATER_OPTIONS || { paragraphLoop: true, linebreaks: true };

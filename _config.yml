@@ -4,3 +4,4 @@ exclude:
   - js/generazione/adapters/MOD_VDT_ILLUMINAMENTO/fields-map.md
   - js/generazione/adapters/MOD_MICROCLIMA/fields-map.md
   - js/generazione/adapters/MOD_STRESS_LC/fields-map.md
+  - js/generazione/adapters/MOD_CHIMICO/fields-map.md

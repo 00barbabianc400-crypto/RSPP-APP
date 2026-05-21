@@ -4476,6 +4476,7 @@
                 MOD_STRESS_LC: '20260520stress16',
                 MOD_MICROCLIMA: '20260520c',
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
+                MOD_CHIMICO: '20260520e',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -4523,13 +4524,23 @@
                     .order('data_rilevamento', { ascending: false }),
                 supabaseClient
                     .from(CONFIG.tables.aziendeProfili)
-                    .select('profilo:profilo_id(nome_profilo, attivo)')
+                    .select('profilo_id, profilo:profilo_id(id, nome_profilo, attivo, descrizione_attivita, protocollo_sor_san)')
                     .eq('azienda_id', aziendaId),
             ]);
             const profiliNomi = (profiliAssociati || [])
                 .filter((row) => row.profilo && row.profilo.attivo !== false)
                 .map((row) => row.profilo.nome_profilo)
                 .filter(Boolean);
+            const profiliAzienda = (profiliAssociati || [])
+                .filter((row) => row.profilo && row.profilo.attivo !== false)
+                .map((row) => ({
+                    id: String(row.profilo_id || row.profilo?.id || ''),
+                    nome: row.profilo.nome_profilo || '',
+                    descrizione_attivita: row.profilo.descrizione_attivita || '',
+                    protocollo_sor_san: row.profilo.protocollo_sor_san,
+                    attivo: row.profilo.attivo,
+                }))
+                .filter((p) => p.id && p.nome);
 
             // Recupera numero modulo dal catalogo
             const catalogoItem = (STATE.data?.catalogoDocumenti || []).find(d => d.codice === codice);
@@ -4545,6 +4556,7 @@
                     logo_path:     logoPath,
                     modulo_numero: moduloNumero,
                     profili_nomi:  profiliNomi,
+                    profili_azienda: profiliAzienda,
                 }
             );
 
@@ -4646,7 +4658,7 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
@@ -4662,7 +4674,10 @@
                 await loadScriptOnce(base + 'pianificazione-misure.js?v=20260520a');
             }
 
-            const adapterVer = codice === 'MOD_STRESS_LC' ? '20260520stress22' : '20260520c';
+            const adapterVer =
+                codice === 'MOD_STRESS_LC' ? '20260520stress22'
+                : codice === 'MOD_CHIMICO' ? '20260520e'
+                : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }
 

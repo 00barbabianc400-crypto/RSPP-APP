@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Agenti chimici</title>
+<script src="adapter.js?v=20260520e"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 20px; }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; }
+  .gruppi-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 8px; }
+  .gruppi-table th { background: #2c3e50; color: #fff; padding: 6px 8px; text-align: left; }
+  .gruppi-table td { border: 1px solid #bbb; padding: 6px 8px; vertical-align: top; }
+  .gruppi-table textarea { width: 100%; min-height: 72px; font-size: 9.5pt; padding: 4px; }
+  .badge-sorv { font-size: 9pt; padding: 2px 6px; border-radius: 3px; }
+  .badge-sorv.si { background: #d5f5e3; color: #145a32; }
+  .badge-sorv.no { background: #f4f4f4; color: #666; }
+  .ciclo-mode { margin: 8px 0; }
+  .ciclo-mode label { display: block; margin: 4px 0; cursor: pointer; }
+  .ciclo-textarea { width: 100%; min-height: 64px; font-size: 10pt; padding: 6px; margin-top: 6px; }
+  .preview-box { font-size: 10pt; background: #f8f9fa; border: 1px solid #ddd; padding: 8px; margin-top: 8px; white-space: pre-wrap; }
+  .sost-block { margin-top: 14px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; background: #fafafa; }
+  .sost-block h3 { font-size: 11pt; margin-bottom: 8px; }
+  .sost-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 6px; }
+  .sost-table th { background: #34495e; color: #fff; padding: 5px 6px; text-align: left; }
+  .sost-table td { border: 1px solid #bbb; padding: 4px 5px; vertical-align: top; }
+  .sost-table input, .sost-table textarea { width: 100%; font-size: 9.5pt; padding: 3px 4px; }
+  .sost-table textarea { min-height: 44px; resize: vertical; }
+  .btn-sost { font-size: 10pt; padding: 4px 10px; margin-top: 6px; cursor: pointer; border: 1px solid #888; background: #fff; border-radius: 3px; }
+  .btn-sost.del { color: #c0392b; border-color: #c0392b; }
+  .btn-sost.add { color: #1a5276; border-color: #3498db; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">MOD_CHIMICO — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Valutazione rischio agenti chimici</h1>
+
+      <h2 class="doc-section">Dati documento</h2>
+      <p><strong>Ragione sociale</strong>: <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong>: <span id="pSede" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong>:<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+          style="width:120px;margin-top:6px;" placeholder="es. 8" autocomplete="off"
+          oninput="setModuloNumero(this.value)">
+      </p>
+      <p><strong>Data emissione</strong>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Luogo</strong>: <span id="pLuogo" class="field-auto">—</span></p>
+
+      <h2 class="doc-section">§3 — Classificazione dei lavoratori</h2>
+      <p class="hint-str">
+        Seleziona i profili/gruppi omogenei da includere nel modulo chimico (non tutti i profili associati all'azienda).
+        La descrizione attività è precompilata dall'anagrafica profilo ed è modificabile.
+      </p>
+      <div id="wrapGruppiTable"></div>
+      <p class="hint-str" style="margin-top:10px;">
+        Paragrafo sorveglianza sanitaria (legge 422/2000): compare nel Word solo se almeno un profilo selezionato ha
+        <strong>Protocollo sorveglianza = Sì</strong>.
+      </p>
+      <p id="pSorveglianzaStato" class="field-auto">—</p>
+
+      <h2 class="doc-section" style="margin-top:16px;">Valutazione ciclo di lavoro</h2>
+      <p class="hint-str">
+        Con 1 gruppo selezionato → testo «unico»; con 2 o più → testo «multipli». Puoi forzare la scelta o modificare i testi.
+      </p>
+      <div class="ciclo-mode" id="wrapCicloMode"></div>
+      <textarea id="taCicloTesto" class="ciclo-textarea" oninput="onCicloTestoInput()"></textarea>
+      <p class="hint-str" style="margin-top:6px;">Anteprima testo che andrà in <code>{{TESTO_VALUTAZIONE_CICLO}}</code>:</p>
+      <div id="pCicloPreview" class="preview-box">—</div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§6 — Censimento sostanze per gruppo</h2>
+      <p class="hint-str">
+        Per ogni gruppo omogeneo selezionato in §3, inserisci le sostanze/preparati utilizzati (colonne come nel modello Word).
+        Pittogrammi ed etichette restano nel file Word. La colonna <strong>Impiego prodotto</strong> alimenta §7 (sottotitolo «Prodotto usato per»).
+      </p>
+      <div id="wrapSostanzeGruppi"></div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§7 — Esiti valutazione (intestazioni esposizione)</h2>
+      <p class="hint-str">
+        Nel Word vengono generate le righe «Esposizione alla sostanza» e «Prodotto usato per» per ogni prodotto censito in §6,
+        ripetute per ogni gruppo. Tabelle indici/classificazioni (da Priorità in poi): copia-incolla da Excel nel file generato.
+      </p>
+      <div id="wrapEsitiPreview" class="preview-box" style="margin-top:8px;">—</div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"><p style="text-align:center;padding:40px;color:#888;">Apri «Anteprima Word» dopo la compilazione.</p></div>
+</div>
+
+<script>
+(function () {
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_CHIMICO'];
+  let DATA = null;
+  let activeView = 'compile';
+  let previewTimer = null;
+  const WIZARD = {
+    modulo_numero: '',
+    gruppi_chimici: [],
+    valutazione_ciclo: null,
+    testo_ciclo_unico: null,
+    testo_ciclo_multipli: null,
+    valutazione_ciclo_forzata: false,
+  };
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const n = parseInt(String(padded || '').trim(), 10);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function sorvBadge(row) {
+    const si = ADAPTER?.protocolloSorSanSi?.(row.protocollo_sor_san);
+    return si
+      ? '<span class="badge-sorv si">Sorv. sanitaria: Sì</span>'
+      : '<span class="badge-sorv no">Sorv. sanitaria: No</span>';
+  }
+
+  function countSelezionati() {
+    return (WIZARD.gruppi_chimici || []).filter((r) => r.selezionato).length;
+  }
+
+  function syncCicloModeFromCount() {
+    if (!WIZARD.valutazione_ciclo_forzata) {
+      WIZARD.valutazione_ciclo = ADAPTER?.autoValutazioneCicloMode?.(countSelezionati()) || 'unico';
+    }
+    renderCicloMode();
+    refreshCicloTextarea();
+  }
+
+  function findGruppoIdxByProfiloId(profiloId) {
+    const id = String(profiloId || '').trim();
+    return (WIZARD.gruppi_chimici || []).findIndex((r) => String(r.profilo_id || '') === id);
+  }
+
+  function ensureSostanzeArray(idx) {
+    const row = WIZARD.gruppi_chimici[idx];
+    if (!row) return;
+    if (!Array.isArray(row.sostanze)) row.sostanze = [];
+  }
+
+  function renderSostanzeGruppi() {
+    const wrap = document.getElementById('wrapSostanzeGruppi');
+    if (!wrap) return;
+    const selected = (WIZARD.gruppi_chimici || []).filter((r) => r.selezionato);
+    if (!selected.length) {
+      wrap.innerHTML =
+        '<p class="hint-str">Seleziona almeno un gruppo in §3 per compilare le tabelle sostanze.</p>';
+      return;
+    }
+    let html = '';
+    selected.forEach((row) => {
+      const idx = findGruppoIdxByProfiloId(row.profilo_id);
+      if (idx < 0) return;
+      ensureSostanzeArray(idx);
+      const sost = WIZARD.gruppi_chimici[idx].sostanze || [];
+      html += '<div class="sost-block"><h3>' + esc(row.nome) + '</h3>';
+      html +=
+        '<table class="sost-table"><thead><tr>' +
+        '<th>Sostanza</th><th style="width:52px;">Tipo</th><th>CAS</th><th>Frasi H</th><th>Impiego prodotto (§7)</th><th style="width:36px;"></th>' +
+        '</tr></thead><tbody>';
+      if (!sost.length) {
+        html += '<tr><td colspan="6" class="hint-str">Nessuna riga — aggiungi un prodotto.</td></tr>';
+      } else {
+        sost.forEach((s, sIdx) => {
+          html +=
+            '<tr>' +
+            '<td><input type="text" value="' + esc(s.sostanza || '') + '" ' +
+            'oninput="setSostanzaField(' + idx + ',' + sIdx + ',\'sostanza\',this.value)"></td>' +
+            '<td><input type="text" value="' + esc(s.tipo || '') + '" maxlength="8" ' +
+            'oninput="setSostanzaField(' + idx + ',' + sIdx + ',\'tipo\',this.value)"></td>' +
+            '<td><textarea oninput="setSostanzaField(' + idx + ',' + sIdx + ',\'cas\',this.value)">' +
+            esc(s.cas || '') + '</textarea></td>' +
+            '<td><input type="text" value="' + esc(s.frasi_h || '') + '" ' +
+            'oninput="setSostanzaField(' + idx + ',' + sIdx + ',\'frasi_h\',this.value)"></td>' +
+            '<td><input type="text" value="' + esc(s.impiego_prodotto || '') + '" placeholder="es. pulizia superfici" ' +
+            'oninput="setSostanzaField(' + idx + ',' + sIdx + ',\'impiego_prodotto\',this.value)"></td>' +
+            '<td><button type="button" class="btn-sost del" onclick="removeSostanzaRow(' + idx + ',' + sIdx + ')">✕</button></td>' +
+            '</tr>';
+        });
+      }
+      html +=
+        '</tbody></table>' +
+        '<button type="button" class="btn-sost add" onclick="addSostanzaRow(' + idx + ')">+ Aggiungi sostanza</button>' +
+        '</div>';
+    });
+    wrap.innerHTML = html;
+    refreshEsitiPreview();
+  }
+
+  function refreshEsitiPreview() {
+    const el = document.getElementById('wrapEsitiPreview');
+    if (!el || !ADAPTER) return;
+    const merged = buildMerged();
+    const gruppi = merged.esiti_gruppi || merged._esiti_gruppi || [];
+    if (!gruppi.length) {
+      el.textContent = 'Nessun gruppo selezionato.';
+      return;
+    }
+    const lines = [];
+    for (const g of gruppi) {
+      lines.push('Analisi sostanze pericolose per: ' + (g.gruppo_nome || '?'));
+      const esp = g.esposizioni || [];
+      if (!esp.length) {
+        lines.push('  (nessun prodotto con nome sostanza in §6)');
+      } else {
+        for (const e of esp) {
+          lines.push('  Esposizione alla sostanza: ' + (e.sostanza_nome || ''));
+          lines.push('  Prodotto usato per: (' + (e.impiego_prodotto || '') + ')');
+          lines.push('');
+        }
+      }
+      lines.push('');
+    }
+    el.textContent = lines.join('\n').trim() || '—';
+  }
+
+  function renderGruppiTable() {
+    const wrap = document.getElementById('wrapGruppiTable');
+    const rows = WIZARD.gruppi_chimici || [];
+    if (!rows.length) {
+      wrap.innerHTML = '<p class="hint-str">Nessun profilo associato all\'azienda.</p>';
+      return;
+    }
+    let html =
+      '<table class="gruppi-table"><thead><tr>' +
+      '<th style="width:36px;">Incl.</th><th>Gruppo omogeneo</th><th>Descrizione attività (Word tab. 2)</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach((row, idx) => {
+      html +=
+        '<tr><td style="text-align:center;">' +
+        '<input type="checkbox" data-idx="' + idx + '" ' + (row.selezionato ? 'checked' : '') +
+        ' onchange="toggleGruppo(' + idx + ', this.checked)"></td>' +
+        '<td><strong>' + esc(row.nome) + '</strong><br>' + sorvBadge(row) + '</td>' +
+        '<td><textarea data-idx="' + idx + '" oninput="setAttivita(' + idx + ', this.value)">' +
+        esc(row.attivita || '') + '</textarea></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function renderCicloMode() {
+    const wrap = document.getElementById('wrapCicloMode');
+    const n = countSelezionati();
+    const auto = ADAPTER?.autoValutazioneCicloMode?.(n) || 'unico';
+    const cur = WIZARD.valutazione_ciclo || auto;
+    wrap.innerHTML =
+      '<p class="hint-str">Gruppi selezionati: <strong>' + n + '</strong> — suggerimento automatico: <strong>' +
+      (auto === 'multipli' ? 'più gruppi' : 'unico gruppo') + '</strong></p>' +
+      '<label><input type="radio" name="cicloMode" value="unico" ' + (cur === 'unico' ? 'checked' : '') +
+      ' onchange="setCicloMode(\'unico\', true)"> Unico gruppo omogeneo</label>' +
+      '<label><input type="radio" name="cicloMode" value="multipli" ' + (cur === 'multipli' ? 'checked' : '') +
+      ' onchange="setCicloMode(\'multipli\', true)"> Più gruppi omogenei</label>' +
+      '<label><input type="checkbox" id="chkCicloAuto" ' + (!WIZARD.valutazione_ciclo_forzata ? 'checked' : '') +
+      ' onchange="setCicloAuto(this.checked)"> Segui automaticamente il numero di gruppi selezionati</label>';
+  }
+
+  function refreshCicloTextarea() {
+    const ta = document.getElementById('taCicloTesto');
+    if (!ta || !ADAPTER) return;
+    const merged = buildMerged();
+    const mode = merged._valutazione_ciclo || 'unico';
+    const testo =
+      mode === 'multipli'
+        ? (WIZARD.testo_ciclo_multipli != null
+          ? WIZARD.testo_ciclo_multipli
+          : ADAPTER.TESTO_CICLO_MULTIPLI_DEFAULT)
+        : (WIZARD.testo_ciclo_unico != null
+          ? WIZARD.testo_ciclo_unico
+          : ADAPTER.TESTO_CICLO_UNICO_DEFAULT);
+    ta.value = testo;
+    document.getElementById('pCicloPreview').textContent = testo || '—';
+  }
+
+  function refreshSorveglianzaStato() {
+    const el = document.getElementById('pSorveglianzaStato');
+    if (!el) return;
+    const merged = buildMerged();
+    if (merged._mostra_sorveglianza) {
+      el.textContent = 'Sì — paragrafo medico competente incluso nel documento';
+      el.classList.remove('field-missing');
+    } else {
+      el.textContent = 'No — paragrafo omesso (nessun profilo selezionato con sorveglianza Sì)';
+      el.classList.add('field-missing');
+    }
+  }
+
+  function buildMerged() {
+    if (!DATA || !ADAPTER?.applyWizard) return {};
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    window.parent.postMessage({
+      type: 'DATA_UPDATE',
+      data: merged,
+      valid: errors.length === 0,
+      errors,
+    }, '*');
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    refreshSorveglianzaStato();
+    refreshCicloTextarea();
+    renderSostanzeGruppi();
+    if (activeView === 'docx' && errors.length === 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 600);
+    }
+  }
+
+  window.toggleGruppo = function (idx, checked) {
+    if (!WIZARD.gruppi_chimici[idx]) return;
+    WIZARD.gruppi_chimici[idx].selezionato = !!checked;
+    syncCicloModeFromCount();
+    sendUpdate();
+  };
+
+  window.setAttivita = function (idx, v) {
+    if (!WIZARD.gruppi_chimici[idx]) return;
+    WIZARD.gruppi_chimici[idx].attivita = v;
+    sendUpdate();
+  };
+
+  window.setCicloMode = function (mode, forced) {
+    WIZARD.valutazione_ciclo = mode === 'multipli' ? 'multipli' : 'unico';
+    if (forced) WIZARD.valutazione_ciclo_forzata = true;
+    const chk = document.getElementById('chkCicloAuto');
+    if (chk) chk.checked = false;
+    refreshCicloTextarea();
+    sendUpdate();
+  };
+
+  window.setCicloAuto = function (on) {
+    WIZARD.valutazione_ciclo_forzata = !on;
+    if (on) syncCicloModeFromCount();
+    else sendUpdate();
+  };
+
+  window.onCicloTestoInput = function () {
+    const ta = document.getElementById('taCicloTesto');
+    const mode = WIZARD.valutazione_ciclo || ADAPTER?.autoValutazioneCicloMode?.(countSelezionati()) || 'unico';
+    if (mode === 'multipli') WIZARD.testo_ciclo_multipli = ta.value;
+    else WIZARD.testo_ciclo_unico = ta.value;
+    document.getElementById('pCicloPreview').textContent = ta.value || '—';
+    sendUpdate();
+  };
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
+  window.addSostanzaRow = function (gruppoIdx) {
+    ensureSostanzeArray(gruppoIdx);
+    WIZARD.gruppi_chimici[gruppoIdx].sostanze.push({
+      sostanza: '',
+      tipo: '',
+      cas: '',
+      frasi_h: '',
+      impiego_prodotto: '',
+    });
+    renderSostanzeGruppi();
+    sendUpdate();
+  };
+
+  window.removeSostanzaRow = function (gruppoIdx, sostanzaIdx) {
+    ensureSostanzeArray(gruppoIdx);
+    WIZARD.gruppi_chimici[gruppoIdx].sostanze.splice(sostanzaIdx, 1);
+    renderSostanzeGruppi();
+    sendUpdate();
+  };
+
+  window.setSostanzaField = function (gruppoIdx, sostanzaIdx, field, value) {
+    ensureSostanzeArray(gruppoIdx);
+    const list = WIZARD.gruppi_chimici[gruppoIdx].sostanze;
+    if (!list[sostanzaIdx]) return;
+    if (
+      field === 'sostanza' ||
+      field === 'tipo' ||
+      field === 'cas' ||
+      field === 'frasi_h' ||
+      field === 'impiego_prodotto'
+    ) {
+      list[sostanzaIdx][field] = value;
+    }
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_CHIMICO — Compila' : 'MOD_CHIMICO — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+
+    const prevWizard = DATA._chimico_wizard || {};
+    WIZARD.gruppi_chimici = ADAPTER.mergeGruppiChimiciWizard(
+      {
+        gruppi_chimici: prevWizard.gruppi_chimici || DATA._gruppi_chimici_wizard,
+        _profili_azienda: DATA._profili_azienda,
+      },
+      DATA._profili_azienda || []
+    );
+    WIZARD.valutazione_ciclo = DATA._valutazione_ciclo || null;
+    WIZARD.valutazione_ciclo_forzata = false;
+    WIZARD.testo_ciclo_unico = ADAPTER.TESTO_CICLO_UNICO_DEFAULT;
+    WIZARD.testo_ciclo_multipli = ADAPTER.TESTO_CICLO_MULTIPLI_DEFAULT;
+
+    renderGruppiTable();
+    syncCicloModeFromCount();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 /**
  * Ripara tag Docxtemplater spezzati da Word (run XML) — condiviso tra adapter generazione.
+ * Delimitatori: {{ }} per campi e loop; {%LOGO} per immagine (sostituito post-render).
  */
 (function () {
   'use strict';
@@ -13,6 +14,10 @@
     },
   };
 
+  const COMPLETE_TAG_RE = /^\{\{[^{}]+\}\}$/;
+  const COMPLETE_IMG_RE = /^\{%[A-Za-z0-9_]+\}$/;
+  const TAG_CHUNK_RE = /\{\{[^{}]+\}\}/g;
+
   function getDocxtemplaterCtor() {
     const d = window.Docxtemplater || window.docxtemplater || null;
     return d && d.default ? d.default : d;
@@ -25,36 +30,71 @@
       prev = out;
       out = out.replace(/\{(?:<[^>]+>)+\{/g, '{{');
       out = out.replace(/\}(?:<[^>]+>)+\}/g, '}}');
+      out = out.replace(
+        /\{(?:<[^>]+>)*#(?:<[^>]+>)*([A-Za-z0-9_]+)(?:<[^>]+>)*\}/g,
+        '{{#$1}}'
+      );
+      out = out.replace(
+        /\{(?:<[^>]+>)*\/(?:<[^>]+>)*([A-Za-z0-9_]+)(?:<[^>]+>)*\}/g,
+        '{{/$1}}'
+      );
       out = out.replace(/\{(?:<[^>]+>)*%(?:<[^>]+>)*([A-Za-z0-9_]+)\}/g, '{%$1}');
-      out = out.replace(/\{(?:<[^>]+>)*%/g, '{%');
+      out = out.replace(/\{(?:<[^>]+>)*%(?:<[^>]+>)*\}/g, '{%');
       out = out.replace(/(?:<[^>]+>)*%\}/g, '%}');
+      out = out.replace(
+        /\{(?:<[^>]+>)*([A-Za-z0-9_]+)(?:<[^>]+>)*\}/g,
+        (match, name) => (match.indexOf('<') >= 0 ? '{{' + name + '}}' : match)
+      );
     } while (out !== prev);
     return out;
   }
 
   function isCompleteImagePlaceholderRun(t) {
-    return /^\{%[A-Za-z0-9_]+\}$/.test(t);
+    return COMPLETE_IMG_RE.test(t);
+  }
+
+  /** Run con testo + tag, o più tag attaccati — valido se non restano graffe spezzate. */
+  function isRunTemplateSafe(t) {
+    if (!t) return true;
+    if (isCompleteImagePlaceholderRun(t)) return true;
+    if (!runTouchesTemplateSyntax(t)) return true;
+    let rest = t;
+    TAG_CHUNK_RE.lastIndex = 0;
+    let m;
+    while ((m = TAG_CHUNK_RE.exec(t)) !== null) {
+      rest = rest.replace(m[0], '');
+    }
+    rest = rest.replace(/\{%[A-Za-z0-9_]+%\}/g, '');
+    return !/[{}%]/.test(rest);
   }
 
   function isBrokenPlaceholderRun(t) {
-    if (isCompleteImagePlaceholderRun(t)) return false;
-    if (t === '{' || t === '%' || /^LOGO\}$/.test(t)) return true;
-    const hasOpen = /\{\{/.test(t) || /\{%/.test(t);
-    const hasClose = /\}\}/.test(t) || /%\}/.test(t);
-    if (hasOpen && !hasClose) return true;
-    if (hasClose && !hasOpen) return true;
+    if (!t) return false;
+    if (isRunTemplateSafe(t)) return false;
+    if (t === '{' || t === '}' || t === '{{' || t === '}}' || t === '%') return true;
+    if (/^LOGO\}$/.test(t)) return true;
+    if (/\{|\}|%/.test(t)) return true;
     return false;
   }
 
+  function runTouchesTemplateSyntax(t) {
+    return t && (/\{\{|\}\}|\{%|%\}/.test(t) || t === '{' || t === '}');
+  }
+
+  /**
+   * Word spezza spesso {{#loop}} in run tipo "{", "{#loop", "}", "}".
+   * Se il testo unito è corretto ma i run no → unisci tutti i w:t del blocco.
+   */
   function needsWtMerge(texts, joined) {
     if (texts.length < 2) return false;
+    if (!/\{\{|\{%/.test(joined)) return false;
+
+    const tagRuns = texts.filter(runTouchesTemplateSyntax);
+    if (!tagRuns.length) return false;
+
+    if (tagRuns.some((t) => !isRunTemplateSafe(t))) return true;
     if (texts.some(isBrokenPlaceholderRun)) return true;
-    const opens = (joined.match(/\{\{/g) || []).length;
-    const complete = (joined.match(/\{\{[A-Z0-9_]+\}\}/g) || []).length;
-    if (opens > complete) return true;
-    const opensImg = (joined.match(/\{%/g) || []).length;
-    const completeImg = (joined.match(/\{%[A-Za-z0-9_]+\}/g) || []).length;
-    if (opensImg > completeImg) return true;
+
     return false;
   }
 
@@ -82,24 +122,36 @@
     return xml.replace(re, (block) => mergeWtInBlock(block));
   }
 
-  /** Solo paragrafo: unire w:tc interi può fondere etichetta + tag e peggiorare lo spezzamento. */
   function consolidatePlaceholderParagraphs(xml) {
     return consolidatePlaceholderBlocks(xml, 'w:p');
+  }
+
+  function consolidatePlaceholderTableCells(xml) {
+    return consolidatePlaceholderBlocks(xml, 'w:tc');
   }
 
   function mergeAdjacentSplitPlaceholderRuns(xml) {
     let out = xml;
     let prev;
+    const tagPart = '[A-Za-z0-9_#\\/]*';
+    const patterns = [
+      [
+        new RegExp(
+          '(<w:t(?:\\s[^>]*)?>)(\\{\\{' + tagPart + ')(<\\/w:t>)([\\s\\S]*?)(<w:t(?:\\s[^>]*)?>)([A-Za-z0-9_#\\/]*\\}\\})(<\\/w:t>)',
+          'g'
+        ),
+        (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2,
+      ],
+      [
+        /(<w:t(?:\s[^>]*)?>)(\{%[A-Za-z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t(?:\s[^>]*)?>)([A-Za-z0-9_]*%\})(<\/w:t>)/g,
+        (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2,
+      ],
+    ];
     do {
       prev = out;
-      out = out.replace(
-        /(<w:t(?:\s[^>]*)?>)(\{\{[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t(?:\s[^>]*)?>)([A-Z0-9_]*\}\})(<\/w:t>)/g,
-        (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2
-      );
-      out = out.replace(
-        /(<w:t(?:\s[^>]*)?>)(\{%[A-Z0-9_]*)(<\/w:t>)([\s\S]*?)(<w:t(?:\s[^>]*)?>)([A-Z0-9_]*%\})(<\/w:t>)/g,
-        (_, o, p1, c1, _mid, o2, p2, c2) => o + p1 + p2 + c1 + o2 + c2
-      );
+      for (const [re, repl] of patterns) {
+        out = out.replace(re, repl);
+      }
     } while (out !== prev);
     return out;
   }
@@ -108,7 +160,10 @@
     let out = reuniteSplitDelimiters(xml);
     out = mergeAdjacentSplitPlaceholderRuns(out);
     out = consolidatePlaceholderParagraphs(out);
+    out = consolidatePlaceholderTableCells(out);
     out = mergeAdjacentSplitPlaceholderRuns(out);
+    out = consolidatePlaceholderParagraphs(out);
+    out = consolidatePlaceholderTableCells(out);
     out = out.replace(/\{\{LOGO\}\}/g, '{%LOGO}');
     return out;
   }
@@ -119,10 +174,9 @@
     let m;
     while ((m = re.exec(xml)) !== null) {
       const t = m[1];
-      if (!/\{\{|\{%|\}\}|%\}/.test(t)) continue;
+      if (!runTouchesTemplateSyntax(t)) continue;
       if (!isBrokenPlaceholderRun(t)) continue;
-      const openOnly = (/\{\{/.test(t) || /\{%/.test(t)) && !/\}\}/.test(t) && !/%\}/.test(t);
-      issues.push({ file: filePath, kind: openOnly ? 'open' : 'close', text: t });
+      issues.push({ file: filePath, kind: 'broken-run', text: t });
     }
     ['w:p', 'w:tc'].forEach((tag) => {
       const blockRe = new RegExp('<' + tag + '[\\s\\S]*?<\\/' + tag + '>', 'g');
@@ -135,7 +189,7 @@
         while ((tm = tre.exec(block)) !== null) texts.push(tm[1]);
         const joined = texts.join('');
         if (needsWtMerge(texts, joined)) {
-          issues.push({ file: filePath, kind: 'split-run', text: joined.slice(0, 60) });
+          issues.push({ file: filePath, kind: 'split-run', text: joined.slice(0, 80) });
         }
       }
     });
@@ -157,16 +211,7 @@
 
   function inspectDocxTemplate(arrayBuffer) {
     const zip = new window.PizZip(arrayBuffer);
-    const issues = [];
-    Object.keys(zip.files || {}).forEach((path) => {
-      if (!/^word\/.*\.xml$/i.test(path)) return;
-      const file = zip.file(path);
-      if (!file || file.dir) return;
-      try {
-        issues.push(...findBrokenPlaceholderRunsInXml(file.asText(), path));
-      } catch (_) { /* skip */ }
-    });
-    return issues;
+    return inspectDocxZip(zip);
   }
 
   function inspectDocxZip(zip) {
@@ -208,23 +253,24 @@
 
     const mods = modules || [];
     let lastIssueCount = Infinity;
-    for (let pass = 0; pass < 10; pass += 1) {
+    for (let pass = 0; pass < 12; pass += 1) {
       fixedCount += repairAllXml();
       const issues = inspectDocxZip(zip);
       const compileErr = tryCompileDocxtemplater(zip, mods);
       if (!compileErr && issues.length === 0) break;
-      if (issues.length >= lastIssueCount && pass > 2) break;
+      if (issues.length >= lastIssueCount && pass > 3) break;
       lastIssueCount = issues.length;
-      if (pass === 9) {
+      if (pass === 11) {
         console.warn(
-          '[GEN_DOCX_REPAIR] Template ancora con tag spezzati:',
+          '[GEN_DOCX_REPAIR] Template ancora con problemi:',
           issues.length,
-          issues.slice(0, 6)
+          compileErr ? compileErr.message : '',
+          issues.slice(0, 5)
         );
       }
     }
 
-    console.info('[GEN_DOCX_REPAIR] Riparati', fixedCount, 'file XML');
+    console.info('[GEN_DOCX_REPAIR] Riparati', fixedCount, 'passaggi XML');
     return zip;
   }
 
@@ -233,11 +279,13 @@
     const parts = list.map((e) => {
       const f = e.properties?.file || '';
       const tag = e.properties?.xtag || e.properties?.context || '';
-      return (f ? f + ' — ' : '') + e.message + (tag ? ' [' + tag + ']' : '');
+      const expl = e.properties?.explanation || '';
+      return (f ? f + ' — ' : '') + e.message + (tag ? ' [' + tag + ']' : '') + (expl ? ' — ' + expl : '');
     });
     let msg = parts.length ? parts.join('; ') : err.message;
-    if (list.some((e) => /duplicate_(open|close)_tag/.test(e.properties?.id || ''))) {
-      msg += ' (tag Word spezzati: nel .docx unisci ogni tag in un unico run, oppure ricarica il template dopo riparazione)';
+    if (list.some((e) => /duplicate_(open|close)_tag|unclosed_loop/.test(e.properties?.id || ''))) {
+      msg +=
+        ' (tag Word spezzati: incolla ogni tag da Blocco note in un colpo solo; alla generazione l’app tenta la riparazione automatica)';
     }
     return msg;
   }

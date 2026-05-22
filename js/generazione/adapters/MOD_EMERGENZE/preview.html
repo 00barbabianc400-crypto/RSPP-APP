@@ -1,0 +1,1932 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Emergenze</title>
+<script src="adapter.js?v=20260522t"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc;
+    padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  .hint-str { font-size: 9.5pt; color: #555; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; min-width: 120px; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .choice-row { margin: 12px 0; padding: 10px 12px; background: #f4f8fb; border-radius: 4px; border: 1px solid #d0e4f2; }
+  .choice-row label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-weight: 600; }
+  .choice-row input[type="checkbox"] { margin-top: 3px; width: 16px; height: 16px; flex-shrink: 0; }
+  .coord-preview { margin-top: 10px; padding: 10px; background: #fff; border-left: 3px solid #3498db; font-size: 10pt; color: #333; }
+  .coord-preview p { margin-bottom: 6px; }
+  .radio-group { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; font-weight: normal; }
+  .radio-group label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+  .radio-group input { width: 15px; height: 15px; flex-shrink: 0; }
+  .snippet-preview { margin-top: 8px; font-size: 10pt; color: #1a5276; font-style: italic; }
+  .luoghi-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .luoghi-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer; border: 1px solid #3498db;
+    background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .luoghi-actions button.secondary { border-color: #999; background: #f4f4f4; color: #333; font-weight: 500; }
+  .luoghi-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 10px; table-layout: fixed; }
+  .luoghi-table th { background: #2c3e50; color: #fff; padding: 6px 4px; text-align: center; font-weight: 600; }
+  .luoghi-table td { border: 1px solid #bbb; padding: 4px; vertical-align: top; }
+  .luoghi-table td input { width: 100%; box-sizing: border-box; border: none; background: transparent; font-size: 9.5pt; padding: 4px 2px; }
+  .luoghi-table td textarea { width: 100%; box-sizing: border-box; border: none; background: transparent; font-size: 9pt; padding: 4px 2px; min-height: 72px; resize: vertical; font-family: inherit; }
+  .luoghi-table td input:focus, .luoghi-table td textarea:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .luoghi-table .col-remove { width: 32px; text-align: center; vertical-align: middle; }
+  .luoghi-table tbody tr:nth-child(even) { background: #f8fafb; }
+  .rischi-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 10px; table-layout: fixed; }
+  .rischi-table th { background: #2c3e50; color: #fff; padding: 6px 4px; text-align: center; font-weight: 600; font-size: 8.5pt; }
+  .rischi-table td { border: 1px solid #bbb; padding: 4px; vertical-align: top; }
+  .rischi-table td input[type="text"], .rischi-table td textarea {
+    width: 100%; box-sizing: border-box; border: none; background: transparent; font-size: 9pt; font-family: inherit;
+  }
+  .rischi-table td textarea { min-height: 52px; resize: vertical; padding: 4px 2px; }
+  .rischi-table td input:focus, .rischi-table td textarea:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .rischi-table .col-sel { width: 36px; text-align: center; vertical-align: middle; }
+  .rischi-table tr.riga-off { opacity: 0.45; }
+  .rischi-table tr.riga-off td input, .rischi-table tr.riga-off td textarea { pointer-events: none; }
+  .misure-esigenze-table td input[type="text"] { width: 100%; font-size: 9.5pt; padding: 4px 2px; border: none; background: transparent; }
+  .misure-esigenze-table td input:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .para-chiusura-label { font-weight: 700; margin-top: 14px; }
+  .affoll-block { margin-top: 14px; }
+  .affoll-block select { font-size: 10pt; padding: 5px 8px; width: 100%; max-width: 600px; margin-top: 4px; }
+  .affoll-block input[type="text"] { font-size: 10.5pt; padding: 5px 8px; width: 120px; margin-top: 4px; }
+  .affoll-block textarea.para-ta {
+    width: 100%; min-height: 80px; padding: 8px; font-size: 10pt; line-height: 1.5;
+    border: 1px solid #bbb; border-radius: 3px; font-family: inherit; resize: vertical; margin-top: 4px;
+  }
+  .affoll-block textarea.para-ta:focus { outline: 1px solid #3498db; border-color: #3498db; }
+  .affoll-block .para-label { font-weight: 600; font-size: 10.5pt; margin-top: 12px; }
+  .affoll-block .para-hint { font-size: 9pt; color: #777; margin-bottom: 2px; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">MOD_EMERGENZE — Compila</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Piano di gestione delle emergenze</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Modulo in costruzione. Caricare <code>MOD_EMERGENZE.docx</code> nel bucket <code>modelli</code>
+        e aggiornare <code>fields-map.md</code> con i tag del modello Word.
+      </p>
+      <p><strong>Ragione sociale</strong>: <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong>: <span id="pSede" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong>:<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+          placeholder="es. 100" autocomplete="off" oninput="setModuloNumero(this.value)">
+      </p>
+      <p><strong>Data emissione</strong>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Luogo</strong>: <span id="pLuogo" class="field-auto">—</span></p>
+
+      <h2 class="doc-section">PREMESSA</h2>
+      <div class="choice-row">
+        <label>
+          <input type="checkbox" id="chkPianoCoordinato" onchange="setPianoCoordinato(this.checked)">
+          <span>C'è un piano delle emergenze coordinato fra più organizzazioni?</span>
+        </label>
+        <div id="wrapCoordPreview" class="coord-preview hidden">
+          <p class="hint-str" style="margin-bottom:6px;">Testo inserito nel Word (fine premessa):</p>
+          <p id="pCoordInoltre"></p>
+          <p id="pCoordRimando"></p>
+        </div>
+      </div>
+
+      <h2 class="doc-section">§1.2 — Definizioni</h2>
+
+      <div class="choice-row">
+        <p style="font-weight:600;margin-bottom:4px;">Segnalazione di emergenza — destinatario dell’avviso</p>
+        <p class="hint-str">Nel paragrafo «… dato al … da chiunque riscontri …»</p>
+        <div class="radio-group" id="grpSegnalazioneDest">
+          <label><input type="radio" name="segnalazione_dest" value="posto_chiamata" onchange="setSegnalazioneDestinatario(this.value)"> Posto di chiamata</label>
+          <label><input type="radio" name="segnalazione_dest" value="responsabile" onchange="setSegnalazioneDestinatario(this.value)"> Responsabile delle emergenze</label>
+          <label><input type="radio" name="segnalazione_dest" value="nessuno" onchange="setSegnalazioneDestinatario(this.value)"> Nessuno (campo vuoto nel Word)</label>
+        </div>
+        <p class="snippet-preview" id="pSnippetRuoloSegnalazione"></p>
+      </div>
+
+      <div class="choice-row">
+        <label>
+          <input type="checkbox" id="chkAllarmeGenerale" onchange="setAllarmeGenerale(this.checked)">
+          <span>È presente l’allarme generale?</span>
+        </label>
+        <p class="hint-str" style="margin-top:6px;">In «Evacuazione dell’intero sito» e, se serve, in altre sezioni del modulo.</p>
+        <p class="snippet-preview" id="pSnippetAllarmeOr"></p>
+      </div>
+
+      <h2 class="doc-section">§2.1 — Caratteristiche dei luoghi</h2>
+      <p class="hint-str">Frase: «Gli ambienti di lavoro sono all'interno di un immobile adibito …»</p>
+      <p style="margin-top:8px;">
+        <strong>Uso / destinazione immobile</strong> (sostituisce «ad ufficio» nel Word):<br>
+        <input type="text" id="inpImmobileAdibito" class="inline-select" style="width:100%;max-width:420px;margin-top:6px;"
+          placeholder="ad ufficio" autocomplete="off"
+          oninput="setImmobileAdibito(this.value)">
+      </p>
+      <p class="snippet-preview" id="pSnippetImmobileAdibito"></p>
+
+      <h3 style="font-size:11pt;font-weight:bold;margin:16px 0 6px;">Tabella luoghi e persone presenti</h3>
+      <p class="hint-str">Come nel modello Word (§2.1): una riga per piano/edificio. In «Attività» usa più righe (Invio) per elencare i locali.</p>
+      <div class="luoghi-actions">
+        <button type="button" onclick="addRigaPianoLuoghi()">+ Aggiungi riga</button>
+        <button type="button" class="secondary" onclick="resetRighePianoLuoghiDefault()">Ripristina modello standard (8 piani)</button>
+      </div>
+      <div id="wrapRighePianoLuoghi"></div>
+
+      <h3 style="font-size:11pt;font-weight:bold;margin:20px 0 6px;">Affollamento massimo (§2.1)</h3>
+      <p class="hint-str">Determina il testo sui paragrafi 176–178 del modello Word.</p>
+
+      <div class="choice-row">
+        <p style="font-weight:600;margin-bottom:6px;">Il rischio incendio è basso?</p>
+        <div class="radio-group" id="grpRischioIncendio">
+          <label><input type="radio" name="rischio_incendio_basso" value="true"  onchange="setRischioIncendioBasso('true')">  Sì — rischio basso</label>
+          <label><input type="radio" name="rischio_incendio_basso" value="false" onchange="setRischioIncendioBasso('false')"> No — rischio non basso</label>
+        </div>
+      </div>
+
+      <div id="wrapModalitaAffollamento" class="choice-row hidden" style="margin-top:8px;">
+        <p style="font-weight:600;margin-bottom:6px;">Modalità calcolo affollamento</p>
+        <div class="radio-group">
+          <label><input type="radio" name="affoll_modalita" value="densita"   onchange="setAffollamentoModalita('densita')">  Con densità (persone/m²) — dalla tabella D.M.</label>
+          <label><input type="radio" name="affoll_modalita" value="conteggio" onchange="setAffollamentoModalita('conteggio')"> Con numero diretto (persone totali)</label>
+        </div>
+
+        <div id="wrapDensita" class="affoll-block">
+          <p class="para-label">Densità di affollamento</p>
+          <p class="hint-str">Seleziona dalla tabella D.M. — il valore è modificabile manualmente.</p>
+          <select id="selDensitaAffollamento" onchange="setDensitaFromSelect(this.value)">
+            <option value="">— seleziona tipologia locale —</option>
+          </select><br>
+          <label style="font-size:10pt;margin-top:6px;display:inline-flex;align-items:center;gap:6px;">
+            Valore (persone/m²):
+            <input type="text" id="inpDensitaAffollamento" placeholder="es. 0,4"
+              oninput="setDensitaManuale(this.value)">
+          </label>
+        </div>
+
+        <div id="wrapConteggio" class="affoll-block hidden">
+          <p class="para-label">Numero massimo di persone</p>
+          <label style="font-size:10pt;display:inline-flex;align-items:center;gap:6px;">
+            N. persone:
+            <input type="text" id="inpNumeroAffollamento" placeholder="30" style="width:80px;"
+              oninput="setNumeroAffollamento(this.value)">
+          </label>
+        </div>
+      </div>
+
+      <div id="wrapTestiAffollamento" class="affoll-block hidden">
+        <p class="para-label">Paragrafo 1 — affollamento calcolato</p>
+        <p class="para-hint">Tag nel Word: <code>{{PARAGRAFO_AFFOLLAMENTO_1}}</code> — modificabile.</p>
+        <textarea id="taAffollamento1" class="para-ta" oninput="setParafoAffollamento1Override(this.value)"></textarea>
+
+        <p class="para-label">Paragrafo 2 — dichiarazione datore di lavoro</p>
+        <p class="para-hint">Tag nel Word: <code>{{PARAGRAFO_AFFOLLAMENTO_2}}</code> — modificabile.</p>
+        <textarea id="taAffollamento2" class="para-ta" oninput="setParafoAffollamento2Override(this.value)"></textarea>
+      </div>
+
+      <h2 class="doc-section">§2.2 — Rilevazione e diffusione dell’allarme</h2>
+      <p class="hint-str">Scegli un solo blocco. Nel Word elimina il paragrafo «oppure» (par. ~189).</p>
+
+      <div class="choice-row">
+        <p style="font-weight:600;margin-bottom:6px;">Impianto di rilevazione e diffusione allarme</p>
+        <div class="radio-group" id="grpRilevazioneAllarme">
+          <label><input type="radio" name="rilevazione_allarme" value="senza" onchange="setRilevazioneAllarme('senza')"> Sede <strong>senza</strong> impianto (testo prima dell’«oppure»)</label>
+          <label><input type="radio" name="rilevazione_allarme" value="con" onchange="setRilevazioneAllarme('con')"> Sede <strong>con</strong> impianto (testo dopo l’«oppure»)</label>
+        </div>
+      </div>
+
+      <div id="wrapBloccoAllarmeSenza" class="affoll-block hidden">
+        <p class="para-label">Blocco A — senza impianto <span class="hint-str">(2 paragrafi nel Word)</span></p>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_ALLARME_SENZA_1}}</code> e <code>{{PARAGRAFO_ALLARME_SENZA_2}}</code> — separa i paragrafi con una riga vuota.</p>
+        <textarea id="taBloccoAllarmeSenza" class="para-ta" style="min-height:100px;" oninput="setBloccoAllarmeSenza(this.value)"></textarea>
+      </div>
+
+      <div id="wrapBloccoAllarmeCon" class="affoll-block hidden">
+        <p class="para-label">Blocco B — con impianto <span class="hint-str">(4 paragrafi nel Word)</span></p>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_ALLARME_CON_1}}</code> … <code>{{PARAGRAFO_ALLARME_CON_4}}</code> — separa i paragrafi con una riga vuota.</p>
+        <textarea id="taBloccoAllarmeCon" class="para-ta" style="min-height:140px;" oninput="setBloccoAllarmeCon(this.value)"></textarea>
+      </div>
+
+      <h2 class="doc-section">§2.3 — Lavoratori esposti a rischi particolari</h2>
+      <p class="hint-str">Elimina «Oppure» nel Word (par. ~197). Scegli una sola opzione.</p>
+
+      <div class="choice-row">
+        <div class="radio-group" id="grpRischiParticolari">
+          <label><input type="radio" name="rischi_particolari" value="nessuno" onchange="setRischiParticolariModalita('nessuno')"> Nessuna mansione a rischio particolare (testo prima dell’«Oppure»)</label>
+          <label><input type="radio" name="rischi_particolari" value="tabella" onchange="setRischiParticolariModalita('tabella')"> Presenti rischi particolari — tabella con misure</label>
+        </div>
+      </div>
+
+      <div id="wrapRischiNessuno" class="affoll-block hidden">
+        <p class="para-label">Testo opzione «nessuno»</p>
+        <p class="para-hint">Tag Word: <code>{{PARAGRAFO_RISCHI_PARTICOLARI_NESSUNO}}</code></p>
+        <textarea id="taRischiNessuno" class="para-ta" oninput="setParagrafoRischiNessuno(this.value)"></textarea>
+      </div>
+
+      <div id="wrapRischiTabella" class="affoll-block hidden">
+        <p class="para-label">Introduzione tabella</p>
+        <p class="para-hint">Tag Word: <code>{{PARAGRAFO_RISCHI_PARTICOLARI_INTRO}}</code></p>
+        <textarea id="taRischiIntro" class="para-ta" style="min-height:72px;" oninput="setParagrafoRischiIntro(this.value)"></textarea>
+
+        <p class="para-label" style="margin-top:14px;">Tabella rischi — deseleziona le righe non applicabili</p>
+        <div class="luoghi-actions">
+          <button type="button" onclick="addRigaRischiParticolari()">+ Aggiungi riga</button>
+          <button type="button" class="secondary" onclick="resetRigheRischiDefault()">Ripristina 6 righe standard</button>
+        </div>
+        <div id="wrapRigheRischiParticolari"></div>
+      </div>
+
+      <h2 class="doc-section">§2.4 — Aree ad elevato rischio incendio</h2>
+      <p class="hint-str">Elimina «oppure» nel Word (par. ~202). Scegli una sola opzione.</p>
+
+      <div class="choice-row">
+        <div class="radio-group" id="grpRischiIncendioAlto">
+          <label><input type="radio" name="rischi_incendio_alto" value="nessuno" onchange="setRischiIncendioAltoModalita('nessuno')"> Nessuna area ad elevato rischio incendio</label>
+          <label><input type="radio" name="rischi_incendio_alto" value="presenti" onchange="setRischiIncendioAltoModalita('presenti')"> Presenti aree ad elevato rischio — testo con approfondimenti</label>
+        </div>
+      </div>
+
+      <div id="wrapRischiIncendioNessuno" class="affoll-block hidden">
+        <p class="para-label">Testo opzione «nessuna area»</p>
+        <p class="para-hint">Tag Word: <code>{{PARAGRAFO_RISCHI_INCENDIO_NESSUNO}}</code></p>
+        <textarea id="taRischiIncendioNessuno" class="para-ta" oninput="setParagrafoRischiIncendioNessuno(this.value)"></textarea>
+      </div>
+
+      <div id="wrapRischiIncendioPresenti" class="affoll-block hidden">
+        <p class="para-label">Blocco aree a rischio elevato <span class="hint-str">(2 paragrafi nel Word)</span></p>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_RISCHI_INCENDIO_ALTO_1}}</code> e <code>{{PARAGRAFO_RISCHI_INCENDIO_ALTO_2}}</code> — separa i paragrafi con una riga vuota. Sostituisci <code>XXXXXXXXXXX</code> con l’area reale.</p>
+        <textarea id="taBloccoRischiIncendioAlto" class="para-ta" style="min-height:120px;" oninput="setBloccoRischiIncendioAlto(this.value)"></textarea>
+      </div>
+
+      <h2 class="doc-section">§2.5 — Persone con esigenze speciali</h2>
+      <p class="hint-str">Elimina «oppure» nel Word (par. ~209). La frase finale va in <strong>grassetto</strong> nel modello Word.</p>
+
+      <div class="choice-row">
+        <div class="radio-group" id="grpEsigenzeSpeciali">
+          <label><input type="radio" name="esigenze_speciali" value="nessuna" onchange="setEsigenzeSpecialiModalita('nessuna')"> Nessuna persona con esigenze speciali</label>
+          <label><input type="radio" name="esigenze_speciali" value="presenti" onchange="setEsigenzeSpecialiModalita('presenti')"> Presenti esigenze particolari — misure aggiuntive</label>
+        </div>
+      </div>
+
+      <div id="wrapEsigenzeNessuna" class="affoll-block hidden">
+        <p class="para-label">Testo opzione «nessuna» (par. ~207)</p>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_ESIGENZE_NESSUNA}}</code></p>
+        <textarea id="taEsigenzeNessuna" class="para-ta" oninput="setParagrafoEsigenzeNessuna(this.value)"></textarea>
+      </div>
+
+      <div id="wrapEsigenzePresenti" class="affoll-block hidden">
+        <p class="para-label">Introduzione misure (par. ~210)</p>
+        <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:600;font-size:10.5pt;">
+          <input type="checkbox" id="chkLuogoPubblico" onchange="setLuogoApertoPubblico(this.checked)">
+          Il luogo di lavoro è aperto al pubblico
+        </label>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_ESIGENZE_INTRO}}</code> — modificabile sotto.</p>
+        <textarea id="taEsigenzeIntro" class="para-ta" style="min-height:64px;" oninput="setParagrafoEsigenzeIntro(this.value)"></textarea>
+
+        <p class="para-label" style="margin-top:14px;">Elenco misure (par. elenco puntato ~211–214)</p>
+        <p class="para-hint">Tag: <code>{{LISTA_MISURE_ESIGENZE}}</code> nel primo punto elenco (oppure loop — vedi fields-map).</p>
+        <div class="luoghi-actions">
+          <button type="button" onclick="addMisuraEsigenze()">+ Aggiungi voce</button>
+          <button type="button" class="secondary" onclick="resetMisureEsigenzeDefault()">Ripristina 4 voci standard</button>
+        </div>
+        <div id="wrapMisureEsigenze"></div>
+      </div>
+
+      <h2 class="doc-section">§2.6 — Misure di protezione</h2>
+      <p class="hint-str">I paragrafi introduttivi (definizioni attive/passive, testo «All’interno dei luoghi…» e chiusura planimetrie) restano <strong>fissi</strong> nel Word. Si compilano solo gli elenchi puntati.</p>
+
+      <div class="affoll-block">
+        <p class="para-label">PROTEZIONI ATTIVE — elenco puntato</p>
+        <p class="para-hint">Tag: <code>{{LISTA_PROTEZIONI_ATTIVE}}</code> nel primo punto (par. ~223); elimina gli altri punti fissi sotto «PROTEZIONI ATTIVE».</p>
+        <div class="luoghi-actions">
+          <button type="button" onclick="addProtezioneAttiva()">+ Aggiungi voce</button>
+          <button type="button" class="secondary" onclick="resetProtezioniAttiveDefault()">Ripristina 3 voci standard</button>
+        </div>
+        <div id="wrapProtezioniAttive"></div>
+      </div>
+
+      <div class="affoll-block" style="margin-top:16px;">
+        <p class="para-label">PROTEZIONI PASSIVE — elenco puntato</p>
+        <p class="para-hint">Tag: <code>{{LISTA_PROTEZIONI_PASSIVE}}</code> nel primo punto (par. ~227); elimina gli altri punti fissi sotto «PROTEZIONI PASSIVE».</p>
+        <div class="luoghi-actions">
+          <button type="button" onclick="addProtezionePassiva()">+ Aggiungi voce</button>
+          <button type="button" class="secondary" onclick="resetProtezioniPassiveDefault()">Ripristina 4 voci standard</button>
+        </div>
+        <div id="wrapProtezioniPassive"></div>
+      </div>
+
+      <h2 class="doc-section">§2.8 — Aree operative</h2>
+      <p class="hint-str">I paragrafi descrittivi (Centro di coordinamento, Posto di chiamata, Punto di raccolta) restano <strong>fissi</strong> nel Word. Si compilano solo i tre luoghi nelle celle evidenziate / tabella.</p>
+
+      <div class="affoll-block">
+        <p class="para-label">Centro di coordinamento</p>
+        <p class="para-hint">Tabella 3, riga 0 — tag: <code>{{LUOGO_CENTRO_COORDINAMENTO}}</code> (sostituisce «RECEPTION»).</p>
+        <input type="text" id="inpLuogoCentroCoord" class="field-inp" style="width:100%;max-width:520px;" oninput="setLuogoCentroCoordinamento(this.value)" placeholder="es. RECEPTION">
+      </div>
+
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">Posto di chiamata</p>
+        <p class="para-hint">Tabella 4, riga 0 — tag: <code>{{LUOGO_POSTO_CHIAMATA}}</code> (sostituisce «RECEPTION»).</p>
+        <input type="text" id="inpLuogoPostoChiamata" class="field-inp" style="width:100%;max-width:520px;" oninput="setLuogoPostoChiamata(this.value)" placeholder="es. RECEPTION">
+      </div>
+
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">Punto di raccolta — area</p>
+        <p class="para-hint">Tabella 5, colonna destra (etichetta «PUNTO DI RACCOLTA» fissa a sinistra) — tag: <code>{{LUOGO_PUNTO_RACCOLTA}}</code>.</p>
+        <input type="text" id="inpLuogoPuntoRaccolta" class="field-inp" style="width:100%;max-width:520px;" oninput="setLuogoPuntoRaccolta(this.value)" placeholder="es. AREA ANTISTANTE L'INGRESSO PRINCIPALE DELLA SALA">
+      </div>
+
+      <h2 class="doc-section">§2.9 — Istruzioni operative (incendio / squadra / soccorso)</h2>
+      <p class="hint-str">Nelle varie istruzioni, titoli DESTINATARIO / QUANDO / DURANTE e punti elenco restano <strong>fissi</strong> dove non indicato un tag. Il ruolo (Posto di chiamata / Responsabile) viene sempre da <strong>§1.2</strong>.</p>
+
+      <h3 style="font-size:11pt;font-weight:bold;margin:12px 0 6px;">Segnalazione di allarme incendio</h3>
+
+      <div class="affoll-block">
+        <p class="para-label">DESTINATARIO — «L&rsquo;incendio può essere segnalato da:»</p>
+        <p class="para-hint">Il punto «testimone: lavoratore…» resta fisso nel modello. Seleziona le voci aggiuntive (anche entrambe o nessuna).</p>
+        <label style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+          <input type="checkbox" id="chkSegnIncImpianto" onchange="setSegnalazioneIncendioImpianto(this.checked)">
+          impianto di rivelazione;
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;margin:6px 0;">
+          <input type="checkbox" id="chkSegnIncPostoEsterno" onchange="setSegnalazioneIncendioPostoEsterno(this.checked)">
+          Posto di chiamata esterno.
+        </label>
+        <p class="para-hint">Tag: <code>{{LISTA_SEGNALAZIONE_INCENDIO_OPZIONALI}}</code> — sostituisce i due punti opzionali sotto «testimone».</p>
+        <p class="snippet-preview" id="pSnippetListaSegnIncOpz"></p>
+      </div>
+
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">QUANDO SI VERIFICA L&rsquo;EVENTO — frase introduttiva</p>
+        <p style="font-weight:600;margin:8px 0 4px;">Centrale di segnalazione incendio?</p>
+        <div class="radio-group" id="grpCentraleSegnInc">
+          <label><input type="radio" name="centrale_segn_inc" value="true" onchange="setCentraleSegnalazioneIncendio(true)"> Sì — include «… dalla centrale, …»</label>
+          <label><input type="radio" name="centrale_segn_inc" value="false" onchange="setCentraleSegnalazioneIncendio(false)"> No — solo «Il testimone dell&rsquo;evento, segnala…»</label>
+        </div>
+        <p class="hint-str" style="margin-top:10px;">Destinatario («Posto di Chiamata» / «Responsabile dell&rsquo;emergenza»): usa la scelta in <strong>§1.2</strong> sopra.</p>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_QUANDO_SEGNALAZIONE_INCENDIO}}</code></p>
+        <p class="snippet-preview" id="pSnippetQuandoSegnInc"></p>
+      </div>
+
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">Attivazione squadra di emergenza — DESTINATARIO</p>
+        <p class="para-hint">Sostituisce la riga sotto «DESTINATARIO» (dopo il titolo «Istruzioni per l&rsquo;attivazione della squadra di emergenza»). Stesso tag anche sotto «Istruzione di richiesta di soccorso agli enti esterni».</p>
+        <p class="para-hint">Tag: <code>{{TESTO_DESTINATARIO_RUOLO_EMERGENZA}}</code> — da §1.2.</p>
+        <p class="snippet-preview" id="pSnippetDestRuoloEmergenza"></p>
+      </div>
+
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">Disattivazione forniture energetiche — punto elenco gas</p>
+        <p class="para-hint">Titolo istruzione, DESTINATARIO («Addetto alla disattivazione…»), intro «Al segnale di evacuazione…» e punto sull&rsquo;<strong>energia elettrica</strong> restano fissi nel Word.</p>
+        <p style="font-weight:600;margin:8px 0 4px;">Impianto di distribuzione del gas presente?</p>
+        <div class="radio-group" id="grpImpiantoGas">
+          <label><input type="radio" name="impianto_gas" value="true" onchange="setImpiantoGasDistribuzione(true)"> Sì — include il secondo punto elenco</label>
+          <label><input type="radio" name="impianto_gas" value="false" onchange="setImpiantoGasDistribuzione(false)"> No — ometti il punto sul gas</label>
+        </div>
+        <p class="para-hint">Tag nel punto elenco gas: <code>{{VOCE_DISATTIVAZIONE_GAS}}</code> (opp. condizionale <code>{{#impianto_gas_distribuzione_presente}}…{{/impianto_gas_distribuzione_presente}}</code>).</p>
+        <p class="snippet-preview" id="pSnippetVoceGas"></p>
+      </div>
+
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">Evacuazione — blocco «Addetto al Posto di Chiamata»</p>
+        <p class="para-hint">Titolo (rosso) + paragrafo «Ricevuto l&rsquo;ordine di evacuazione…» restano <strong>fissi</strong> nel Word. Visibili solo se in <strong>§1.2</strong> non hai scelto «Nessuno».</p>
+        <p class="para-hint">Condizionale docxtemplater: <code>{{#mostra_addetto_posto_chiamata_evacuazione}}</code> sul titolo rosso, <code>{{/mostra_addetto_posto_chiamata_evacuazione}}</code> alla fine del paragrafo successivo.</p>
+        <p class="snippet-preview" id="pSnippetEvacPostoChiamata"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">Comportamenti in caso di incendio</h2>
+      <p class="hint-str">Sezioni introduttive, elenchi su fumo / locale bloccato / ordine evacuazione restano <strong>fissi</strong> nel Word.</p>
+
+      <div class="affoll-block">
+        <p class="para-label">Primo elenco — segnalazione evento</p>
+        <p class="para-hint">Sostituisce il punto «segnalare… al Posto di Chiamata/Responsabile…» — ruolo da <strong>§1.2</strong>.</p>
+        <p class="para-hint">Tag: <code>{{VOCE_COMPORTAMENTI_SEGNALAZIONE_EVENTO}}</code></p>
+        <p class="snippet-preview" id="pSnippetComportamentiSegnala"></p>
+      </div>
+
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">«In linea generale» — voci centrali</p>
+        <p class="para-hint">Fissi nel Word: primo punto (flussi opposti) e ultimi tre (vestiti, solidarietà, punto di raccolta).</p>
+        <p style="font-weight:600;margin:8px 0 4px;">Divieto utilizzo ascensori per l&rsquo;esodo?</p>
+        <div class="radio-group" id="grpComportamentiAscensori">
+          <label><input type="radio" name="comportamenti_ascensori" value="true" onchange="setComportamentiAscensori(true)"> Sì — includi il punto</label>
+          <label><input type="radio" name="comportamenti_ascensori" value="false" onchange="setComportamentiAscensori(false)"> No — ometti</label>
+        </div>
+        <p style="font-weight:600;margin:12px 0 4px;">Porte REI da menzionare?</p>
+        <div class="radio-group" id="grpComportamentiPorteRei">
+          <label><input type="radio" name="comportamenti_porte_rei" value="true" onchange="setComportamentiPorteRei(true)"> Sì — includi il punto</label>
+          <label><input type="radio" name="comportamenti_porte_rei" value="false" onchange="setComportamentiPorteRei(false)"> No — ometti</label>
+        </div>
+        <p class="para-hint">Tag: <code>{{VOCE_COMPORTAMENTI_ASCENSORI}}</code> e <code>{{VOCE_COMPORTAMENTI_PORTE_REI}}</code> (vuoti se non selezionati).</p>
+        <p class="snippet-preview" id="pSnippetComportamentiLineaGen"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§4.2 — Responsabile delle emergenze (preallarme)</h2>
+      <div class="affoll-block">
+        <p class="para-label">Reset centrale antincendio (falso allarme)</p>
+        <p class="para-hint">Ultimo punto dell&rsquo;elenco «Se falso allarme o emergenza rientrata…». Visibile solo se in <strong>§2.9</strong> hai indicato <strong>Sì</strong> alla centrale di segnalazione incendio.</p>
+        <p class="para-hint">Tag: <code>{{VOCE_RESET_CENTRALE_ANTINCENDIO}}</code></p>
+        <p class="snippet-preview" id="pSnippetResetCentrale"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§4.3 — Addetti antincendio</h2>
+      <div class="affoll-block">
+        <p class="para-label">Diffusione ordine di evacuazione</p>
+        <p class="para-hint">Sostituisce il paragrafo «Su disposizione del Responsabile delle emergenze…» (intro fissa + una delle due modalità).</p>
+        <div class="radio-group" id="grpDiffusioneEvacAntincendio">
+          <label><input type="radio" name="diffusione_evac_antinc" value="allarme" onchange="setDiffusioneEvacuazioneAntincendio('allarme')"> Allarme / segnalazione acustica di evacuazione</label>
+          <label><input type="radio" name="diffusione_evac_antinc" value="verbale" onchange="setDiffusioneEvacuazioneAntincendio('verbale')"> Diffusione verbale dell&rsquo;ordine</label>
+        </div>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_DIFFUSIONE_EVACUAZIONE_ANTINCENDIO}}</code></p>
+        <p class="snippet-preview" id="pSnippetDiffusioneEvacAntinc"></p>
+      </div>
+      <div class="affoll-block" style="margin-top:12px;">
+        <p class="para-label">Classificazione rischio incendio (D.M. 02/09/2021)</p>
+        <p class="para-hint">Nel paragrafo sulla formazione: «… classificata a Livello <strong>X</strong> di rischio incendio.» — sostituire solo il numero.</p>
+        <input type="text" id="inpLivelloRischioIncendio" class="field-inp" style="width:80px;max-width:120px;" oninput="setLivelloRischioIncendio(this.value)" placeholder="1">
+        <p class="para-hint">Tag: <code>{{LIVELLO_RISCHIO_INCENDIO}}</code></p>
+        <p class="snippet-preview" id="pSnippetLivelloRischio"></p>
+      </div>
+
+      <h3 style="font-size:11pt;font-weight:bold;margin:16px 0 6px;">Preallarme incendio</h3>
+      <div class="affoll-block">
+        <p class="para-label">Frase introduttiva (ruolo)</p>
+        <p class="para-hint">«Il Posto di Chiamata / Responsabile… consulta l&rsquo;elenco…» — da <strong>§1.2</strong>. Tag: <code>{{PARAGRAFO_PREALLARME_ANTINCENDIO_INTRO}}</code></p>
+        <p class="snippet-preview" id="pSnippetPreallarmeIntro"></p>
+        <p class="para-label" style="margin-top:12px;">Ultimo punto elenco — comunicazione esito</p>
+        <div class="radio-group" id="grpEsitoComunicazioneA">
+          <label><input type="radio" name="esito_comunicazione_a" value="centro" onchange="setEsitoInterventoComunicazioneA('centro')"> Centro di coordinamento</label>
+          <label><input type="radio" name="esito_comunicazione_a" value="responsabile" onchange="setEsitoInterventoComunicazioneA('responsabile')"> Responsabile delle emergenze</label>
+          <label><input type="radio" name="esito_comunicazione_a" value="entrambi" onchange="setEsitoInterventoComunicazioneA('entrambi')"> Centro e Responsabile (formula combinata)</label>
+        </div>
+        <p class="para-hint">Tag: <code>{{VOCE_ESITO_INTERVENTO_ANTINCENDIO}}</code></p>
+        <p class="snippet-preview" id="pSnippetEsitoIntervento"></p>
+      </div>
+
+      <h3 style="font-size:11pt;font-weight:bold;margin:16px 0 6px;">Evacuazione (intervento fallito)</h3>
+      <div class="affoll-block">
+        <p class="para-label">Punto «comunica… esito… evacuazione»</p>
+        <p class="para-hint">Ruolo da <strong>§1.2</strong>. Tag: <code>{{VOCE_EVAC_COMUNICA_ESITO}}</code></p>
+        <p class="snippet-preview" id="pSnippetEvacComunicaEsito"></p>
+        <p class="para-label" style="margin-top:12px;">Attivazione allarme evacuazione</p>
+        <div class="radio-group" id="grpModalitaAllarmeEvac">
+          <label><input type="radio" name="modalita_allarme_evac" value="pulsante" onchange="setModalitaAllarmeEvacuazioneAntincendio('pulsante')"> Pulsante allarme generale (+ fallback verbale se guasto)</label>
+          <label><input type="radio" name="modalita_allarme_evac" value="verbale" onchange="setModalitaAllarmeEvacuazioneAntincendio('verbale')"> Solo diffusione verbale dell&rsquo;ordine</label>
+        </div>
+        <p class="para-hint">Tag: <code>{{VOCE_EVAC_ATTIVAZIONE_ALLARME}}</code> e <code>{{VOCE_EVAC_ALLARME_FALLBACK_VERBALE}}</code> (secondo par. vuoto se solo verbale).</p>
+        <p class="snippet-preview" id="pSnippetEvacAllarme"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§4.4 — Addetti allo sfollamento</h2>
+      <div class="affoll-block">
+        <p class="para-hint">Punto elenco evacuazione «… le segnalano … affinché siano inviati i soccorsi» — ruolo da <strong>§1.2</strong>.</p>
+        <p class="para-hint">Tag: <code>{{VOCE_SFOLLAMENTO_SEGNALA_SOCCORSI}}</code></p>
+        <p class="snippet-preview" id="pSnippetSfollamentoSegnala"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:16px;">§4.5 — Addetti al primo soccorso</h2>
+      <div class="affoll-block">
+        <p class="para-hint">Emergenza sanitaria — comunicazione iniziale. Tag: <code>{{VOCE_PRIMO_SOCCORSO_COMUNICAZIONE}}</code> (§1.2).</p>
+        <p class="snippet-preview" id="pSnippetPrimoSoccorsoCom"></p>
+        <p class="para-hint" style="margin-top:10px;">Coordinamento 118. Tag: <code>{{VOCE_PRIMO_SOCCORSO_COORDINA_118}}</code> (§1.2).</p>
+        <p class="snippet-preview" id="pSnippetPrimoSoccorso118"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§4.6 — Addetto al posto di chiamata</h2>
+      <div class="affoll-block">
+        <p class="para-label">Chiamata di soccorso esterna</p>
+        <p class="para-hint">«La telefonata di soccorso dovrà essere effettuata…» — ruolo da <strong>§1.2</strong>. Tag: <code>{{PARAGRAFO_TELEFONATA_SOCCORSO_POSTO_CHIAMATA}}</code></p>
+        <p class="snippet-preview" id="pSnippetTelefonataSoccorso"></p>
+        <p class="para-label" style="margin-top:12px;">Preallarme — ricezione informazioni</p>
+        <p class="para-hint">Primo punto elenco: include «…dalla centrale antincendio» solo se in <strong>§2.9</strong> la centrale è <strong>Sì</strong>. Tag: <code>{{VOCE_POSTO_CHIAMATA_RICEVE_INFORMAZIONI}}</code></p>
+        <p class="snippet-preview" id="pSnippetPostoChiamataRiceve"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§5.2 — Formazione del personale</h2>
+      <div class="affoll-block">
+        <p class="para-label">Livello addestramento (D.M. 02/09/2021)</p>
+        <p class="para-hint">Nel paragrafo: «… è previsto un addestramento di Livello <strong>X</strong> ai sensi della normativa vigente.» — inserire solo il numero o la sigla (es. II, 2).</p>
+        <input type="text" id="inpLivelloAddestramentoEmergenze" class="field-inp" style="width:80px;max-width:120px;" oninput="setLivelloAddestramentoEmergenze(this.value)" placeholder="II">
+        <p class="para-hint">Tag: <code>{{LIVELLO_ADDESTRAMENTO_EMERGENZE}}</code></p>
+        <p class="snippet-preview" id="pSnippetLivelloAddestramento"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§6.1 — Emergenza sanitaria</h2>
+      <div class="affoll-block">
+        <p class="para-label">Primo punto elenco — chi informare</p>
+        <p class="para-hint">«… deve immediatamente informare:» — primo punto in <strong>maiuscolo</strong>, da <strong>§1.2</strong> (Posto di chiamata / Responsabile / formula combinata).</p>
+        <p class="para-hint">Tag: <code>{{VOCE_EMERGENZA_SANITARIA_DESTINATARIO}}</code></p>
+        <p class="snippet-preview" id="pSnippetEmergenzaSanitariaDest"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§6.2 — Rinvenimento oggetto sospetto</h2>
+      <div class="affoll-block">
+        <p class="para-label">Destinatario segnalazione</p>
+        <p class="para-hint">«… va segnalata, il più presto al <strong>…</strong> che provvederà…» — da <strong>§1.2</strong>. La frase «previa consultazione del Responsabile dell&rsquo;emergenza» resta fissa.</p>
+        <p class="para-hint">Tag: <code>{{TESTO_RINVENIMENTO_OGGETTO_SOSPETTO_DESTINATARIO}}</code></p>
+        <p class="snippet-preview" id="pSnippetRinvenimentoDest"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:20px;">§6.7 — Comportamenti in emergenza incendio</h2>
+      <div class="affoll-block">
+        <p class="para-label">Primo punto — avvisare (fiamme/fumo)</p>
+        <p class="para-hint">«… avvisare immediatamente il <strong>…</strong>» — da <strong>§1.2</strong>. Tag: <code>{{VOCE_COMPORTAMENTI_67_AVVISA_DESTINATARIO}}</code></p>
+        <p class="snippet-preview" id="pSnippet67Avvisa"></p>
+        <p class="para-label" style="margin-top:12px;">Ultimo punto — evacuazione</p>
+        <p class="para-hint">«… avvisare immediatamente <strong>il …</strong> per l&rsquo;eventuale ordine di evacuazione» — da <strong>§1.2</strong>. Tag: <code>{{VOCE_COMPORTAMENTI_67_EVACUA_DESTINATARIO}}</code></p>
+        <p class="snippet-preview" id="pSnippet67Evacua"></p>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:16px;">§6.8 — Fuga di gas / sostanze pericolose</h2>
+      <div class="affoll-block">
+        <p class="para-label">Ultimo punto — allertare</p>
+        <p class="para-hint">«Allertare il <strong>…</strong> per l&rsquo;eventuale chiamata…» — da <strong>§1.2</strong>. Tag: <code>{{VOCE_COMPORTAMENTI_68_ALLERTA_DESTINATARIO}}</code></p>
+        <p class="snippet-preview" id="pSnippet68Allerta"></p>
+      </div>
+
+      <div id="wrapEsigenzeChiusura" class="affoll-block hidden">
+        <p class="para-label para-chiusura-label">Frase finale (entrambe le opzioni) — grassetto nel Word</p>
+        <p class="para-hint">Tag: <code>{{PARAGRAFO_ESIGENZE_CHIUSURA}}</code> — par. ~208 (opz. A) e ~215 (opz. B); formattare il tag in grassetto nel template.</p>
+        <textarea id="taEsigenzeChiusura" class="para-ta" oninput="setParagrafoEsigenzeChiusura(this.value)"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"><p style="text-align:center;padding:40px;color:#888;">Apri «Anteprima Word» dopo la compilazione.</p></div>
+</div>
+
+<script>
+(function () {
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_EMERGENZE'];
+  let DATA = null;
+  let activeView = 'compile';
+  const WIZARD = {
+    modulo_numero: '',
+    piano_emergenza_coordinato: false,
+    segnalazione_destinatario: 'nessuno',
+    allarme_generale: false,
+    immobile_adibito_a: '',
+    righe_piano_luoghi: [],
+    rischio_incendio_basso: null,
+    affollamento_modalita: 'densita',
+    densita_affollamento: '0,4',
+    numero_affollamento: '30',
+    paragrafo_affollamento_1: null,
+    paragrafo_affollamento_2: null,
+    rilevazione_allarme: null,
+    testo_blocco_allarme_senza: null,
+    testo_blocco_allarme_con: null,
+    rischi_particolari_modalita: null,
+    paragrafo_rischi_nessuno: null,
+    paragrafo_rischi_intro: null,
+    righe_rischi_particolari: [],
+    rischi_incendio_alto_modalita: null,
+    paragrafo_rischi_incendio_nessuno: null,
+    testo_blocco_rischi_incendio_alto: null,
+    esigenze_speciali_modalita: null,
+    luogo_aperto_pubblico: false,
+    paragrafo_esigenze_nessuna: null,
+    paragrafo_esigenze_intro: null,
+    paragrafo_esigenze_chiusura: null,
+    misure_esigenze_speciali: [],
+    protezioni_attive: [],
+    protezioni_passive: [],
+    luogo_centro_coordinamento: '',
+    luogo_posto_chiamata: '',
+    luogo_punto_raccolta: '',
+    segnalazione_incendio_impianto_rivelazione: false,
+    segnalazione_incendio_posto_chiamata_esterno: false,
+    centrale_segnalazione_incendio: null,
+    impianto_gas_distribuzione_presente: null,
+    comportamenti_vietato_ascensori: null,
+    comportamenti_porte_rei: null,
+    diffusione_evacuazione_antincendio: null,
+    livello_rischio_incendio: '',
+    livello_addestramento_emergenze: '',
+    esito_intervento_comunicazione_a: null,
+    modalita_allarme_evacuazione_antincendio: null,
+  };
+
+  function buildDensitaSelect() {
+    const sel = document.getElementById('selDensitaAffollamento');
+    if (!sel || !ADAPTER?.DENSITA_AFFOLLAMENTO_OPTIONS) return;
+    const opts = ADAPTER.DENSITA_AFFOLLAMENTO_OPTIONS;
+    sel.innerHTML = '<option value="">— seleziona tipologia locale —</option>';
+    opts.forEach((o) => {
+      const el = document.createElement('option');
+      el.value = o.value;
+      el.textContent = o.value + ' — ' + o.label;
+      sel.appendChild(el);
+    });
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function ensureRighePianoLuoghi() {
+    if (!Array.isArray(WIZARD.righe_piano_luoghi)) WIZARD.righe_piano_luoghi = [];
+    if (!WIZARD.righe_piano_luoghi.length && ADAPTER?.DEFAULT_RIGHE_PIANO_LUOGHI) {
+      WIZARD.righe_piano_luoghi = ADAPTER.DEFAULT_RIGHE_PIANO_LUOGHI.map((r) => ({ ...r }));
+    }
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const n = parseInt(String(padded || '').trim(), 10);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function renderFields() {
+    if (!DATA) return;
+    const set = (id, val, miss) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const ok = val != null && String(val).trim() !== '';
+      el.textContent = ok ? val : '—';
+      el.className = ok ? 'field-auto' : 'field-missing';
+      if (miss && !ok) el.textContent = miss;
+    };
+    set('pRagSoc', DATA.RAGIONE_SOCIALE, 'mancante');
+    set('pSede', DATA.SEDE_OPERATIVA, 'mancante');
+    set('pData', DATA.DATA_EMISSIONE);
+    set('pLuogo', DATA.LUOGO);
+    const inp = document.getElementById('inpModuloNumero');
+    if (inp && document.activeElement !== inp) {
+      inp.value = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    }
+    const btn = document.getElementById('btnGenera');
+    if (btn) btn.disabled = !(ADAPTER && DATA && (ADAPTER.validate(DATA) || []).length === 0);
+    renderPianoCoordinato();
+    renderSezione12();
+    renderSezione21();
+    renderTabellaPianoLuoghi();
+    renderAffollamento();
+    renderSezione22();
+    renderSezione23();
+    renderSezione24();
+    renderSezione25();
+    renderSezione26();
+    renderSezione28();
+    renderSezione29();
+    renderComportamentiIncendio();
+    renderSezione42();
+    renderSezione43();
+    renderSezione44e45();
+    renderSezione46();
+    renderSezione52();
+    renderSezione61();
+    renderSezione62();
+    renderSezione67e68();
+  }
+
+  function renderSezione67e68() {
+    const dest =
+      DATA?.VOCE_COMPORTAMENTI_67_AVVISA_DESTINATARIO
+      ?? ADAPTER?.testoDestinatarioComportamentiIncendio?.(WIZARD)
+      ?? '';
+    const evac =
+      DATA?.VOCE_COMPORTAMENTI_67_EVACUA_DESTINATARIO
+      ?? ADAPTER?.testoIlDestinatarioEmergenza?.(WIZARD)
+      ?? '';
+    const allerta =
+      DATA?.VOCE_COMPORTAMENTI_68_ALLERTA_DESTINATARIO
+      ?? ADAPTER?.testoDestinatarioComportamentiIncendio?.(WIZARD)
+      ?? '';
+    const p1 = document.getElementById('pSnippet67Avvisa');
+    if (p1) p1.textContent = dest ? 'Nel Word: «… avvisare immediatamente il ' + dest + '»' : '';
+    const p2 = document.getElementById('pSnippet67Evacua');
+    if (p2) {
+      p2.textContent = evac
+        ? 'Nel Word: «… avvisare immediatamente ' + evac + ' per l\u2019eventuale ordine di evacuazione»'
+        : '';
+    }
+    const p3 = document.getElementById('pSnippet68Allerta');
+    if (p3) {
+      p3.textContent = allerta
+        ? 'Nel Word: «Allertare il ' + allerta + ' per l\u2019eventuale chiamata agli enti di soccorso esterni»'
+        : '';
+    }
+  }
+
+  function renderSezione62() {
+    const dest =
+      DATA?.TESTO_RINVENIMENTO_OGGETTO_SOSPETTO_DESTINATARIO
+      ?? ADAPTER?.testoDestinatarioComportamentiIncendio?.(WIZARD)
+      ?? '';
+    const p = document.getElementById('pSnippetRinvenimentoDest');
+    if (p) {
+      p.textContent = dest
+        ? 'Nel Word: «… il più presto al ' + dest + ' che provvederà…»'
+        : '';
+    }
+  }
+
+  function renderSezione61() {
+    const voce =
+      DATA?.VOCE_EMERGENZA_SANITARIA_DESTINATARIO
+      ?? ADAPTER?.voceEmergenzaSanitariaDestinatario?.(WIZARD)
+      ?? '';
+    const p = document.getElementById('pSnippetEmergenzaSanitariaDest');
+    if (p) p.textContent = voce ? 'Nel Word (elenco): «' + voce + '»' : '';
+  }
+
+  function renderSezione52() {
+    const liv =
+      DATA?.LIVELLO_ADDESTRAMENTO_EMERGENZE
+      ?? ADAPTER?.livelloAddestramentoEmergenze?.(WIZARD)
+      ?? 'II';
+    const inp = document.getElementById('inpLivelloAddestramentoEmergenze');
+    if (inp && document.activeElement !== inp) {
+      inp.value = String(WIZARD.livello_addestramento_emergenze || '').trim() || liv;
+    }
+    const p = document.getElementById('pSnippetLivelloAddestramento');
+    if (p) {
+      p.textContent =
+        'Nel Word: «… è previsto un addestramento di Livello ' + liv + ' ai sensi della normativa vigente.»';
+    }
+  }
+
+  window.setLivelloAddestramentoEmergenze = function (v) {
+    WIZARD.livello_addestramento_emergenze = v;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione52(); sendUpdate(); }
+  };
+
+  function renderSezione46() {
+    const tel =
+      DATA?.PARAGRAFO_TELEFONATA_SOCCORSO_POSTO_CHIAMATA
+      ?? ADAPTER?.paragrafoTelefonataSoccorsoPostoChiamata?.(WIZARD)
+      ?? '';
+    const pTel = document.getElementById('pSnippetTelefonataSoccorso');
+    if (pTel) pTel.textContent = tel ? 'Nel Word: «' + tel + '»' : '';
+    const riceve =
+      DATA?.VOCE_POSTO_CHIAMATA_RICEVE_INFORMAZIONI
+      ?? ADAPTER?.vocePostoChiamataRiceveInformazioni?.(WIZARD)
+      ?? '';
+    const pR = document.getElementById('pSnippetPostoChiamataRiceve');
+    if (pR) {
+      const cent = ADAPTER?.centraleSegnalazioneIncendioSi?.(WIZARD);
+      pR.textContent = riceve
+        ? 'Nel Word: «' + riceve + '»' + (cent === false ? ' (senza centrale)' : '')
+        : '';
+    }
+  }
+
+  function renderSezione44e45() {
+    const sf =
+      DATA?.VOCE_SFOLLAMENTO_SEGNALA_SOCCORSI ?? ADAPTER?.voceSfollamentoSegnalaSoccorso?.(WIZARD) ?? '';
+    const pS = document.getElementById('pSnippetSfollamentoSegnala');
+    if (pS) pS.textContent = sf ? 'Nel Word: «' + sf + '»' : '';
+    const com =
+      DATA?.VOCE_PRIMO_SOCCORSO_COMUNICAZIONE ?? ADAPTER?.vocePrimoSoccorsoComunicazione?.(WIZARD) ?? '';
+    const pC = document.getElementById('pSnippetPrimoSoccorsoCom');
+    if (pC) pC.textContent = com ? 'Nel Word: «' + com + '»' : '';
+    const c118 =
+      DATA?.VOCE_PRIMO_SOCCORSO_COORDINA_118 ?? ADAPTER?.vocePrimoSoccorsoCoordina118?.(WIZARD) ?? '';
+    const p118 = document.getElementById('pSnippetPrimoSoccorso118');
+    if (p118) p118.textContent = c118 ? 'Nel Word: «' + c118 + '»' : '';
+  }
+
+  function ensureAreeOperative() {
+    if (!String(WIZARD.luogo_centro_coordinamento || '').trim() && ADAPTER?.DEFAULT_LUOGO_CENTRO_COORDINAMENTO) {
+      WIZARD.luogo_centro_coordinamento = ADAPTER.DEFAULT_LUOGO_CENTRO_COORDINAMENTO;
+    }
+    if (!String(WIZARD.luogo_posto_chiamata || '').trim() && ADAPTER?.DEFAULT_LUOGO_POSTO_CHIAMATA) {
+      WIZARD.luogo_posto_chiamata = ADAPTER.DEFAULT_LUOGO_POSTO_CHIAMATA;
+    }
+    if (!String(WIZARD.luogo_punto_raccolta || '').trim() && ADAPTER?.DEFAULT_LUOGO_PUNTO_RACCOLTA) {
+      WIZARD.luogo_punto_raccolta = ADAPTER.DEFAULT_LUOGO_PUNTO_RACCOLTA;
+    }
+  }
+
+  function renderSezione28() {
+    ensureAreeOperative();
+    const setInp = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && document.activeElement !== el) el.value = val != null ? String(val) : '';
+    };
+    setInp('inpLuogoCentroCoord', DATA?.LUOGO_CENTRO_COORDINAMENTO ?? ADAPTER?.luogoCentroCoordinamento?.(WIZARD) ?? '');
+    setInp('inpLuogoPostoChiamata', DATA?.LUOGO_POSTO_CHIAMATA ?? ADAPTER?.luogoPostoChiamata?.(WIZARD) ?? '');
+    setInp('inpLuogoPuntoRaccolta', DATA?.LUOGO_PUNTO_RACCOLTA ?? ADAPTER?.luogoPuntoRaccolta?.(WIZARD) ?? '');
+  }
+
+  window.setLuogoCentroCoordinamento = function (v) {
+    WIZARD.luogo_centro_coordinamento = v;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione28(); sendUpdate(); }
+  };
+
+  window.setLuogoPostoChiamata = function (v) {
+    WIZARD.luogo_posto_chiamata = v;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione28(); sendUpdate(); }
+  };
+
+  window.setLuogoPuntoRaccolta = function (v) {
+    WIZARD.luogo_punto_raccolta = v;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione28(); sendUpdate(); }
+  };
+
+  function renderSezione29() {
+    const chkImp = document.getElementById('chkSegnIncImpianto');
+    const chkPosto = document.getElementById('chkSegnIncPostoEsterno');
+    if (chkImp) chkImp.checked = !!ADAPTER?.segnalazioneIncendioImpiantoRivelazioneSi?.(WIZARD);
+    if (chkPosto) chkPosto.checked = !!ADAPTER?.segnalazioneIncendioPostoChiamataEsternoSi?.(WIZARD);
+    const cent = ADAPTER?.normalizeCentraleSegnalazioneIncendio?.(WIZARD.centrale_segnalazione_incendio);
+    document.querySelectorAll('input[name="centrale_segn_inc"]').forEach((el) => {
+      el.checked = cent === true ? el.value === 'true' : cent === false ? el.value === 'false' : false;
+    });
+    const lista =
+      DATA?.LISTA_SEGNALAZIONE_INCENDIO_OPZIONALI
+      ?? ADAPTER?.listaSegnalazioneIncendioOpzionali?.(WIZARD)
+      ?? '';
+    const pLista = document.getElementById('pSnippetListaSegnIncOpz');
+    if (pLista) {
+      pLista.textContent = lista.trim()
+        ? 'Voci aggiuntive nel Word:\n' + lista
+        : 'Nessuna voce aggiuntiva (resta solo «testimone» nel modello).';
+    }
+    const quando =
+      DATA?.PARAGRAFO_QUANDO_SEGNALAZIONE_INCENDIO
+      ?? ADAPTER?.paragrafoQuandoSegnalazioneIncendio?.(WIZARD)
+      ?? '';
+    const pQuando = document.getElementById('pSnippetQuandoSegnInc');
+    if (pQuando) pQuando.textContent = quando ? 'Nel Word: «' + quando + '»' : '';
+    const ruolo =
+      DATA?.TESTO_DESTINATARIO_RUOLO_EMERGENZA
+      ?? ADAPTER?.testoDestinatarioRuoloEmergenza?.(WIZARD)
+      ?? '';
+    const pRuolo = document.getElementById('pSnippetDestRuoloEmergenza');
+    if (pRuolo) {
+      pRuolo.textContent = ruolo
+        ? 'Nel Word (DESTINATARIO): «' + ruolo + '»'
+        : '';
+    }
+    const gas =
+      DATA?.VOCE_DISATTIVAZIONE_GAS ?? ADAPTER?.voceDisattivazioneGas?.(WIZARD) ?? '';
+    const gasSel = ADAPTER?.normalizeImpiantoGasDistribuzione?.(WIZARD.impianto_gas_distribuzione_presente);
+    document.querySelectorAll('input[name="impianto_gas"]').forEach((el) => {
+      el.checked = gasSel === true ? el.value === 'true' : gasSel === false ? el.value === 'false' : false;
+    });
+    const pGas = document.getElementById('pSnippetVoceGas');
+    if (pGas) {
+      pGas.textContent = gasSel === false
+        ? 'Nel Word: punto gas omesso (tag vuoto).'
+        : gasSel === true
+          ? 'Nel Word: «' + gas + '»'
+          : '';
+    }
+    const mostraPosto =
+      DATA?.mostra_addetto_posto_chiamata_evacuazione
+      ?? ADAPTER?.mostraAddettoPostoChiamataEvacuazione?.(WIZARD);
+    const pEvac = document.getElementById('pSnippetEvacPostoChiamata');
+    if (pEvac) {
+      const dest = ADAPTER?.normalizeSegnalazioneDestinatario?.(WIZARD.segnalazione_destinatario) || 'nessuno';
+      pEvac.textContent = mostraPosto
+        ? 'Blocco «Addetto al Posto di Chiamata» incluso (§1.2: ' + dest + ').'
+        : 'Blocco omesso (§1.2: Nessuno).';
+    }
+  }
+
+  window.setImpiantoGasDistribuzione = function (si) {
+    WIZARD.impianto_gas_distribuzione_presente = !!si;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione29(); sendUpdate(); }
+  };
+
+  function renderComportamentiIncendio() {
+    const segnala =
+      DATA?.VOCE_COMPORTAMENTI_SEGNALAZIONE_EVENTO
+      ?? ADAPTER?.voceComportamentiSegnalazioneEvento?.(WIZARD)
+      ?? '';
+    const pSeg = document.getElementById('pSnippetComportamentiSegnala');
+    if (pSeg) pSeg.textContent = segnala ? 'Nel Word: «' + segnala + '»' : '';
+    const ascSel = ADAPTER?.normalizeComportamentiAscensori?.(WIZARD.comportamenti_vietato_ascensori);
+    const reiSel = ADAPTER?.normalizeComportamentiPorteRei?.(WIZARD.comportamenti_porte_rei);
+    document.querySelectorAll('input[name="comportamenti_ascensori"]').forEach((el) => {
+      el.checked = ascSel === true ? el.value === 'true' : ascSel === false ? el.value === 'false' : false;
+    });
+    document.querySelectorAll('input[name="comportamenti_porte_rei"]').forEach((el) => {
+      el.checked = reiSel === true ? el.value === 'true' : reiSel === false ? el.value === 'false' : false;
+    });
+    const asc = DATA?.VOCE_COMPORTAMENTI_ASCENSORI ?? ADAPTER?.voceComportamentiAscensori?.(WIZARD) ?? '';
+    const rei = DATA?.VOCE_COMPORTAMENTI_PORTE_REI ?? ADAPTER?.voceComportamentiPorteRei?.(WIZARD) ?? '';
+    const pLinea = document.getElementById('pSnippetComportamentiLineaGen');
+    if (pLinea) {
+      const parts = [];
+      if (asc.trim()) parts.push('• ' + asc);
+      if (rei.trim()) parts.push('• ' + rei);
+      pLinea.textContent = parts.length
+        ? 'Voci aggiuntive:\n' + parts.join('\n')
+        : 'Nessuna voce centrale selezionata (restano i 4 punti fissi).';
+    }
+  }
+
+  window.setComportamentiAscensori = function (si) {
+    WIZARD.comportamenti_vietato_ascensori = !!si;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setComportamentiPorteRei = function (si) {
+    WIZARD.comportamenti_porte_rei = !!si;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setSegnalazioneIncendioImpianto = function (checked) {
+    WIZARD.segnalazione_incendio_impianto_rivelazione = !!checked;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione29(); sendUpdate(); }
+  };
+
+  window.setSegnalazioneIncendioPostoEsterno = function (checked) {
+    WIZARD.segnalazione_incendio_posto_chiamata_esterno = !!checked;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione29(); sendUpdate(); }
+  };
+
+  window.setCentraleSegnalazioneIncendio = function (si) {
+    WIZARD.centrale_segnalazione_incendio = !!si;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  function renderSezione43() {
+    const mod = ADAPTER?.normalizeDiffusioneEvacuazioneAntincendio?.(WIZARD.diffusione_evacuazione_antincendio);
+    document.querySelectorAll('input[name="diffusione_evac_antinc"]').forEach((el) => {
+      el.checked = el.value === mod;
+    });
+    const par =
+      DATA?.PARAGRAFO_DIFFUSIONE_EVACUAZIONE_ANTINCENDIO
+      ?? ADAPTER?.paragrafoDiffusioneEvacuazioneAntincendio?.(WIZARD)
+      ?? '';
+    const pDiff = document.getElementById('pSnippetDiffusioneEvacAntinc');
+    if (pDiff) pDiff.textContent = par ? 'Nel Word: «' + par + '»' : '';
+    const liv =
+      DATA?.LIVELLO_RISCHIO_INCENDIO ?? ADAPTER?.livelloRischioIncendio?.(WIZARD) ?? '1';
+    const inp = document.getElementById('inpLivelloRischioIncendio');
+    if (inp && document.activeElement !== inp) {
+      inp.value = String(WIZARD.livello_rischio_incendio || '').trim() || liv;
+    }
+    const pLiv = document.getElementById('pSnippetLivelloRischio');
+    if (pLiv) {
+      pLiv.textContent =
+        'Nel Word: «… classificata a Livello ' + liv + ' di rischio incendio.»';
+    }
+    const preIntro =
+      DATA?.PARAGRAFO_PREALLARME_ANTINCENDIO_INTRO
+      ?? ADAPTER?.paragrafoPreallarmeAntincendioIntro?.(WIZARD)
+      ?? '';
+    const pPre = document.getElementById('pSnippetPreallarmeIntro');
+    if (pPre) pPre.textContent = preIntro ? 'Nel Word: «' + preIntro + '»' : '';
+    const esitoSel = ADAPTER?.normalizeEsitoInterventoComunicazioneA?.(WIZARD.esito_intervento_comunicazione_a);
+    document.querySelectorAll('input[name="esito_comunicazione_a"]').forEach((el) => {
+      el.checked = el.value === esitoSel;
+    });
+    const voceEsito =
+      DATA?.VOCE_ESITO_INTERVENTO_ANTINCENDIO ?? ADAPTER?.voceEsitoInterventoAntincendio?.(WIZARD) ?? '';
+    const pEsito = document.getElementById('pSnippetEsitoIntervento');
+    if (pEsito) pEsito.textContent = voceEsito ? 'Nel Word: «' + voceEsito + '»' : '';
+    const voceEvac =
+      DATA?.VOCE_EVAC_COMUNICA_ESITO ?? ADAPTER?.voceEvacComunicaEsitoAntincendio?.(WIZARD) ?? '';
+    const pEvacCom = document.getElementById('pSnippetEvacComunicaEsito');
+    if (pEvacCom) pEvacCom.textContent = voceEvac ? 'Nel Word: «' + voceEvac + '»' : '';
+    const modAl = ADAPTER?.normalizeModalitaAllarmeEvacuazioneAntincendio?.(WIZARD.modalita_allarme_evacuazione_antincendio);
+    document.querySelectorAll('input[name="modalita_allarme_evac"]').forEach((el) => {
+      el.checked = el.value === modAl;
+    });
+    const v1 = DATA?.VOCE_EVAC_ATTIVAZIONE_ALLARME ?? ADAPTER?.voceEvacAttivazioneAllarme?.(WIZARD) ?? '';
+    const v2 = DATA?.VOCE_EVAC_ALLARME_FALLBACK_VERBALE ?? ADAPTER?.voceEvacAllarmeFallbackVerbale?.(WIZARD) ?? '';
+    const pAl = document.getElementById('pSnippetEvacAllarme');
+    if (pAl) {
+      const lines = [];
+      if (v1.trim()) lines.push('• ' + v1);
+      if (v2.trim()) lines.push('• ' + v2);
+      pAl.textContent = lines.length ? lines.join('\n') : '';
+    }
+  }
+
+  window.setEsitoInterventoComunicazioneA = function (val) {
+    WIZARD.esito_intervento_comunicazione_a = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione43(); sendUpdate(); }
+  };
+
+  window.setModalitaAllarmeEvacuazioneAntincendio = function (val) {
+    WIZARD.modalita_allarme_evacuazione_antincendio = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione43(); sendUpdate(); }
+  };
+
+  window.setDiffusioneEvacuazioneAntincendio = function (val) {
+    WIZARD.diffusione_evacuazione_antincendio = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione43(); sendUpdate(); }
+  };
+
+  window.setLivelloRischioIncendio = function (v) {
+    WIZARD.livello_rischio_incendio = v;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione43(); sendUpdate(); }
+  };
+
+  function renderSezione42() {
+    const cent = ADAPTER?.normalizeCentraleSegnalazioneIncendio?.(WIZARD.centrale_segnalazione_incendio);
+    const voce =
+      DATA?.VOCE_RESET_CENTRALE_ANTINCENDIO ?? ADAPTER?.voceResetCentraleAntincendio?.(WIZARD) ?? '';
+    const p = document.getElementById('pSnippetResetCentrale');
+    if (!p) return;
+    if (cent === null) {
+      p.textContent = 'Seleziona prima la centrale di segnalazione in §2.9.';
+    } else if (cent === false) {
+      p.textContent = 'Punto reset centrale omesso (§2.9: centrale assente).';
+    } else {
+      p.textContent = 'Nel Word: «' + voce + '»';
+    }
+  }
+
+  function ensureProtezioniListe() {
+    if (!Array.isArray(WIZARD.protezioni_attive)) WIZARD.protezioni_attive = [];
+    if (!WIZARD.protezioni_attive.length && ADAPTER?.DEFAULT_PROTEZIONI_ATTIVE) {
+      WIZARD.protezioni_attive = ADAPTER.DEFAULT_PROTEZIONI_ATTIVE.map((r) => ({ ...r }));
+    }
+    if (!Array.isArray(WIZARD.protezioni_passive)) WIZARD.protezioni_passive = [];
+    if (!WIZARD.protezioni_passive.length && ADAPTER?.DEFAULT_PROTEZIONI_PASSIVE) {
+      WIZARD.protezioni_passive = ADAPTER.DEFAULT_PROTEZIONI_PASSIVE.map((r) => ({ ...r }));
+    }
+  }
+
+  function renderListaProtezioni(wrapId, rows, onInputFn, onRemoveFn) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    let html =
+      '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
+      '<th>Voce elenco</th><th style="width:28px;"></th></tr></thead><tbody>';
+    if (!rows.length) {
+      html += '<tr><td colspan="2" class="hint-str">Nessuna voce.</td></tr>';
+    } else {
+      rows.forEach((row, idx) => {
+        html +=
+          '<tr><td><input type="text" value="' + esc(row.testo) + '" ' +
+          'oninput="' + onInputFn + '(' + idx + ',this.value)"></td>' +
+          '<td style="text-align:center;"><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" ' +
+          'onclick="' + onRemoveFn + '(' + idx + ')">✕</button></td></tr>';
+      });
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function renderSezione26() {
+    ensureProtezioniListe();
+    renderListaProtezioni('wrapProtezioniAttive', WIZARD.protezioni_attive, 'setProtezioneAttivaField', 'removeProtezioneAttiva');
+    renderListaProtezioni('wrapProtezioniPassive', WIZARD.protezioni_passive, 'setProtezionePassivaField', 'removeProtezionePassiva');
+  }
+
+  function applyProtezioniToData() {
+    if (!DATA || !ADAPTER) return;
+    DATA = ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  window.setProtezioneAttivaField = function (idx, val) {
+    ensureProtezioniListe();
+    if (!WIZARD.protezioni_attive[idx]) return;
+    WIZARD.protezioni_attive[idx].testo = val;
+    applyProtezioniToData();
+    sendUpdate();
+  };
+
+  window.removeProtezioneAttiva = function (idx) {
+    ensureProtezioniListe();
+    WIZARD.protezioni_attive.splice(idx, 1);
+    applyProtezioniToData();
+    renderSezione26();
+    sendUpdate();
+  };
+
+  window.addProtezioneAttiva = function () {
+    ensureProtezioniListe();
+    WIZARD.protezioni_attive.push({ id: 'custom_' + Date.now(), testo: '' });
+    applyProtezioniToData();
+    renderSezione26();
+    sendUpdate();
+  };
+
+  window.resetProtezioniAttiveDefault = function () {
+    if (!ADAPTER?.DEFAULT_PROTEZIONI_ATTIVE) return;
+    WIZARD.protezioni_attive = ADAPTER.DEFAULT_PROTEZIONI_ATTIVE.map((r) => ({ ...r }));
+    applyProtezioniToData();
+    renderSezione26();
+    sendUpdate();
+  };
+
+  window.setProtezionePassivaField = function (idx, val) {
+    ensureProtezioniListe();
+    if (!WIZARD.protezioni_passive[idx]) return;
+    WIZARD.protezioni_passive[idx].testo = val;
+    applyProtezioniToData();
+    sendUpdate();
+  };
+
+  window.removeProtezionePassiva = function (idx) {
+    ensureProtezioniListe();
+    WIZARD.protezioni_passive.splice(idx, 1);
+    applyProtezioniToData();
+    renderSezione26();
+    sendUpdate();
+  };
+
+  window.addProtezionePassiva = function () {
+    ensureProtezioniListe();
+    WIZARD.protezioni_passive.push({ id: 'custom_' + Date.now(), testo: '' });
+    applyProtezioniToData();
+    renderSezione26();
+    sendUpdate();
+  };
+
+  window.resetProtezioniPassiveDefault = function () {
+    if (!ADAPTER?.DEFAULT_PROTEZIONI_PASSIVE) return;
+    WIZARD.protezioni_passive = ADAPTER.DEFAULT_PROTEZIONI_PASSIVE.map((r) => ({ ...r }));
+    applyProtezioniToData();
+    renderSezione26();
+    sendUpdate();
+  };
+
+  function ensureRigheRischiParticolari() {
+    if (!Array.isArray(WIZARD.righe_rischi_particolari)) WIZARD.righe_rischi_particolari = [];
+    if (!WIZARD.righe_rischi_particolari.length && ADAPTER?.DEFAULT_RIGHE_RISCHI_PARTICOLARI) {
+      WIZARD.righe_rischi_particolari = ADAPTER.DEFAULT_RIGHE_RISCHI_PARTICOLARI.map((r) => ({ ...r }));
+    }
+  }
+
+  function renderTabellaRischiParticolari() {
+    ensureRigheRischiParticolari();
+    const wrap = document.getElementById('wrapRigheRischiParticolari');
+    if (!wrap) return;
+    const rows = WIZARD.righe_rischi_particolari;
+    let html =
+      '<table class="rischi-table"><thead><tr>' +
+      '<th class="col-sel">✓</th>' +
+      '<th>Lavoratori / situazioni</th>' +
+      '<th>Misure di prevenzione e protezione</th>' +
+      '<th style="width:28px;"></th></tr></thead><tbody>';
+    if (!rows.length) {
+      html += '<tr><td colspan="4" class="hint-str">Nessuna riga.</td></tr>';
+    } else {
+      rows.forEach((row, idx) => {
+        const on = row.selezionato !== false;
+        html +=
+          '<tr class="' + (on ? '' : 'riga-off') + '">' +
+          '<td class="col-sel"><input type="checkbox" ' + (on ? 'checked' : '') +
+          ' onchange="toggleRigaRischi(' + idx + ',this.checked)"></td>' +
+          '<td><textarea oninput="setRigaRischiField(' + idx + ',\'situazione\',this.value)">' +
+          esc(row.situazione) + '</textarea></td>' +
+          '<td><textarea oninput="setRigaRischiField(' + idx + ',\'misure\',this.value)">' +
+          esc(row.misure) + '</textarea></td>' +
+          '<td style="text-align:center;"><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" ' +
+          'onclick="removeRigaRischi(' + idx + ')">✕</button></td></tr>';
+      });
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function renderSezione23() {
+    const mod = ADAPTER?.normalizeRischiParticolariModalita?.(WIZARD.rischi_particolari_modalita);
+    document.querySelectorAll('input[name="rischi_particolari"]').forEach((el) => {
+      el.checked = el.value === mod;
+    });
+    const wrapN = document.getElementById('wrapRischiNessuno');
+    const wrapT = document.getElementById('wrapRischiTabella');
+    if (wrapN) wrapN.classList.toggle('hidden', mod !== 'nessuno');
+    if (wrapT) wrapT.classList.toggle('hidden', mod !== 'tabella');
+    const taN = document.getElementById('taRischiNessuno');
+    if (taN && document.activeElement !== taN) {
+      taN.value = WIZARD.paragrafo_rischi_nessuno != null
+        ? WIZARD.paragrafo_rischi_nessuno
+        : (ADAPTER?.testoRischiNessuno?.(WIZARD) || ADAPTER?.TESTO_RISCHI_NESSUNO_DEFAULT || '');
+    }
+    const taI = document.getElementById('taRischiIntro');
+    if (taI && document.activeElement !== taI) {
+      taI.value = WIZARD.paragrafo_rischi_intro != null
+        ? WIZARD.paragrafo_rischi_intro
+        : (ADAPTER?.testoRischiIntro?.(WIZARD) || ADAPTER?.TESTO_RISCHI_INTRO_DEFAULT || '');
+    }
+    if (mod === 'tabella') renderTabellaRischiParticolari();
+  }
+
+  window.setRischiParticolariModalita = function (val) {
+    WIZARD.rischi_particolari_modalita = val;
+    ensureRigheRischiParticolari();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setParagrafoRischiNessuno = function (val) {
+    WIZARD.paragrafo_rischi_nessuno = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.setParagrafoRischiIntro = function (val) {
+    WIZARD.paragrafo_rischi_intro = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.toggleRigaRischi = function (idx, checked) {
+    ensureRigheRischiParticolari();
+    if (!WIZARD.righe_rischi_particolari[idx]) return;
+    WIZARD.righe_rischi_particolari[idx].selezionato = !!checked;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderTabellaRischiParticolari(); sendUpdate(); }
+  };
+
+  window.setRigaRischiField = function (idx, key, value) {
+    ensureRigheRischiParticolari();
+    if (!WIZARD.righe_rischi_particolari[idx]) return;
+    WIZARD.righe_rischi_particolari[idx][key] = value;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.addRigaRischiParticolari = function () {
+    ensureRigheRischiParticolari();
+    WIZARD.righe_rischi_particolari.push({
+      id: 'custom_' + Date.now(),
+      selezionato: true,
+      situazione: '',
+      misure: '',
+    });
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderTabellaRischiParticolari(); sendUpdate(); }
+  };
+
+  window.removeRigaRischi = function (idx) {
+    ensureRigheRischiParticolari();
+    WIZARD.righe_rischi_particolari.splice(idx, 1);
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.resetRigheRischiDefault = function () {
+    if (!ADAPTER?.DEFAULT_RIGHE_RISCHI_PARTICOLARI) return;
+    WIZARD.righe_rischi_particolari = ADAPTER.DEFAULT_RIGHE_RISCHI_PARTICOLARI.map((r) => ({ ...r }));
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  function renderSezione24() {
+    const mod = ADAPTER?.normalizeRischiIncendioAltoModalita?.(WIZARD.rischi_incendio_alto_modalita);
+    document.querySelectorAll('input[name="rischi_incendio_alto"]').forEach((el) => {
+      el.checked = el.value === mod;
+    });
+    const wrapN = document.getElementById('wrapRischiIncendioNessuno');
+    const wrapP = document.getElementById('wrapRischiIncendioPresenti');
+    if (wrapN) wrapN.classList.toggle('hidden', mod !== 'nessuno');
+    if (wrapP) wrapP.classList.toggle('hidden', mod !== 'presenti');
+    const taN = document.getElementById('taRischiIncendioNessuno');
+    if (taN && document.activeElement !== taN) {
+      taN.value = WIZARD.paragrafo_rischi_incendio_nessuno != null
+        ? WIZARD.paragrafo_rischi_incendio_nessuno
+        : (ADAPTER?.testoRischiIncendioNessuno?.(WIZARD) || ADAPTER?.TESTO_RISCHI_INCENDIO_NESSUNO_DEFAULT || '');
+    }
+    const taP = document.getElementById('taBloccoRischiIncendioAlto');
+    if (taP && document.activeElement !== taP) {
+      taP.value = WIZARD.testo_blocco_rischi_incendio_alto != null
+        ? WIZARD.testo_blocco_rischi_incendio_alto
+        : (ADAPTER?.joinBloccoParagrafi?.(ADAPTER.getRischiIncendioAltoParagrafi(WIZARD))
+          || ADAPTER?.testoBloccoRischiIncendioAltoDefault?.() || '');
+    }
+  }
+
+  window.setRischiIncendioAltoModalita = function (val) {
+    WIZARD.rischi_incendio_alto_modalita = val;
+    if (WIZARD.testo_blocco_rischi_incendio_alto == null && val === 'presenti') {
+      WIZARD.testo_blocco_rischi_incendio_alto = ADAPTER?.testoBloccoRischiIncendioAltoDefault?.() || '';
+    }
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setParagrafoRischiIncendioNessuno = function (val) {
+    WIZARD.paragrafo_rischi_incendio_nessuno = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.setBloccoRischiIncendioAlto = function (val) {
+    WIZARD.testo_blocco_rischi_incendio_alto = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  function ensureMisureEsigenze() {
+    if (!Array.isArray(WIZARD.misure_esigenze_speciali)) WIZARD.misure_esigenze_speciali = [];
+    if (!WIZARD.misure_esigenze_speciali.length && ADAPTER?.DEFAULT_MISURE_ESIGENZE_SPECIALI) {
+      WIZARD.misure_esigenze_speciali = ADAPTER.DEFAULT_MISURE_ESIGENZE_SPECIALI.map((r) => ({ ...r }));
+    }
+  }
+
+  function renderTabellaMisureEsigenze() {
+    ensureMisureEsigenze();
+    const wrap = document.getElementById('wrapMisureEsigenze');
+    if (!wrap) return;
+    const rows = WIZARD.misure_esigenze_speciali;
+    let html =
+      '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
+      '<th class="col-sel">✓</th><th>Voce elenco</th><th style="width:28px;"></th></tr></thead><tbody>';
+    rows.forEach((row, idx) => {
+      const on = row.selezionato !== false;
+      html +=
+        '<tr class="' + (on ? '' : 'riga-off') + '">' +
+        '<td class="col-sel"><input type="checkbox" ' + (on ? 'checked' : '') +
+        ' onchange="toggleMisuraEsigenze(' + idx + ',this.checked)"></td>' +
+        '<td><input type="text" value="' + esc(row.testo) + '" ' +
+        'oninput="setMisuraEsigenzeField(' + idx + ',this.value)"></td>' +
+        '<td style="text-align:center;"><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" ' +
+        'onclick="removeMisuraEsigenze(' + idx + ')">✕</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function renderSezione25() {
+    const mod = ADAPTER?.normalizeEsigenzeSpecialiModalita?.(WIZARD.esigenze_speciali_modalita);
+    document.querySelectorAll('input[name="esigenze_speciali"]').forEach((el) => {
+      el.checked = el.value === mod;
+    });
+    const wrapN = document.getElementById('wrapEsigenzeNessuna');
+    const wrapP = document.getElementById('wrapEsigenzePresenti');
+    const wrapC = document.getElementById('wrapEsigenzeChiusura');
+    if (wrapN) wrapN.classList.toggle('hidden', mod !== 'nessuna');
+    if (wrapP) wrapP.classList.toggle('hidden', mod !== 'presenti');
+    if (wrapC) wrapC.classList.toggle('hidden', mod === null);
+    const chkPub = document.getElementById('chkLuogoPubblico');
+    if (chkPub) chkPub.checked = ADAPTER?.luogoApertoPubblicoSi?.(WIZARD.luogo_aperto_pubblico);
+    const taN = document.getElementById('taEsigenzeNessuna');
+    if (taN && document.activeElement !== taN) {
+      taN.value = WIZARD.paragrafo_esigenze_nessuna != null
+        ? WIZARD.paragrafo_esigenze_nessuna
+        : (ADAPTER?.testoEsigenzeNessuna?.(WIZARD) || '');
+    }
+    const taI = document.getElementById('taEsigenzeIntro');
+    if (taI && document.activeElement !== taI) {
+      if (WIZARD.paragrafo_esigenze_intro != null) {
+        taI.value = WIZARD.paragrafo_esigenze_intro;
+      } else {
+        taI.value = ADAPTER?.testoEsigenzeIntro?.(WIZARD) || '';
+      }
+    }
+    const taC = document.getElementById('taEsigenzeChiusura');
+    if (taC && document.activeElement !== taC) {
+      taC.value = mod
+        ? (WIZARD.paragrafo_esigenze_chiusura != null
+          ? WIZARD.paragrafo_esigenze_chiusura
+          : (ADAPTER?.testoEsigenzeChiusura?.(WIZARD) || ''))
+        : '';
+    }
+    if (mod === 'presenti') renderTabellaMisureEsigenze();
+  }
+
+  window.setEsigenzeSpecialiModalita = function (val) {
+    WIZARD.esigenze_speciali_modalita = val;
+    ensureMisureEsigenze();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setLuogoApertoPubblico = function (checked) {
+    WIZARD.luogo_aperto_pubblico = !!checked;
+    WIZARD.paragrafo_esigenze_intro = null;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderSezione25(); sendUpdate(); }
+  };
+
+  window.setParagrafoEsigenzeNessuna = function (val) {
+    WIZARD.paragrafo_esigenze_nessuna = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.setParagrafoEsigenzeIntro = function (val) {
+    WIZARD.paragrafo_esigenze_intro = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.setParagrafoEsigenzeChiusura = function (val) {
+    WIZARD.paragrafo_esigenze_chiusura = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.toggleMisuraEsigenze = function (idx, checked) {
+    ensureMisureEsigenze();
+    if (!WIZARD.misure_esigenze_speciali[idx]) return;
+    WIZARD.misure_esigenze_speciali[idx].selezionato = !!checked;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderTabellaMisureEsigenze(); sendUpdate(); }
+  };
+
+  window.setMisuraEsigenzeField = function (idx, val) {
+    ensureMisureEsigenze();
+    if (!WIZARD.misure_esigenze_speciali[idx]) return;
+    WIZARD.misure_esigenze_speciali[idx].testo = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.addMisuraEsigenze = function () {
+    ensureMisureEsigenze();
+    WIZARD.misure_esigenze_speciali.push({ id: 'custom_' + Date.now(), selezionato: true, testo: '' });
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderTabellaMisureEsigenze(); sendUpdate(); }
+  };
+
+  window.removeMisuraEsigenze = function (idx) {
+    ensureMisureEsigenze();
+    WIZARD.misure_esigenze_speciali.splice(idx, 1);
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.resetMisureEsigenzeDefault = function () {
+    if (!ADAPTER?.DEFAULT_MISURE_ESIGENZE_SPECIALI) return;
+    WIZARD.misure_esigenze_speciali = ADAPTER.DEFAULT_MISURE_ESIGENZE_SPECIALI.map((r) => ({ ...r }));
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  function renderTabellaPianoLuoghi() {
+    ensureRighePianoLuoghi();
+    const wrap = document.getElementById('wrapRighePianoLuoghi');
+    if (!wrap) return;
+    const rows = WIZARD.righe_piano_luoghi;
+    let html =
+      '<table class="luoghi-table"><thead><tr>' +
+      '<th style="width:18%;">Edificio</th>' +
+      '<th>Attività individuata</th>' +
+      '<th style="width:14%;">N. persone</th>' +
+      '<th class="col-remove"></th></tr></thead><tbody>';
+    if (!rows.length) {
+      html += '<tr><td colspan="4" class="hint-str">Nessuna riga — aggiungi una riga.</td></tr>';
+    } else {
+      rows.forEach((row, idx) => {
+        html +=
+          '<tr>' +
+          '<td><input type="text" value="' + esc(row.edificio) + '" placeholder="es. Terra" ' +
+          'oninput="setRigaPianoLuoghiField(' + idx + ',\'edificio\',this.value)"></td>' +
+          '<td><textarea placeholder="Uffici&#10;Servizi igienici…" ' +
+          'oninput="setRigaPianoLuoghiField(' + idx + ',\'attivita\',this.value)">' +
+          esc(row.attivita) + '</textarea></td>' +
+          '<td><input type="text" value="' + esc(row.numero_persone) + '" placeholder="x" ' +
+          'oninput="setRigaPianoLuoghiField(' + idx + ',\'numero_persone\',this.value)"></td>' +
+          '<td class="col-remove"><button type="button" class="secondary" style="font-size:9pt;padding:2px 6px;" ' +
+          'onclick="removeRigaPianoLuoghi(' + idx + ')" title="Rimuovi riga">✕</button></td>' +
+          '</tr>';
+      });
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function applyRigheToData() {
+    if (!DATA || !ADAPTER) return;
+    DATA = ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  window.setRigaPianoLuoghiField = function (idx, key, value) {
+    ensureRighePianoLuoghi();
+    if (!WIZARD.righe_piano_luoghi[idx]) return;
+    WIZARD.righe_piano_luoghi[idx][key] = value;
+    applyRigheToData();
+    sendUpdate();
+  };
+
+  window.addRigaPianoLuoghi = function () {
+    ensureRighePianoLuoghi();
+    WIZARD.righe_piano_luoghi.push({ edificio: '', attivita: '', numero_persone: 'x' });
+    applyRigheToData();
+    renderTabellaPianoLuoghi();
+    sendUpdate();
+  };
+
+  window.removeRigaPianoLuoghi = function (idx) {
+    ensureRighePianoLuoghi();
+    WIZARD.righe_piano_luoghi.splice(idx, 1);
+    applyRigheToData();
+    renderFields();
+    sendUpdate();
+  };
+
+  window.resetRighePianoLuoghiDefault = function () {
+    if (!ADAPTER?.DEFAULT_RIGHE_PIANO_LUOGHI) return;
+    WIZARD.righe_piano_luoghi = ADAPTER.DEFAULT_RIGHE_PIANO_LUOGHI.map((r) => ({ ...r }));
+    applyRigheToData();
+    renderFields();
+    sendUpdate();
+  };
+
+  function renderSezione22() {
+    const scelta = ADAPTER?.normalizeRilevazioneAllarme?.(WIZARD.rilevazione_allarme);
+    document.querySelectorAll('input[name="rilevazione_allarme"]').forEach((el) => {
+      el.checked = el.value === scelta;
+    });
+    const wrapSenza = document.getElementById('wrapBloccoAllarmeSenza');
+    const wrapCon = document.getElementById('wrapBloccoAllarmeCon');
+    if (wrapSenza) wrapSenza.classList.toggle('hidden', scelta !== 'senza');
+    if (wrapCon) wrapCon.classList.toggle('hidden', scelta !== 'con');
+    const taSenza = document.getElementById('taBloccoAllarmeSenza');
+    const taCon = document.getElementById('taBloccoAllarmeCon');
+    if (taSenza && document.activeElement !== taSenza) {
+      taSenza.value = WIZARD.testo_blocco_allarme_senza != null
+        ? WIZARD.testo_blocco_allarme_senza
+        : (ADAPTER?.joinBloccoParagrafi?.(ADAPTER.getAllarmeSenzaParagrafi(WIZARD))
+          || ADAPTER?.testoBloccoAllarmeSenzaDefault?.() || '');
+    }
+    if (taCon && document.activeElement !== taCon) {
+      taCon.value = WIZARD.testo_blocco_allarme_con != null
+        ? WIZARD.testo_blocco_allarme_con
+        : (ADAPTER?.joinBloccoParagrafi?.(ADAPTER.getAllarmeConParagrafi(WIZARD))
+          || ADAPTER?.testoBloccoAllarmeConDefault?.() || '');
+    }
+  }
+
+  window.setRilevazioneAllarme = function (val) {
+    WIZARD.rilevazione_allarme = val;
+    if (WIZARD.testo_blocco_allarme_senza == null) {
+      WIZARD.testo_blocco_allarme_senza = ADAPTER?.testoBloccoAllarmeSenzaDefault?.() || '';
+    }
+    if (WIZARD.testo_blocco_allarme_con == null) {
+      WIZARD.testo_blocco_allarme_con = ADAPTER?.testoBloccoAllarmeConDefault?.() || '';
+    }
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setBloccoAllarmeSenza = function (val) {
+    WIZARD.testo_blocco_allarme_senza = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.setBloccoAllarmeCon = function (val) {
+    WIZARD.testo_blocco_allarme_con = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  function renderAffollamento() {
+    const basso = ADAPTER?.rischioIncendioBasso?.(WIZARD);
+    // radio rischio
+    document.querySelectorAll('input[name="rischio_incendio_basso"]').forEach((el) => {
+      el.checked = el.value === String(WIZARD.rischio_incendio_basso);
+    });
+    // blocco modalità (visibile solo se basso === false)
+    const wrapMod = document.getElementById('wrapModalitaAffollamento');
+    if (wrapMod) wrapMod.classList.toggle('hidden', basso !== false);
+    // radio modalità
+    const modalita = WIZARD.affollamento_modalita || 'densita';
+    document.querySelectorAll('input[name="affoll_modalita"]').forEach((el) => {
+      el.checked = el.value === modalita;
+    });
+    const wrapDens = document.getElementById('wrapDensita');
+    const wrapCont = document.getElementById('wrapConteggio');
+    if (wrapDens) wrapDens.classList.toggle('hidden', !(basso === false && modalita === 'densita'));
+    if (wrapCont) wrapCont.classList.toggle('hidden', !(basso === false && modalita === 'conteggio'));
+    // input densità/conteggio
+    const inpDens = document.getElementById('inpDensitaAffollamento');
+    if (inpDens && document.activeElement !== inpDens) {
+      inpDens.value = WIZARD.densita_affollamento || '0,4';
+    }
+    const inpNum = document.getElementById('inpNumeroAffollamento');
+    if (inpNum && document.activeElement !== inpNum) {
+      inpNum.value = WIZARD.numero_affollamento || '30';
+    }
+    // textareas P1/P2
+    const wrapTesti = document.getElementById('wrapTestiAffollamento');
+    if (wrapTesti) wrapTesti.classList.toggle('hidden', basso === null);
+    if (basso !== null) {
+      const ta1 = document.getElementById('taAffollamento1');
+      const ta2 = document.getElementById('taAffollamento2');
+      if (ta1 && document.activeElement !== ta1) {
+        ta1.value = DATA?.PARAGRAFO_AFFOLLAMENTO_1 ?? ADAPTER?.buildParafoAffollamento1?.(WIZARD) ?? '';
+      }
+      if (ta2 && document.activeElement !== ta2) {
+        ta2.value = DATA?.PARAGRAFO_AFFOLLAMENTO_2 ?? ADAPTER?.buildParafoAffollamento2?.(WIZARD) ?? '';
+      }
+    }
+  }
+
+  function clearAffollamentoOverrides() {
+    WIZARD.paragrafo_affollamento_1 = null;
+    WIZARD.paragrafo_affollamento_2 = null;
+  }
+
+  window.setRischioIncendioBasso = function (val) {
+    WIZARD.rischio_incendio_basso = val === 'true' ? true : val === 'false' ? false : null;
+    clearAffollamentoOverrides();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setAffollamentoModalita = function (val) {
+    WIZARD.affollamento_modalita = val;
+    clearAffollamentoOverrides();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setDensitaFromSelect = function (val) {
+    if (!val) return;
+    WIZARD.densita_affollamento = val;
+    const inpDens = document.getElementById('inpDensitaAffollamento');
+    if (inpDens) inpDens.value = val;
+    clearAffollamentoOverrides();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderAffollamento(); sendUpdate(); }
+  };
+
+  window.setDensitaManuale = function (val) {
+    WIZARD.densita_affollamento = val;
+    clearAffollamentoOverrides();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderAffollamento(); sendUpdate(); }
+  };
+
+  window.setNumeroAffollamento = function (val) {
+    WIZARD.numero_affollamento = val;
+    clearAffollamentoOverrides();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderAffollamento(); sendUpdate(); }
+  };
+
+  window.setParafoAffollamento1Override = function (val) {
+    WIZARD.paragrafo_affollamento_1 = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  window.setParafoAffollamento2Override = function (val) {
+    WIZARD.paragrafo_affollamento_2 = val;
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); sendUpdate(); }
+  };
+
+  function renderSezione21() {
+    const val = DATA?.IMMOBILE_ADIBITO_A ?? ADAPTER?.immobileAdibitoA?.(WIZARD) ?? 'ad ufficio';
+    const inp = document.getElementById('inpImmobileAdibito');
+    if (inp && document.activeElement !== inp) {
+      const wiz = String(WIZARD.immobile_adibito_a || '').trim();
+      inp.value = wiz || val;
+    }
+    const p = document.getElementById('pSnippetImmobileAdibito');
+    if (p) {
+      p.textContent =
+        'Nel Word: «Gli ambienti di lavoro sono all\'interno di un immobile adibito ' + val + '.»';
+    }
+  }
+
+  function renderSezione12() {
+    const dest = ADAPTER?.normalizeSegnalazioneDestinatario?.(WIZARD.segnalazione_destinatario) || 'nessuno';
+    document.querySelectorAll('input[name="segnalazione_dest"]').forEach((el) => {
+      el.checked = el.value === dest;
+    });
+    const ruolo = DATA?.TESTO_RUOLO_SEGNALAZIONE ?? ADAPTER?.testoRuoloSegnalazione?.(WIZARD) ?? '';
+    const pRuolo = document.getElementById('pSnippetRuoloSegnalazione');
+    if (pRuolo) {
+      pRuolo.textContent = ruolo
+        ? 'Nel Word: «… dato al ' + ruolo + ' da chiunque …»'
+        : 'Nel Word: il campo destinatario resta vuoto («… dato al  da chiunque …» — verificare formulazione nel modello).';
+    }
+    const chkAl = document.getElementById('chkAllarmeGenerale');
+    const siAl = ADAPTER?.allarmeGeneraleSi?.(WIZARD.allarme_generale);
+    if (chkAl) chkAl.checked = !!siAl;
+    const testoOr = DATA?.TESTO_ALLARME_GENERALE_OR ?? ADAPTER?.testoAllarmeGeneraleOr?.(WIZARD) ?? '';
+    const pAl = document.getElementById('pSnippetAllarmeOr');
+    if (pAl) {
+      pAl.textContent = siAl
+        ? 'Nel Word: «… attraverso ' + testoOr + 'tramite comunicazione verbale …»'
+        : 'Nel Word: «… attraverso tramite comunicazione verbale …» (senza allarme generale)';
+    }
+  }
+
+  function renderPianoCoordinato() {
+    const chk = document.getElementById('chkPianoCoordinato');
+    const wrap = document.getElementById('wrapCoordPreview');
+    const si = ADAPTER?.pianoEmergenzaCoordinatoSi?.(WIZARD.piano_emergenza_coordinato);
+    if (chk) chk.checked = !!si;
+    if (wrap) wrap.classList.toggle('hidden', !si);
+    const p1 = document.getElementById('pCoordInoltre');
+    const p2 = document.getElementById('pCoordRimando');
+    if (p1) p1.textContent = si ? (ADAPTER?.PARAGRAFO_PREMESSA_COORD_INOLTRE || DATA?.PARAGRAFO_PREMESSA_COORD_INOLTRE || '') : '';
+    if (p2) p2.textContent = si ? (ADAPTER?.PARAGRAFO_PREMESSA_COORD_RIMANDO || DATA?.PARAGRAFO_PREMESSA_COORD_RIMANDO || '') : '';
+  }
+
+  window.setPianoCoordinato = function (checked) {
+    WIZARD.piano_emergenza_coordinato = !!checked;
+    if (DATA) {
+      DATA = ADAPTER.applyWizard(DATA, WIZARD);
+      renderFields();
+      sendUpdate();
+    }
+  };
+
+  window.setSegnalazioneDestinatario = function (value) {
+    WIZARD.segnalazione_destinatario = value;
+    if (DATA) {
+      DATA = ADAPTER.applyWizard(DATA, WIZARD);
+      renderFields();
+      sendUpdate();
+    }
+  };
+
+  window.setAllarmeGenerale = function (checked) {
+    WIZARD.allarme_generale = !!checked;
+    if (DATA) {
+      DATA = ADAPTER.applyWizard(DATA, WIZARD);
+      renderFields();
+      sendUpdate();
+    }
+  };
+
+  window.setImmobileAdibito = function (v) {
+    WIZARD.immobile_adibito_a = v;
+    if (DATA) {
+      DATA = ADAPTER.applyWizard(DATA, WIZARD);
+      renderFields();
+      sendUpdate();
+    }
+  };
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    if (DATA) {
+      DATA = ADAPTER.applyWizard(DATA, WIZARD);
+      renderFields();
+      sendUpdate();
+    }
+  };
+
+  function sendUpdate() {
+    if (!DATA) return;
+    parent.postMessage({ type: 'GEN_PREVIEW_UPDATE', codice: 'MOD_EMERGENZE', wizard: { ...WIZARD } }, '*');
+  }
+
+  function requestPreviewDocx() {
+    parent.postMessage({ type: 'GEN_PREVIEW_DOCX', codice: 'MOD_EMERGENZE', wizard: { ...WIZARD } }, '*');
+  }
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_EMERGENZE — Compila' : 'MOD_EMERGENZE — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  window.addEventListener('message', function (ev) {
+    const msg = ev.data || {};
+    if (msg.type === 'GEN_PREVIEW_INIT') {
+      DATA = ADAPTER.applyWizard(msg.data || {}, msg.wizard || {});
+      if (msg.wizard?.modulo_numero != null) WIZARD.modulo_numero = msg.wizard.modulo_numero;
+      if (msg.wizard?.piano_emergenza_coordinato != null) {
+        WIZARD.piano_emergenza_coordinato = msg.wizard.piano_emergenza_coordinato;
+      }
+      if (msg.wizard?.segnalazione_destinatario != null) {
+        WIZARD.segnalazione_destinatario = msg.wizard.segnalazione_destinatario;
+      }
+      if (msg.wizard?.allarme_generale != null) {
+        WIZARD.allarme_generale = msg.wizard.allarme_generale;
+      }
+      if (msg.wizard?.immobile_adibito_a != null) {
+        WIZARD.immobile_adibito_a = msg.wizard.immobile_adibito_a;
+      }
+      if (Array.isArray(msg.wizard?.righe_piano_luoghi) && msg.wizard.righe_piano_luoghi.length) {
+        WIZARD.righe_piano_luoghi = msg.wizard.righe_piano_luoghi.map((r) => ({ ...r }));
+      } else {
+        ensureRighePianoLuoghi();
+      }
+      if (msg.wizard?.rischio_incendio_basso !== undefined) {
+        WIZARD.rischio_incendio_basso = msg.wizard.rischio_incendio_basso;
+      }
+      if (msg.wizard?.affollamento_modalita != null) WIZARD.affollamento_modalita = msg.wizard.affollamento_modalita;
+      if (msg.wizard?.densita_affollamento != null) WIZARD.densita_affollamento = msg.wizard.densita_affollamento;
+      if (msg.wizard?.numero_affollamento != null) WIZARD.numero_affollamento = msg.wizard.numero_affollamento;
+      if (msg.wizard?.paragrafo_affollamento_1 !== undefined) WIZARD.paragrafo_affollamento_1 = msg.wizard.paragrafo_affollamento_1;
+      if (msg.wizard?.paragrafo_affollamento_2 !== undefined) WIZARD.paragrafo_affollamento_2 = msg.wizard.paragrafo_affollamento_2;
+      if (msg.wizard?.rilevazione_allarme != null) WIZARD.rilevazione_allarme = msg.wizard.rilevazione_allarme;
+      if (msg.wizard?.testo_blocco_allarme_senza != null) WIZARD.testo_blocco_allarme_senza = msg.wizard.testo_blocco_allarme_senza;
+      if (msg.wizard?.testo_blocco_allarme_con != null) WIZARD.testo_blocco_allarme_con = msg.wizard.testo_blocco_allarme_con;
+      if (msg.wizard?.rischi_particolari_modalita != null) {
+        WIZARD.rischi_particolari_modalita = msg.wizard.rischi_particolari_modalita;
+      }
+      if (msg.wizard?.paragrafo_rischi_nessuno != null) WIZARD.paragrafo_rischi_nessuno = msg.wizard.paragrafo_rischi_nessuno;
+      if (msg.wizard?.paragrafo_rischi_intro != null) WIZARD.paragrafo_rischi_intro = msg.wizard.paragrafo_rischi_intro;
+      if (Array.isArray(msg.wizard?.righe_rischi_particolari) && msg.wizard.righe_rischi_particolari.length) {
+        WIZARD.righe_rischi_particolari = msg.wizard.righe_rischi_particolari.map((r) => ({ ...r }));
+      } else {
+        ensureRigheRischiParticolari();
+      }
+      if (msg.wizard?.rischi_incendio_alto_modalita != null) {
+        WIZARD.rischi_incendio_alto_modalita = msg.wizard.rischi_incendio_alto_modalita;
+      }
+      if (msg.wizard?.paragrafo_rischi_incendio_nessuno != null) {
+        WIZARD.paragrafo_rischi_incendio_nessuno = msg.wizard.paragrafo_rischi_incendio_nessuno;
+      }
+      if (msg.wizard?.testo_blocco_rischi_incendio_alto != null) {
+        WIZARD.testo_blocco_rischi_incendio_alto = msg.wizard.testo_blocco_rischi_incendio_alto;
+      }
+      if (msg.wizard?.esigenze_speciali_modalita != null) {
+        WIZARD.esigenze_speciali_modalita = msg.wizard.esigenze_speciali_modalita;
+      }
+      if (msg.wizard?.luogo_aperto_pubblico != null) WIZARD.luogo_aperto_pubblico = msg.wizard.luogo_aperto_pubblico;
+      if (msg.wizard?.paragrafo_esigenze_nessuna != null) WIZARD.paragrafo_esigenze_nessuna = msg.wizard.paragrafo_esigenze_nessuna;
+      if (msg.wizard?.paragrafo_esigenze_intro != null) WIZARD.paragrafo_esigenze_intro = msg.wizard.paragrafo_esigenze_intro;
+      if (msg.wizard?.paragrafo_esigenze_chiusura != null) WIZARD.paragrafo_esigenze_chiusura = msg.wizard.paragrafo_esigenze_chiusura;
+      if (Array.isArray(msg.wizard?.misure_esigenze_speciali) && msg.wizard.misure_esigenze_speciali.length) {
+        WIZARD.misure_esigenze_speciali = msg.wizard.misure_esigenze_speciali.map((r) => ({ ...r }));
+      } else {
+        ensureMisureEsigenze();
+      }
+      if (Array.isArray(msg.wizard?.protezioni_attive) && msg.wizard.protezioni_attive.length) {
+        WIZARD.protezioni_attive = msg.wizard.protezioni_attive.map((r) => ({ ...r }));
+      } else {
+        ensureProtezioniListe();
+      }
+      if (Array.isArray(msg.wizard?.protezioni_passive) && msg.wizard.protezioni_passive.length) {
+        WIZARD.protezioni_passive = msg.wizard.protezioni_passive.map((r) => ({ ...r }));
+      } else {
+        ensureProtezioniListe();
+      }
+      if (msg.wizard?.luogo_centro_coordinamento != null) {
+        WIZARD.luogo_centro_coordinamento = msg.wizard.luogo_centro_coordinamento;
+      }
+      if (msg.wizard?.luogo_posto_chiamata != null) {
+        WIZARD.luogo_posto_chiamata = msg.wizard.luogo_posto_chiamata;
+      }
+      if (msg.wizard?.luogo_punto_raccolta != null) {
+        WIZARD.luogo_punto_raccolta = msg.wizard.luogo_punto_raccolta;
+      }
+      ensureAreeOperative();
+      if (msg.wizard?.segnalazione_incendio_impianto_rivelazione != null) {
+        WIZARD.segnalazione_incendio_impianto_rivelazione = msg.wizard.segnalazione_incendio_impianto_rivelazione;
+      }
+      if (msg.wizard?.segnalazione_incendio_posto_chiamata_esterno != null) {
+        WIZARD.segnalazione_incendio_posto_chiamata_esterno = msg.wizard.segnalazione_incendio_posto_chiamata_esterno;
+      }
+      if (msg.wizard?.centrale_segnalazione_incendio != null) {
+        WIZARD.centrale_segnalazione_incendio = msg.wizard.centrale_segnalazione_incendio;
+      }
+      if (msg.wizard?.impianto_gas_distribuzione_presente != null) {
+        WIZARD.impianto_gas_distribuzione_presente = msg.wizard.impianto_gas_distribuzione_presente;
+      }
+      if (msg.wizard?.comportamenti_vietato_ascensori != null) {
+        WIZARD.comportamenti_vietato_ascensori = msg.wizard.comportamenti_vietato_ascensori;
+      }
+      if (msg.wizard?.comportamenti_porte_rei != null) {
+        WIZARD.comportamenti_porte_rei = msg.wizard.comportamenti_porte_rei;
+      }
+      if (msg.wizard?.diffusione_evacuazione_antincendio != null) {
+        WIZARD.diffusione_evacuazione_antincendio = msg.wizard.diffusione_evacuazione_antincendio;
+      }
+      if (msg.wizard?.livello_rischio_incendio != null) {
+        WIZARD.livello_rischio_incendio = msg.wizard.livello_rischio_incendio;
+      }
+      if (!String(WIZARD.livello_rischio_incendio || '').trim() && ADAPTER?.DEFAULT_LIVELLO_RISCHIO_INCENDIO) {
+        WIZARD.livello_rischio_incendio = ADAPTER.DEFAULT_LIVELLO_RISCHIO_INCENDIO;
+      }
+      if (msg.wizard?.livello_addestramento_emergenze != null) {
+        WIZARD.livello_addestramento_emergenze = msg.wizard.livello_addestramento_emergenze;
+      }
+      if (
+        !String(WIZARD.livello_addestramento_emergenze || '').trim()
+        && ADAPTER?.DEFAULT_LIVELLO_ADDESTRAMENTO_EMERGENZE
+      ) {
+        WIZARD.livello_addestramento_emergenze = ADAPTER.DEFAULT_LIVELLO_ADDESTRAMENTO_EMERGENZE;
+      }
+      if (msg.wizard?.esito_intervento_comunicazione_a != null) {
+        WIZARD.esito_intervento_comunicazione_a = msg.wizard.esito_intervento_comunicazione_a;
+      }
+      if (msg.wizard?.modalita_allarme_evacuazione_antincendio != null) {
+        WIZARD.modalita_allarme_evacuazione_antincendio = msg.wizard.modalita_allarme_evacuazione_antincendio;
+      }
+      buildDensitaSelect();
+      renderFields();
+      return;
+    }
+    if (msg.type === 'PREVIEW_DOCX_BLOB' && activeView === 'docx') {
+      const host = document.getElementById('docxPreviewHost');
+      if (!host || !window.docx) return;
+      host.innerHTML = '';
+      window.docx.renderAsync(msg.buffer, host, null, { className: 'docx-preview' });
+      return;
+    }
+    if (msg.type === 'PREVIEW_DOCX_ERROR') {
+      const host = document.getElementById('docxPreviewHost');
+      if (host) host.innerHTML = '<p style="color:#c0392b;padding:24px;">' + (msg.message || 'Errore generazione') + '</p>';
+    }
+  });
+
+  buildDensitaSelect();
+  parent.postMessage({ type: 'GEN_PREVIEW_READY', codice: 'MOD_EMERGENZE' }, '*');
+})();
+</script>
+</body>
+</html>

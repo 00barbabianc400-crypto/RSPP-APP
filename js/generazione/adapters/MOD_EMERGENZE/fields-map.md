@@ -109,7 +109,7 @@ Sostituire par 176 con `{{PARAGRAFO_AFFOLLAMENTO_1}}` e par 178 con `{{PARAGRAFO
 
 | Rischio basso | Modalità | `{{PARAGRAFO_AFFOLLAMENTO_1}}` | `{{PARAGRAFO_AFFOLLAMENTO_2}}` |
 |---|---|---|---|
-| **Sì** | — | Testo standard D.M. 03/09/2021 con densità 0,7 persone/m² | Dichiarazione datore di lavoro standard |
+| **Sì** | Scelta unica (`affollamento_basso_scelta`) | Solo **uno** dei due tag valorizzato: calcolo D.M. (0,7) **oppure** dichiarazione DL | L’altro tag resta **vuoto** |
 | **No** | Densità | Come sopra ma senza riferimento D.M., densità configurabile da tabella o input libero | Dichiarazione datore di lavoro standard |
 | **No** | Conteggio diretto | «…il numero massimo di persone ammesse nei locali è pari a N persone.» | Dichiarazione semplificata |
 
@@ -117,7 +117,7 @@ Densità selezionabili (tabella D.M.): 2,0 / 1,2 / 0,7 / 0,4 / 0,2 / 0,1 / 0,05 
 
 > **In tutti i casi** i testi pre-popolati sono modificabili dall'operatore tramite textarea. Il testo della textarea è quello che va nel Word.
 
-Wizard: `rischio_incendio_basso`, `affollamento_modalita` (`'densita'`|`'conteggio'`), `densita_affollamento`, `numero_affollamento`, `paragrafo_affollamento_1` (override), `paragrafo_affollamento_2` (override).
+Wizard: `rischio_incendio_basso`, `affollamento_basso_scelta` (`'calcolo_dm'`|`'dichiarazione_dl'`, solo se rischio basso), `affollamento_modalita` (`'densita'`|`'conteggio'`), `densita_affollamento`, `numero_affollamento`, `paragrafo_affollamento_1` (override), `paragrafo_affollamento_2` (override).
 
 ## §2.2 — Rilevazione e diffusione dell’allarme antincendio (par. ~187–193)
 
@@ -204,10 +204,10 @@ Eliminare **«oppure»** (par. ~209).
 
 | Dove | Tag |
 |------|-----|
-| Opz. A — par. ~208 | `{{PARAGRAFO_ESIGENZE_CHIUSURA}}` |
+| Opz. A — par. ~208 | `{{PARAGRAFO_ESIGENZE_CHIUSURA_PRIMA}}` |
 | Opz. B — par. ~215 | `{{PARAGRAFO_ESIGENZE_CHIUSURA}}` |
 
-> Formattare il tag (o l’intero paragrafo) in **grassetto** nel file `.docx`. Testo modificabile in compilazione.
+> Tag **distinti**: docxtemplater sostituisce tutte le occorrenze dello stesso nome. Formattare in **grassetto** nel `.docx`.
 
 ### Opzione A — nessuna esigenza (par. ~207)
 
@@ -215,14 +215,14 @@ Eliminare **«oppure»** (par. ~209).
 {{PARAGRAFO_ESIGENZE_NESSUNA}}
 ```
 
-Poi il paragrafo con `{{PARAGRAFO_ESIGENZE_CHIUSURA}}` (grassetto).
+Poi il paragrafo con `{{PARAGRAFO_ESIGENZE_CHIUSURA_PRIMA}}` (grassetto).
 
 ### Opzione B — misure aggiuntive
 
 | Par. | Tag |
 |------|-----|
 | ~210 Intro | `{{PARAGRAFO_ESIGENZE_INTRO}}` |
-| ~211–214 Elenco | `{{LISTA_MISURE_ESIGENZE}}` nel **primo** punto elenco (testo multiriga con `-` e tab), oppure una riga modello: `{{#misure_esigenze_speciali}}-{{testo}}{{/misure_esigenze_speciali}}` |
+| ~211–214 Elenco | `{{LISTA_MISURE_ESIGENZE}}` — testo multiriga **senza** prefissi `-`/`•` (il paragrafo nel Word non deve avere `numPr` elenco puntato) |
 | ~215 | `{{PARAGRAFO_ESIGENZE_CHIUSURA}}` (grassetto) |
 
 Intro: con checkbox «aperto al pubblico» si aggiunge «anche legate al fatto che il luogo di lavoro è aperto al pubblico».
@@ -269,7 +269,7 @@ Wizard: `luogo_centro_coordinamento`, `luogo_posto_chiamata`, `luogo_punto_racco
 
 | Tag | Dove |
 |-----|------|
-| `{{LISTA_SEGNALAZIONE_INCENDIO_OPZIONALI}}` | Sostituisce i paragrafi «impianto di rivelazione;» e «Posto di chiamata esterno.» (multiriga con `•` se selezionate; vuoto se nessuna) |
+| `{{LISTA_SEGNALAZIONE_INCENDIO_OPZIONALI}}` | Una riga per voce, separata da a capo; **senza** `•` nel testo (paragrafo Word senza elenco puntato automatico) |
 
 Wizard: `segnalazione_incendio_impianto_rivelazione`, `segnalazione_incendio_posto_chiamata_esterno` (checkbox, indipendenti).
 

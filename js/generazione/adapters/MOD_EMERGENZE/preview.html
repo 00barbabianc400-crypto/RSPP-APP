@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Emergenze</title>
-<script src="adapter.js?v=20260522u"></script>
+<script src="adapter.js?v=20260522v"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -180,6 +180,15 @@
         </div>
       </div>
 
+      <div id="wrapAffollamentoBassoScelta" class="choice-row hidden" style="margin-top:8px;">
+        <p style="font-weight:600;margin-bottom:6px;">Quale paragrafo inserire nel Word?</p>
+        <p class="hint-str">Con rischio basso va compilato <strong>un solo</strong> tag tra <code>{{PARAGRAFO_AFFOLLAMENTO_1}}</code> e <code>{{PARAGRAFO_AFFOLLAMENTO_2}}</code>.</p>
+        <div class="radio-group">
+          <label><input type="radio" name="affoll_basso_scelta" value="calcolo_dm" onchange="setAffollamentoBassoScelta('calcolo_dm')"> Calcolo D.M. (densità 0,7 persone/m²) — par. 1</label>
+          <label><input type="radio" name="affoll_basso_scelta" value="dichiarazione_dl" onchange="setAffollamentoBassoScelta('dichiarazione_dl')"> Dichiarazione datore di lavoro — par. 2</label>
+        </div>
+      </div>
+
       <div id="wrapModalitaAffollamento" class="choice-row hidden" style="margin-top:8px;">
         <p style="font-weight:600;margin-bottom:6px;">Modalità calcolo affollamento</p>
         <div class="radio-group">
@@ -211,13 +220,16 @@
       </div>
 
       <div id="wrapTestiAffollamento" class="affoll-block hidden">
-        <p class="para-label">Paragrafo 1 — affollamento calcolato</p>
-        <p class="para-hint">Tag nel Word: <code>{{PARAGRAFO_AFFOLLAMENTO_1}}</code> — modificabile.</p>
-        <textarea id="taAffollamento1" class="para-ta" oninput="setParafoAffollamento1Override(this.value)"></textarea>
-
-        <p class="para-label">Paragrafo 2 — dichiarazione datore di lavoro</p>
-        <p class="para-hint">Tag nel Word: <code>{{PARAGRAFO_AFFOLLAMENTO_2}}</code> — modificabile.</p>
-        <textarea id="taAffollamento2" class="para-ta" oninput="setParafoAffollamento2Override(this.value)"></textarea>
+        <div id="wrapTaAffollamento1">
+          <p class="para-label">Paragrafo 1 — affollamento calcolato</p>
+          <p class="para-hint">Tag nel Word: <code>{{PARAGRAFO_AFFOLLAMENTO_1}}</code> — modificabile.</p>
+          <textarea id="taAffollamento1" class="para-ta" oninput="setParafoAffollamento1Override(this.value)"></textarea>
+        </div>
+        <div id="wrapTaAffollamento2" style="margin-top:12px;">
+          <p class="para-label">Paragrafo 2 — dichiarazione datore di lavoro</p>
+          <p class="para-hint">Tag nel Word: <code>{{PARAGRAFO_AFFOLLAMENTO_2}}</code> — modificabile.</p>
+          <textarea id="taAffollamento2" class="para-ta" oninput="setParafoAffollamento2Override(this.value)"></textarea>
+        </div>
       </div>
 
       <h2 class="doc-section">§2.2 — Rilevazione e diffusione dell’allarme</h2>
@@ -582,7 +594,7 @@
 
       <div id="wrapEsigenzeChiusura" class="affoll-block hidden">
         <p class="para-label para-chiusura-label">Frase finale (entrambe le opzioni) — grassetto nel Word</p>
-        <p class="para-hint">Tag: <code>{{PARAGRAFO_ESIGENZE_CHIUSURA}}</code> — par. ~208 (opz. A) e ~215 (opz. B); formattare il tag in grassetto nel template.</p>
+        <p class="para-hint">Opz. «nessuna»: <code>{{PARAGRAFO_ESIGENZE_CHIUSURA_PRIMA}}</code> (par. ~208). Opz. «presenti»: <code>{{PARAGRAFO_ESIGENZE_CHIUSURA}}</code> (par. ~215). Formattare i tag in grassetto nel template.</p>
         <textarea id="taEsigenzeChiusura" class="para-ta" oninput="setParagrafoEsigenzeChiusura(this.value)"></textarea>
       </div>
     </div>
@@ -607,6 +619,7 @@
     immobile_adibito_a: '',
     righe_piano_luoghi: [],
     rischio_incendio_basso: null,
+    affollamento_basso_scelta: 'calcolo_dm',
     affollamento_modalita: 'densita',
     densita_affollamento: '0,4',
     numero_affollamento: '30',
@@ -1588,6 +1601,21 @@
     document.querySelectorAll('input[name="rischio_incendio_basso"]').forEach((el) => {
       el.checked = el.value === String(WIZARD.rischio_incendio_basso);
     });
+    const wrapBassoScelta = document.getElementById('wrapAffollamentoBassoScelta');
+    if (wrapBassoScelta) wrapBassoScelta.classList.toggle('hidden', basso !== true);
+    const sceltaBasso = WIZARD.affollamento_basso_scelta || 'calcolo_dm';
+    document.querySelectorAll('input[name="affoll_basso_scelta"]').forEach((el) => {
+      el.checked = el.value === sceltaBasso;
+    });
+    const wrapTa1 = document.getElementById('wrapTaAffollamento1');
+    const wrapTa2 = document.getElementById('wrapTaAffollamento2');
+    if (basso === true) {
+      if (wrapTa1) wrapTa1.classList.toggle('hidden', sceltaBasso !== 'calcolo_dm');
+      if (wrapTa2) wrapTa2.classList.toggle('hidden', sceltaBasso !== 'dichiarazione_dl');
+    } else {
+      if (wrapTa1) wrapTa1.classList.remove('hidden');
+      if (wrapTa2) wrapTa2.classList.remove('hidden');
+    }
     // blocco modalità (visibile solo se basso === false)
     const wrapMod = document.getElementById('wrapModalitaAffollamento');
     if (wrapMod) wrapMod.classList.toggle('hidden', basso !== false);
@@ -1631,8 +1659,17 @@
 
   window.setRischioIncendioBasso = function (val) {
     WIZARD.rischio_incendio_basso = val === 'true' ? true : val === 'false' ? false : null;
+    if (WIZARD.rischio_incendio_basso === true && !WIZARD.affollamento_basso_scelta) {
+      WIZARD.affollamento_basso_scelta = 'calcolo_dm';
+    }
     clearAffollamentoOverrides();
     if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+  };
+
+  window.setAffollamentoBassoScelta = function (val) {
+    WIZARD.affollamento_basso_scelta = val;
+    clearAffollamentoOverrides();
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderAffollamento(); sendUpdate(); }
   };
 
   window.setAffollamentoModalita = function (val) {
@@ -1842,6 +1879,7 @@
     if (src.affollamento_modalita != null) WIZARD.affollamento_modalita = src.affollamento_modalita;
     if (src.densita_affollamento != null) WIZARD.densita_affollamento = src.densita_affollamento;
     if (src.numero_affollamento != null) WIZARD.numero_affollamento = src.numero_affollamento;
+    if (src.affollamento_basso_scelta != null) WIZARD.affollamento_basso_scelta = src.affollamento_basso_scelta;
     if (src.paragrafo_affollamento_1 !== undefined) WIZARD.paragrafo_affollamento_1 = src.paragrafo_affollamento_1;
     if (src.paragrafo_affollamento_2 !== undefined) WIZARD.paragrafo_affollamento_2 = src.paragrafo_affollamento_2;
     if (src.rilevazione_allarme != null) WIZARD.rilevazione_allarme = src.rilevazione_allarme;

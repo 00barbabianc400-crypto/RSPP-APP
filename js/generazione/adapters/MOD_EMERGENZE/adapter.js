@@ -206,17 +206,33 @@
     return TESTO_P2_STANDARD;
   }
 
+  function normalizeAffollamentoBassoScelta(v) {
+    const s = String(v || '').trim().toLowerCase();
+    if (s === 'calcolo_dm' || s === 'calcolo' || s === 'p1' || s === 'paragrafo_1') return 'calcolo_dm';
+    if (s === 'dichiarazione_dl' || s === 'dichiarazione' || s === 'p2' || s === 'paragrafo_2') {
+      return 'dichiarazione_dl';
+    }
+    return null;
+  }
+
   function sezione21AffollamentoFields(wizard) {
     const p1Override = wizard?.paragrafo_affollamento_1;
     const p2Override = wizard?.paragrafo_affollamento_2;
     const basso = rischioIncendioBasso(wizard);
-    // Se il wizard cambia scenario, invalida gli override manualmente impostati
-    // (l'override è mantenuto solo finché l'utente non tocca uno switch principale)
+    const p1Built =
+      p1Override != null && basso !== null ? String(p1Override) : buildParafoAffollamento1(wizard);
+    const p2Built =
+      p2Override != null && basso !== null ? String(p2Override) : buildParafoAffollamento2(wizard);
+    if (basso === true) {
+      const scelta = normalizeAffollamentoBassoScelta(wizard?.affollamento_basso_scelta) || 'calcolo_dm';
+      if (scelta === 'dichiarazione_dl') {
+        return { PARAGRAFO_AFFOLLAMENTO_1: '', PARAGRAFO_AFFOLLAMENTO_2: p2Built };
+      }
+      return { PARAGRAFO_AFFOLLAMENTO_1: p1Built, PARAGRAFO_AFFOLLAMENTO_2: '' };
+    }
     return {
-      PARAGRAFO_AFFOLLAMENTO_1:
-        p1Override != null && basso !== null ? String(p1Override) : buildParafoAffollamento1(wizard),
-      PARAGRAFO_AFFOLLAMENTO_2:
-        p2Override != null && basso !== null ? String(p2Override) : buildParafoAffollamento2(wizard),
+      PARAGRAFO_AFFOLLAMENTO_1: p1Built,
+      PARAGRAFO_AFFOLLAMENTO_2: p2Built,
     };
   }
 
@@ -575,7 +591,7 @@
   function listaMisureEsigenzeForTemplate(wizard) {
     return mergeMisureEsigenzeWizard(wizard)
       .filter((r) => r.selezionato && r.testo)
-      .map((r) => '-\t' + r.testo)
+      .map((r) => String(r.testo).trim())
       .join('\n');
   }
 
@@ -604,6 +620,7 @@
         PARAGRAFO_ESIGENZE_NESSUNA: '',
         PARAGRAFO_ESIGENZE_INTRO: '',
         LISTA_MISURE_ESIGENZE: '',
+        PARAGRAFO_ESIGENZE_CHIUSURA_PRIMA: '',
         PARAGRAFO_ESIGENZE_CHIUSURA: '',
       };
     }
@@ -612,13 +629,15 @@
         PARAGRAFO_ESIGENZE_NESSUNA: testoEsigenzeNessuna(wizard),
         PARAGRAFO_ESIGENZE_INTRO: '',
         LISTA_MISURE_ESIGENZE: '',
-        PARAGRAFO_ESIGENZE_CHIUSURA: chiusura,
+        PARAGRAFO_ESIGENZE_CHIUSURA_PRIMA: chiusura,
+        PARAGRAFO_ESIGENZE_CHIUSURA: '',
       };
     }
     return {
       PARAGRAFO_ESIGENZE_NESSUNA: '',
       PARAGRAFO_ESIGENZE_INTRO: testoEsigenzeIntro(wizard),
       LISTA_MISURE_ESIGENZE: listaMisureEsigenzeForTemplate(wizard),
+      PARAGRAFO_ESIGENZE_CHIUSURA_PRIMA: '',
       PARAGRAFO_ESIGENZE_CHIUSURA: chiusura,
     };
   }
@@ -672,7 +691,7 @@
   function listaProtezioniToText(rows) {
     return (rows || [])
       .filter((r) => String(r.testo || '').trim())
-      .map((r) => '\u2022\t' + String(r.testo).trim())
+      .map((r) => String(r.testo).trim())
       .join('\n');
   }
 
@@ -804,7 +823,7 @@
     if (segnalazioneIncendioPostoChiamataEsternoSi(wizard)) {
       rows.push(VOCE_POSTO_CHIAMATA_ESTERNO_SEGNALAZIONE);
     }
-    return rows.map((r) => '\u2022\t' + r).join('\n');
+    return rows.join('\n');
   }
 
   function normalizeImpiantoGasDistribuzione(v) {
@@ -1321,6 +1340,14 @@
         errors.push('§2.1: riga ' + (i + 1) + ' — colonna «Edificio» mancante');
       }
     });
+    const w21 = data._emergenze_wizard || {};
+    if (rischioIncendioBasso(w21) === null) {
+      errors.push('§2.1 affollamento: indicare se il rischio incendio \u00e8 basso');
+    } else if (rischioIncendioBasso(w21) === true && !normalizeAffollamentoBassoScelta(w21.affollamento_basso_scelta)) {
+      errors.push(
+        '§2.1 affollamento: con rischio basso scegliere quale paragrafo inserire nel Word (calcolo D.M. o dichiarazione DL)',
+      );
+    }
     if (!normalizeRilevazioneAllarme(data._emergenze_wizard?.rilevazione_allarme ?? data.rilevazione_allarme)) {
       errors.push('§2.2: selezionare la modalità di rilevazione e diffusione dell\u2019allarme');
     }

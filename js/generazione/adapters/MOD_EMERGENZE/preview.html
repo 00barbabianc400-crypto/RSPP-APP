@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Emergenze</title>
-<script src="adapter.js?v=20260522t"></script>
+<script src="adapter.js?v=20260522u"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -15,6 +15,11 @@
     padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
   }
   #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
   #toolbar button {
     background: #3498db; color: #fff; border: none; padding: 6px 16px;
     border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
@@ -90,6 +95,8 @@
 
 <div id="toolbar">
   <span class="title" id="toolbarTitle">MOD_EMERGENZE — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
   <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
   <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
   <button type="button" id="btnGenera" disabled>Genera DOCX</button>
@@ -99,10 +106,6 @@
   <div class="page-wrap">
     <div class="page">
       <h1 class="doc-title">Piano di gestione delle emergenze</h1>
-      <p class="hint-str" style="margin-bottom:14px;">
-        Modulo in costruzione. Caricare <code>MOD_EMERGENZE.docx</code> nel bucket <code>modelli</code>
-        e aggiornare <code>fields-map.md</code> con i tag del modello Word.
-      </p>
       <p><strong>Ragione sociale</strong>: <span id="pRagSoc" class="field-auto">—</span></p>
       <p><strong>Sede operativa</strong>: <span id="pSede" class="field-auto">—</span></p>
       <p>
@@ -595,6 +598,7 @@
   const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_EMERGENZE'];
   let DATA = null;
   let activeView = 'compile';
+  let previewTimer = null;
   const WIZARD = {
     modulo_numero: '',
     piano_emergenza_coordinato: false,
@@ -659,8 +663,12 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function ensureRighePianoLuoghi() {
+  function ensureRighePianoLuoghiArray() {
     if (!Array.isArray(WIZARD.righe_piano_luoghi)) WIZARD.righe_piano_luoghi = [];
+  }
+
+  function fillDefaultRighePianoLuoghiIfEmpty() {
+    ensureRighePianoLuoghiArray();
     if (!WIZARD.righe_piano_luoghi.length && ADAPTER?.DEFAULT_RIGHE_PIANO_LUOGHI) {
       WIZARD.righe_piano_luoghi = ADAPTER.DEFAULT_RIGHE_PIANO_LUOGHI.map((r) => ({ ...r }));
     }
@@ -689,8 +697,6 @@
     if (inp && document.activeElement !== inp) {
       inp.value = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
     }
-    const btn = document.getElementById('btnGenera');
-    if (btn) btn.disabled = !(ADAPTER && DATA && (ADAPTER.validate(DATA) || []).length === 0);
     renderPianoCoordinato();
     renderSezione12();
     renderSezione21();
@@ -1461,7 +1467,7 @@
   };
 
   function renderTabellaPianoLuoghi() {
-    ensureRighePianoLuoghi();
+    ensureRighePianoLuoghiArray();
     const wrap = document.getElementById('wrapRighePianoLuoghi');
     if (!wrap) return;
     const rows = WIZARD.righe_piano_luoghi;
@@ -1499,7 +1505,7 @@
   }
 
   window.setRigaPianoLuoghiField = function (idx, key, value) {
-    ensureRighePianoLuoghi();
+    ensureRighePianoLuoghiArray();
     if (!WIZARD.righe_piano_luoghi[idx]) return;
     WIZARD.righe_piano_luoghi[idx][key] = value;
     applyRigheToData();
@@ -1507,7 +1513,7 @@
   };
 
   window.addRigaPianoLuoghi = function () {
-    ensureRighePianoLuoghi();
+    ensureRighePianoLuoghiArray();
     WIZARD.righe_piano_luoghi.push({ edificio: '', attivita: '', numero_persone: 'x' });
     applyRigheToData();
     renderTabellaPianoLuoghi();
@@ -1515,10 +1521,10 @@
   };
 
   window.removeRigaPianoLuoghi = function (idx) {
-    ensureRighePianoLuoghi();
+    ensureRighePianoLuoghiArray();
     WIZARD.righe_piano_luoghi.splice(idx, 1);
     applyRigheToData();
-    renderFields();
+    renderTabellaPianoLuoghi();
     sendUpdate();
   };
 
@@ -1526,7 +1532,7 @@
     if (!ADAPTER?.DEFAULT_RIGHE_PIANO_LUOGHI) return;
     WIZARD.righe_piano_luoghi = ADAPTER.DEFAULT_RIGHE_PIANO_LUOGHI.map((r) => ({ ...r }));
     applyRigheToData();
-    renderFields();
+    renderTabellaPianoLuoghi();
     sendUpdate();
   };
 
@@ -1761,13 +1767,178 @@
     }
   };
 
+  function buildMerged() {
+    if (!DATA || !ADAPTER?.applyWizard) return {};
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
   function sendUpdate() {
     if (!DATA) return;
-    parent.postMessage({ type: 'GEN_PREVIEW_UPDATE', codice: 'MOD_EMERGENZE', wizard: { ...WIZARD } }, '*');
+    const merged = buildMerged();
+    DATA = merged;
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    window.parent.postMessage({
+      type: 'DATA_UPDATE',
+      data: merged,
+      valid: errors.length === 0,
+      errors,
+    }, '*');
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    } else {
+      document.getElementById('stopBadge').title = '';
+    }
+    renderFields();
+    if (activeView === 'docx' && errors.length === 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 600);
+    }
   }
 
   function requestPreviewDocx() {
-    parent.postMessage({ type: 'GEN_PREVIEW_DOCX', codice: 'MOD_EMERGENZE', wizard: { ...WIZARD } }, '*');
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML =
+        '<p style="color:#c0392b;padding:20px;">Completa la compilazione: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx-preview', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function loadWizardFromSaved(w) {
+    const src = w || {};
+    if (src.modulo_numero != null) WIZARD.modulo_numero = src.modulo_numero;
+    if (src.piano_emergenza_coordinato != null) WIZARD.piano_emergenza_coordinato = src.piano_emergenza_coordinato;
+    if (src.segnalazione_destinatario != null) WIZARD.segnalazione_destinatario = src.segnalazione_destinatario;
+    if (src.allarme_generale != null) WIZARD.allarme_generale = src.allarme_generale;
+    if (src.immobile_adibito_a != null) WIZARD.immobile_adibito_a = src.immobile_adibito_a;
+    if (Array.isArray(src.righe_piano_luoghi) && src.righe_piano_luoghi.length) {
+      WIZARD.righe_piano_luoghi = src.righe_piano_luoghi.map((r) => ({ ...r }));
+    } else {
+      fillDefaultRighePianoLuoghiIfEmpty();
+    }
+    if (src.rischio_incendio_basso !== undefined) WIZARD.rischio_incendio_basso = src.rischio_incendio_basso;
+    if (src.affollamento_modalita != null) WIZARD.affollamento_modalita = src.affollamento_modalita;
+    if (src.densita_affollamento != null) WIZARD.densita_affollamento = src.densita_affollamento;
+    if (src.numero_affollamento != null) WIZARD.numero_affollamento = src.numero_affollamento;
+    if (src.paragrafo_affollamento_1 !== undefined) WIZARD.paragrafo_affollamento_1 = src.paragrafo_affollamento_1;
+    if (src.paragrafo_affollamento_2 !== undefined) WIZARD.paragrafo_affollamento_2 = src.paragrafo_affollamento_2;
+    if (src.rilevazione_allarme != null) WIZARD.rilevazione_allarme = src.rilevazione_allarme;
+    if (src.testo_blocco_allarme_senza != null) WIZARD.testo_blocco_allarme_senza = src.testo_blocco_allarme_senza;
+    if (src.testo_blocco_allarme_con != null) WIZARD.testo_blocco_allarme_con = src.testo_blocco_allarme_con;
+    if (src.rischi_particolari_modalita != null) WIZARD.rischi_particolari_modalita = src.rischi_particolari_modalita;
+    if (src.paragrafo_rischi_nessuno != null) WIZARD.paragrafo_rischi_nessuno = src.paragrafo_rischi_nessuno;
+    if (src.paragrafo_rischi_intro != null) WIZARD.paragrafo_rischi_intro = src.paragrafo_rischi_intro;
+    if (Array.isArray(src.righe_rischi_particolari) && src.righe_rischi_particolari.length) {
+      WIZARD.righe_rischi_particolari = src.righe_rischi_particolari.map((r) => ({ ...r }));
+    } else {
+      ensureRigheRischiParticolari();
+    }
+    if (src.rischi_incendio_alto_modalita != null) {
+      WIZARD.rischi_incendio_alto_modalita = src.rischi_incendio_alto_modalita;
+    }
+    if (src.paragrafo_rischi_incendio_nessuno != null) {
+      WIZARD.paragrafo_rischi_incendio_nessuno = src.paragrafo_rischi_incendio_nessuno;
+    }
+    if (src.testo_blocco_rischi_incendio_alto != null) {
+      WIZARD.testo_blocco_rischi_incendio_alto = src.testo_blocco_rischi_incendio_alto;
+    }
+    if (src.esigenze_speciali_modalita != null) WIZARD.esigenze_speciali_modalita = src.esigenze_speciali_modalita;
+    if (src.luogo_aperto_pubblico != null) WIZARD.luogo_aperto_pubblico = src.luogo_aperto_pubblico;
+    if (src.paragrafo_esigenze_nessuna != null) WIZARD.paragrafo_esigenze_nessuna = src.paragrafo_esigenze_nessuna;
+    if (src.paragrafo_esigenze_intro != null) WIZARD.paragrafo_esigenze_intro = src.paragrafo_esigenze_intro;
+    if (src.paragrafo_esigenze_chiusura != null) WIZARD.paragrafo_esigenze_chiusura = src.paragrafo_esigenze_chiusura;
+    if (Array.isArray(src.misure_esigenze_speciali) && src.misure_esigenze_speciali.length) {
+      WIZARD.misure_esigenze_speciali = src.misure_esigenze_speciali.map((r) => ({ ...r }));
+    } else {
+      ensureMisureEsigenze();
+    }
+    if (Array.isArray(src.protezioni_attive) && src.protezioni_attive.length) {
+      WIZARD.protezioni_attive = src.protezioni_attive.map((r) => ({ ...r }));
+    } else {
+      ensureProtezioniListe();
+    }
+    if (Array.isArray(src.protezioni_passive) && src.protezioni_passive.length) {
+      WIZARD.protezioni_passive = src.protezioni_passive.map((r) => ({ ...r }));
+    } else {
+      ensureProtezioniListe();
+    }
+    if (src.luogo_centro_coordinamento != null) WIZARD.luogo_centro_coordinamento = src.luogo_centro_coordinamento;
+    if (src.luogo_posto_chiamata != null) WIZARD.luogo_posto_chiamata = src.luogo_posto_chiamata;
+    if (src.luogo_punto_raccolta != null) WIZARD.luogo_punto_raccolta = src.luogo_punto_raccolta;
+    ensureAreeOperative();
+    if (src.segnalazione_incendio_impianto_rivelazione != null) {
+      WIZARD.segnalazione_incendio_impianto_rivelazione = src.segnalazione_incendio_impianto_rivelazione;
+    }
+    if (src.segnalazione_incendio_posto_chiamata_esterno != null) {
+      WIZARD.segnalazione_incendio_posto_chiamata_esterno = src.segnalazione_incendio_posto_chiamata_esterno;
+    }
+    if (src.centrale_segnalazione_incendio != null) {
+      WIZARD.centrale_segnalazione_incendio = src.centrale_segnalazione_incendio;
+    }
+    if (src.impianto_gas_distribuzione_presente != null) {
+      WIZARD.impianto_gas_distribuzione_presente = src.impianto_gas_distribuzione_presente;
+    }
+    if (src.comportamenti_vietato_ascensori != null) {
+      WIZARD.comportamenti_vietato_ascensori = src.comportamenti_vietato_ascensori;
+    }
+    if (src.comportamenti_porte_rei != null) WIZARD.comportamenti_porte_rei = src.comportamenti_porte_rei;
+    if (src.diffusione_evacuazione_antincendio != null) {
+      WIZARD.diffusione_evacuazione_antincendio = src.diffusione_evacuazione_antincendio;
+    }
+    if (src.livello_rischio_incendio != null) WIZARD.livello_rischio_incendio = src.livello_rischio_incendio;
+    if (!String(WIZARD.livello_rischio_incendio || '').trim() && ADAPTER?.DEFAULT_LIVELLO_RISCHIO_INCENDIO) {
+      WIZARD.livello_rischio_incendio = ADAPTER.DEFAULT_LIVELLO_RISCHIO_INCENDIO;
+    }
+    if (src.livello_addestramento_emergenze != null) {
+      WIZARD.livello_addestramento_emergenze = src.livello_addestramento_emergenze;
+    }
+    if (
+      !String(WIZARD.livello_addestramento_emergenze || '').trim()
+      && ADAPTER?.DEFAULT_LIVELLO_ADDESTRAMENTO_EMERGENZE
+    ) {
+      WIZARD.livello_addestramento_emergenze = ADAPTER.DEFAULT_LIVELLO_ADDESTRAMENTO_EMERGENZE;
+    }
+    if (src.esito_intervento_comunicazione_a != null) {
+      WIZARD.esito_intervento_comunicazione_a = src.esito_intervento_comunicazione_a;
+    }
+    if (src.modalita_allarme_evacuazione_antincendio != null) {
+      WIZARD.modalita_allarme_evacuazione_antincendio = src.modalita_allarme_evacuazione_antincendio;
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+    if (!WIZARD.immobile_adibito_a && ADAPTER.DEFAULT_IMMOBILE_ADIBITO_A) {
+      WIZARD.immobile_adibito_a = ADAPTER.DEFAULT_IMMOBILE_ADIBITO_A;
+    }
+    loadWizardFromSaved(DATA._emergenze_wizard || {});
+    buildDensitaSelect();
+    sendUpdate();
   }
 
   window.showView = function (view) {
@@ -1783,149 +1954,39 @@
 
   window.addEventListener('message', function (ev) {
     const msg = ev.data || {};
-    if (msg.type === 'GEN_PREVIEW_INIT') {
-      DATA = ADAPTER.applyWizard(msg.data || {}, msg.wizard || {});
-      if (msg.wizard?.modulo_numero != null) WIZARD.modulo_numero = msg.wizard.modulo_numero;
-      if (msg.wizard?.piano_emergenza_coordinato != null) {
-        WIZARD.piano_emergenza_coordinato = msg.wizard.piano_emergenza_coordinato;
-      }
-      if (msg.wizard?.segnalazione_destinatario != null) {
-        WIZARD.segnalazione_destinatario = msg.wizard.segnalazione_destinatario;
-      }
-      if (msg.wizard?.allarme_generale != null) {
-        WIZARD.allarme_generale = msg.wizard.allarme_generale;
-      }
-      if (msg.wizard?.immobile_adibito_a != null) {
-        WIZARD.immobile_adibito_a = msg.wizard.immobile_adibito_a;
-      }
-      if (Array.isArray(msg.wizard?.righe_piano_luoghi) && msg.wizard.righe_piano_luoghi.length) {
-        WIZARD.righe_piano_luoghi = msg.wizard.righe_piano_luoghi.map((r) => ({ ...r }));
-      } else {
-        ensureRighePianoLuoghi();
-      }
-      if (msg.wizard?.rischio_incendio_basso !== undefined) {
-        WIZARD.rischio_incendio_basso = msg.wizard.rischio_incendio_basso;
-      }
-      if (msg.wizard?.affollamento_modalita != null) WIZARD.affollamento_modalita = msg.wizard.affollamento_modalita;
-      if (msg.wizard?.densita_affollamento != null) WIZARD.densita_affollamento = msg.wizard.densita_affollamento;
-      if (msg.wizard?.numero_affollamento != null) WIZARD.numero_affollamento = msg.wizard.numero_affollamento;
-      if (msg.wizard?.paragrafo_affollamento_1 !== undefined) WIZARD.paragrafo_affollamento_1 = msg.wizard.paragrafo_affollamento_1;
-      if (msg.wizard?.paragrafo_affollamento_2 !== undefined) WIZARD.paragrafo_affollamento_2 = msg.wizard.paragrafo_affollamento_2;
-      if (msg.wizard?.rilevazione_allarme != null) WIZARD.rilevazione_allarme = msg.wizard.rilevazione_allarme;
-      if (msg.wizard?.testo_blocco_allarme_senza != null) WIZARD.testo_blocco_allarme_senza = msg.wizard.testo_blocco_allarme_senza;
-      if (msg.wizard?.testo_blocco_allarme_con != null) WIZARD.testo_blocco_allarme_con = msg.wizard.testo_blocco_allarme_con;
-      if (msg.wizard?.rischi_particolari_modalita != null) {
-        WIZARD.rischi_particolari_modalita = msg.wizard.rischi_particolari_modalita;
-      }
-      if (msg.wizard?.paragrafo_rischi_nessuno != null) WIZARD.paragrafo_rischi_nessuno = msg.wizard.paragrafo_rischi_nessuno;
-      if (msg.wizard?.paragrafo_rischi_intro != null) WIZARD.paragrafo_rischi_intro = msg.wizard.paragrafo_rischi_intro;
-      if (Array.isArray(msg.wizard?.righe_rischi_particolari) && msg.wizard.righe_rischi_particolari.length) {
-        WIZARD.righe_rischi_particolari = msg.wizard.righe_rischi_particolari.map((r) => ({ ...r }));
-      } else {
-        ensureRigheRischiParticolari();
-      }
-      if (msg.wizard?.rischi_incendio_alto_modalita != null) {
-        WIZARD.rischi_incendio_alto_modalita = msg.wizard.rischi_incendio_alto_modalita;
-      }
-      if (msg.wizard?.paragrafo_rischi_incendio_nessuno != null) {
-        WIZARD.paragrafo_rischi_incendio_nessuno = msg.wizard.paragrafo_rischi_incendio_nessuno;
-      }
-      if (msg.wizard?.testo_blocco_rischi_incendio_alto != null) {
-        WIZARD.testo_blocco_rischi_incendio_alto = msg.wizard.testo_blocco_rischi_incendio_alto;
-      }
-      if (msg.wizard?.esigenze_speciali_modalita != null) {
-        WIZARD.esigenze_speciali_modalita = msg.wizard.esigenze_speciali_modalita;
-      }
-      if (msg.wizard?.luogo_aperto_pubblico != null) WIZARD.luogo_aperto_pubblico = msg.wizard.luogo_aperto_pubblico;
-      if (msg.wizard?.paragrafo_esigenze_nessuna != null) WIZARD.paragrafo_esigenze_nessuna = msg.wizard.paragrafo_esigenze_nessuna;
-      if (msg.wizard?.paragrafo_esigenze_intro != null) WIZARD.paragrafo_esigenze_intro = msg.wizard.paragrafo_esigenze_intro;
-      if (msg.wizard?.paragrafo_esigenze_chiusura != null) WIZARD.paragrafo_esigenze_chiusura = msg.wizard.paragrafo_esigenze_chiusura;
-      if (Array.isArray(msg.wizard?.misure_esigenze_speciali) && msg.wizard.misure_esigenze_speciali.length) {
-        WIZARD.misure_esigenze_speciali = msg.wizard.misure_esigenze_speciali.map((r) => ({ ...r }));
-      } else {
-        ensureMisureEsigenze();
-      }
-      if (Array.isArray(msg.wizard?.protezioni_attive) && msg.wizard.protezioni_attive.length) {
-        WIZARD.protezioni_attive = msg.wizard.protezioni_attive.map((r) => ({ ...r }));
-      } else {
-        ensureProtezioniListe();
-      }
-      if (Array.isArray(msg.wizard?.protezioni_passive) && msg.wizard.protezioni_passive.length) {
-        WIZARD.protezioni_passive = msg.wizard.protezioni_passive.map((r) => ({ ...r }));
-      } else {
-        ensureProtezioniListe();
-      }
-      if (msg.wizard?.luogo_centro_coordinamento != null) {
-        WIZARD.luogo_centro_coordinamento = msg.wizard.luogo_centro_coordinamento;
-      }
-      if (msg.wizard?.luogo_posto_chiamata != null) {
-        WIZARD.luogo_posto_chiamata = msg.wizard.luogo_posto_chiamata;
-      }
-      if (msg.wizard?.luogo_punto_raccolta != null) {
-        WIZARD.luogo_punto_raccolta = msg.wizard.luogo_punto_raccolta;
-      }
-      ensureAreeOperative();
-      if (msg.wizard?.segnalazione_incendio_impianto_rivelazione != null) {
-        WIZARD.segnalazione_incendio_impianto_rivelazione = msg.wizard.segnalazione_incendio_impianto_rivelazione;
-      }
-      if (msg.wizard?.segnalazione_incendio_posto_chiamata_esterno != null) {
-        WIZARD.segnalazione_incendio_posto_chiamata_esterno = msg.wizard.segnalazione_incendio_posto_chiamata_esterno;
-      }
-      if (msg.wizard?.centrale_segnalazione_incendio != null) {
-        WIZARD.centrale_segnalazione_incendio = msg.wizard.centrale_segnalazione_incendio;
-      }
-      if (msg.wizard?.impianto_gas_distribuzione_presente != null) {
-        WIZARD.impianto_gas_distribuzione_presente = msg.wizard.impianto_gas_distribuzione_presente;
-      }
-      if (msg.wizard?.comportamenti_vietato_ascensori != null) {
-        WIZARD.comportamenti_vietato_ascensori = msg.wizard.comportamenti_vietato_ascensori;
-      }
-      if (msg.wizard?.comportamenti_porte_rei != null) {
-        WIZARD.comportamenti_porte_rei = msg.wizard.comportamenti_porte_rei;
-      }
-      if (msg.wizard?.diffusione_evacuazione_antincendio != null) {
-        WIZARD.diffusione_evacuazione_antincendio = msg.wizard.diffusione_evacuazione_antincendio;
-      }
-      if (msg.wizard?.livello_rischio_incendio != null) {
-        WIZARD.livello_rischio_incendio = msg.wizard.livello_rischio_incendio;
-      }
-      if (!String(WIZARD.livello_rischio_incendio || '').trim() && ADAPTER?.DEFAULT_LIVELLO_RISCHIO_INCENDIO) {
-        WIZARD.livello_rischio_incendio = ADAPTER.DEFAULT_LIVELLO_RISCHIO_INCENDIO;
-      }
-      if (msg.wizard?.livello_addestramento_emergenze != null) {
-        WIZARD.livello_addestramento_emergenze = msg.wizard.livello_addestramento_emergenze;
-      }
-      if (
-        !String(WIZARD.livello_addestramento_emergenze || '').trim()
-        && ADAPTER?.DEFAULT_LIVELLO_ADDESTRAMENTO_EMERGENZE
-      ) {
-        WIZARD.livello_addestramento_emergenze = ADAPTER.DEFAULT_LIVELLO_ADDESTRAMENTO_EMERGENZE;
-      }
-      if (msg.wizard?.esito_intervento_comunicazione_a != null) {
-        WIZARD.esito_intervento_comunicazione_a = msg.wizard.esito_intervento_comunicazione_a;
-      }
-      if (msg.wizard?.modalita_allarme_evacuazione_antincendio != null) {
-        WIZARD.modalita_allarme_evacuazione_antincendio = msg.wizard.modalita_allarme_evacuazione_antincendio;
-      }
-      buildDensitaSelect();
-      renderFields();
+    if (msg.type === 'SET_DATA') {
+      DATA = msg.data || {};
+      initFromData();
       return;
     }
-    if (msg.type === 'PREVIEW_DOCX_BLOB' && activeView === 'docx') {
-      const host = document.getElementById('docxPreviewHost');
-      if (!host || !window.docx) return;
-      host.innerHTML = '';
-      window.docx.renderAsync(msg.buffer, host, null, { className: 'docx-preview' });
+    if (msg.type === 'PREVIEW_DOCX_BLOB' && msg.buffer) {
+      renderDocxBlob(msg.buffer);
       return;
     }
     if (msg.type === 'PREVIEW_DOCX_ERROR') {
       const host = document.getElementById('docxPreviewHost');
-      if (host) host.innerHTML = '<p style="color:#c0392b;padding:24px;">' + (msg.message || 'Errore generazione') + '</p>';
+      if (host) {
+        host.innerHTML = '<p style="color:#c0392b;padding:24px;">' + esc(msg.message || 'Errore generazione') + '</p>';
+      }
     }
   });
 
+  document.getElementById('btnGenera').addEventListener('click', function () {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) {
+      alert('Errori:\n' + errors.join('\n'));
+      return;
+    }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
   buildDensitaSelect();
-  parent.postMessage({ type: 'GEN_PREVIEW_READY', codice: 'MOD_EMERGENZE' }, '*');
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
 })();
 </script>
 </body>

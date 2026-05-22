@@ -4289,28 +4289,59 @@
             const canGenerate = canMutateData();
             await ensureAziendeLoaded();
 
+            const aziendaOptions = (STATE.data.aziende || []).map(a =>
+                '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>'
+            ).join('');
+
             main.innerHTML = ''
                 + '<div class="page-header"><div>'
                 + '<h1 class="page-title">Generazione documenti</h1>'
-                + '<p class="page-subtitle">Documenti selezionati per azienda — template dal bucket <code>modelli</code>, output in <code>output/{azienda_id}/</code></p>'
+                + '<p class="page-subtitle">Template dal bucket <code>modelli</code> — output in <code>output/{azienda_id}/</code></p>'
                 + '</div>'
                 + (canGenerate ? '' : '<span class="badge info">Sola lettura</span>')
                 + '</div>'
+                // ── tab bar ──
+                + '<div style="display:flex;gap:0;border-bottom:2px solid var(--sp-border,#333);margin-bottom:18px;">'
+                + '<button id="genTabBtn-genera" onclick="switchGenTab(\'genera\')" style="padding:9px 22px;background:none;border:none;border-bottom:2px solid var(--sp-primary,#0066ff);margin-bottom:-2px;color:var(--sp-primary,#0066ff);font-weight:600;cursor:pointer;font-size:13px;">Genera</button>'
+                + '<button id="genTabBtn-output" onclick="switchGenTab(\'output\')" style="padding:9px 22px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--sp-text-secondary,#aaa);cursor:pointer;font-size:13px;">Documenti generati</button>'
+                + '</div>'
+                // ── shared azienda selector ──
                 + '<div class="card"><div class="card-body">'
                 + '<div class="form-grid cols-2"><div class="form-field">'
                 + '<label>Azienda</label>'
                 + '<select id="generazioneAziendaSelect">'
                 + '<option value="">— Seleziona azienda —</option>'
-                + (STATE.data.aziende || []).map(a =>
-                    '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>'
-                ).join('')
+                + aziendaOptions
                 + '</select>'
                 + '</div></div>'
                 + '</div></div>'
-                + '<div id="generazioneDocumentiContainer"></div>';
+                // ── tab panes ──
+                + '<div id="genPane-genera"><div id="generazioneDocumentiContainer"></div></div>'
+                + '<div id="genPane-output" style="display:none;"></div>';
 
             document.getElementById('generazioneAziendaSelect')
-                ?.addEventListener('change', loadGenerazioneDocumenti);
+                ?.addEventListener('change', () => {
+                    const tab = document.getElementById('genPane-output').style.display === 'none' ? 'genera' : 'output';
+                    if (tab === 'genera') loadGenerazioneDocumenti();
+                    else loadOutputDocumenti();
+                });
+        }
+
+        function switchGenTab(tab) {
+            ['genera','output'].forEach(t => {
+                const pane = document.getElementById('genPane-' + t);
+                const btn  = document.getElementById('genTabBtn-' + t);
+                if (!pane || !btn) return;
+                const active = t === tab;
+                pane.style.display = active ? '' : 'none';
+                btn.style.borderBottomColor  = active ? 'var(--sp-primary,#0066ff)' : 'transparent';
+                btn.style.color = active ? 'var(--sp-primary,#0066ff)' : 'var(--sp-text-secondary,#aaa)';
+                btn.style.fontWeight = active ? '600' : '400';
+            });
+            const aziendaId = document.getElementById('generazioneAziendaSelect')?.value;
+            if (!aziendaId) return;
+            if (tab === 'genera') loadGenerazioneDocumenti();
+            else loadOutputDocumenti();
         }
 
         async function loadGenerazioneDocumenti() {
@@ -4383,9 +4414,8 @@
                         const templateBadge = hasTemplate
                             ? '<span class="badge success">Disponibile</span>'
                             : '<span class="badge warning">Assente</span>';
-                        const outputBadge = hasOutput
-                            ? '<span class="badge info">Generato</span>'
-                            : '<span class="badge">—</span>';
+                        const outputBadgeClass = hasOutput ? 'badge success' : 'badge';
+                        const outputBadgeText  = hasOutput ? 'Generato' : '—';
 
                         let actions = '';
                         if (canGenerate) {
@@ -4407,8 +4437,8 @@
                         html += '<tr>'
                             + '<td>' + esc(s.documento?.nome || '—') + '</td>'
                             + '<td>' + templateBadge + '</td>'
-                            + '<td>' + outputBadge + '</td>'
-                            + '<td><div class="actions">' + actions + '</div></td>'
+                            + '<td><span class="' + outputBadgeClass + '" data-output-badge="' + attrEsc(codice) + '">' + outputBadgeText + '</span></td>'
+                            + '<td><div class="actions" data-output-actions="' + attrEsc(codice) + '">' + actions + '</div></td>'
                             + '</tr>';
                     }
 
@@ -4757,18 +4787,25 @@
                     });
                 if (upErr) throw upErr;
 
-                // Download locale
-                const blob = new Blob([outputBuffer], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url; a.download = outputFileName;
-                document.body.appendChild(a); a.click();
-                setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+                showToast('✓ ' + outputFileName + ' salvato nel cloud', 'success');
 
-                showToast('Documento generato e salvato: ' + outputFileName, 'success');
-
-                // Ricarica la lista documenti per aggiornare lo stato output
-                await loadGenerazioneDocumenti();
+                // Aggiorna badge output nella riga del documento (senza scroll)
+                const rowBadge = document.querySelector('[data-output-badge="' + CSS.escape(codice) + '"]');
+                if (rowBadge) {
+                    rowBadge.className = 'badge success';
+                    rowBadge.textContent = 'Generato';
+                }
+                // Aggiorna anche il bottone Scarica se non c'era
+                const rowActions = document.querySelector('[data-output-actions="' + CSS.escape(codice) + '"]');
+                if (rowActions && !rowActions.querySelector('[data-action="download-output"]')) {
+                    const dlBtn = document.createElement('button');
+                    dlBtn.className = 'btn';
+                    dlBtn.dataset.action = 'download-output';
+                    dlBtn.dataset.codice = codice;
+                    dlBtn.dataset.aziendaId = aziendaId;
+                    dlBtn.textContent = 'Scarica';
+                    rowActions.appendChild(dlBtn);
+                }
 
             } catch (err) {
                 console.error(err);
@@ -4789,6 +4826,170 @@
                 window.open(data.signedUrl, '_blank', 'noopener');
             } catch (err) {
                 showToast('Errore download: ' + err.message, 'error');
+            }
+        }
+
+        // ─── TAB: Documenti generati ──────────────────────────────────────────────
+
+        function parseOutputFileName(name) {
+            // Formati attesi: MOD_XXX_YYYYMMDD.docx  oppure  MOD_XXX_YYYYMMDDTHHMMSS.docx
+            const stem = name.replace(/\.[^.]+$/, '');
+            const m = stem.match(/^(.+?)_(\d{8})(?:T(\d{6}))?$/);
+            if (!m) return { codice: stem, label: name, ts: 0 };
+            const codice = m[1];
+            const d = m[2];   // YYYYMMDD
+            const t = m[3];   // HHMMSS (optional)
+            const dateStr = d.slice(0,4) + '-' + d.slice(4,6) + '-' + d.slice(6,8)
+                + (t ? 'T' + t.slice(0,2) + ':' + t.slice(2,4) + ':' + t.slice(4,6) : 'T00:00:00');
+            const dt = new Date(dateStr);
+            const label = isNaN(dt)
+                ? stem
+                : dt.toLocaleDateString('it-IT', { day:'2-digit', month:'short', year:'numeric' })
+                  + (t ? ' ' + dt.toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' }) : '');
+            return { codice, label, ts: isNaN(dt) ? 0 : dt.getTime() };
+        }
+
+        async function loadOutputDocumenti() {
+            const aziendaId = document.getElementById('generazioneAziendaSelect')?.value;
+            const pane = document.getElementById('genPane-output');
+            if (!pane) return;
+            if (!aziendaId) { pane.innerHTML = ''; return; }
+
+            const canDelete = hasRequiredRole('rspp');
+            pane.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento documenti generati…</div>';
+
+            try {
+                const { data: files, error } = await supabaseClient.storage
+                    .from(CONFIG.storage.output).list(aziendaId, { limit: 1000, sortBy: { column: 'name', order: 'desc' } });
+                if (error) throw error;
+
+                const items = (files || [])
+                    .filter(f => f.name && !f.name.endsWith('/') && f.name.includes('.'))
+                    .map(f => ({ ...parseOutputFileName(f.name), name: f.name, size: f.metadata?.size }))
+                    .sort((a, b) => b.ts - a.ts);
+
+                if (!items.length) {
+                    pane.innerHTML = '<div class="card"><div class="card-body">'
+                        + '<p class="hint">Nessun documento generato per questa azienda.</p>'
+                        + '</div></div>';
+                    return;
+                }
+
+                // Ricava lista codici unici per filtro
+                const codiciSet = [...new Set(items.map(i => i.codice))].sort();
+                const filterBar = ''
+                    + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">'
+                    + '<input type="search" id="outSearch" placeholder="Cerca nome file…" style="width:220px;padding:6px 10px;font-size:12px;" oninput="filterOutputTable()">'
+                    + '<select id="outCodiceFilter" onchange="filterOutputTable()" style="padding:6px 10px;font-size:12px;">'
+                    + '<option value="">Tutti i moduli</option>'
+                    + codiciSet.map(c => '<option value="' + attrEsc(c) + '">' + esc(c) + '</option>').join('')
+                    + '</select>'
+                    + '<span id="outCount" style="font-size:12px;color:var(--sp-text-secondary,#aaa);margin-left:auto;"></span>'
+                    + '</div>';
+
+                let rows = '';
+                items.forEach((item, idx) => {
+                    const sizeKb = item.size ? (item.size / 1024).toFixed(0) + ' KB' : '';
+                    rows += '<tr data-out-codice="' + attrEsc(item.codice) + '" data-out-name="' + attrEsc(item.name.toLowerCase()) + '">'
+                        + '<td style="font-family:monospace;font-size:11.5px;">' + esc(item.name) + '</td>'
+                        + '<td><span class="badge info">' + esc(item.codice) + '</span></td>'
+                        + '<td>' + esc(item.label) + '</td>'
+                        + '<td style="color:var(--sp-text-secondary,#aaa);font-size:11px;">' + esc(sizeKb) + '</td>'
+                        + '<td><div class="actions">'
+                        + '<button class="btn" data-action="download-output-file" data-name="' + attrEsc(item.name) + '" data-azienda-id="' + attrEsc(aziendaId) + '">Scarica</button>'
+                        + (canDelete ? '<button class="btn" style="color:var(--sp-error,#e53);" data-action="delete-output-file" data-name="' + attrEsc(item.name) + '" data-azienda-id="' + attrEsc(aziendaId) + '">Elimina</button>' : '')
+                        + '</div></td>'
+                        + '</tr>';
+                });
+
+                pane.innerHTML = '<div class="card"><div class="card-body" style="padding:12px 16px;">'
+                    + filterBar
+                    + '<table class="data-table" id="outTable"><thead>'
+                    + '<tr><th>Nome file</th><th>Modulo</th><th>Data generazione</th><th>Dim.</th><th></th></tr>'
+                    + '</thead><tbody>' + rows + '</tbody></table>'
+                    + '</div></div>';
+
+                filterOutputTable();
+
+                // Event delegation
+                pane.addEventListener('click', async function onOutClick(e) {
+                    const dlBtn = e.target.closest('[data-action="download-output-file"]');
+                    if (dlBtn) {
+                        const { name: fn, aziendaId: aid } = dlBtn.dataset;
+                        await downloadOutputFile(fn, aid);
+                        return;
+                    }
+                    const delBtn = e.target.closest('[data-action="delete-output-file"]');
+                    if (delBtn) {
+                        await deleteOutputFile(delBtn.dataset.name, delBtn.dataset.aziendaId, delBtn.closest('tr'));
+                    }
+                }, { once: false });
+
+            } catch (err) {
+                pane.innerHTML = '<div class="card"><div class="card-body" style="color:var(--sp-error,#e53);">'
+                    + esc(err.message) + '</div></div>';
+            }
+        }
+
+        function filterOutputTable() {
+            const q = (document.getElementById('outSearch')?.value || '').toLowerCase().trim();
+            const codice = document.getElementById('outCodiceFilter')?.value || '';
+            const tbody = document.querySelector('#outTable tbody');
+            if (!tbody) return;
+            let vis = 0;
+            tbody.querySelectorAll('tr').forEach(tr => {
+                const matchQ = !q || tr.dataset.outName?.includes(q);
+                const matchC = !codice || tr.dataset.outCodice === codice;
+                tr.style.display = (matchQ && matchC) ? '' : 'none';
+                if (matchQ && matchC) vis++;
+            });
+            const cnt = document.getElementById('outCount');
+            if (cnt) cnt.textContent = vis + ' file';
+        }
+
+        async function downloadOutputFile(fileName, aziendaId) {
+            try {
+                const { data, error } = await supabaseClient.storage
+                    .from(CONFIG.storage.output)
+                    .createSignedUrl(aziendaId + '/' + fileName, 180);
+                if (error) throw error;
+                window.open(data.signedUrl, '_blank', 'noopener');
+            } catch (err) {
+                showToast('Errore download: ' + err.message, 'error');
+            }
+        }
+
+        async function deleteOutputFile(fileName, aziendaId, trEl) {
+            if (!hasRequiredRole('rspp')) { showToast('Permesso negato', 'error'); return; }
+            if (!confirm('Eliminare definitivamente ' + fileName + '?')) return;
+            try {
+                const { error } = await supabaseClient.storage
+                    .from(CONFIG.storage.output)
+                    .remove([aziendaId + '/' + fileName]);
+                if (error) throw error;
+                trEl?.remove();
+                showToast('File eliminato: ' + fileName, 'success');
+
+                // Aggiorna badge nella tab Genera se il documento è ancora visibile
+                const parsed = parseOutputFileName(fileName);
+                const badge = document.querySelector('[data-output-badge="' + CSS.escape(parsed.codice) + '"]');
+                if (badge) {
+                    // Controlla se esistono altri file per lo stesso codice (reload leggero)
+                    const { data: remaining } = await supabaseClient.storage
+                        .from(CONFIG.storage.output).list(aziendaId, { limit: 1000 });
+                    const still = (remaining || []).some(f => codiceFromStorageName(f.name) === parsed.codice);
+                    if (!still) {
+                        badge.className = 'badge';
+                        badge.textContent = '—';
+                        const actWrap = document.querySelector('[data-output-actions="' + CSS.escape(parsed.codice) + '"]');
+                        actWrap?.querySelector('[data-action="download-output"]')?.remove();
+                    }
+                }
+
+                // Aggiorna contatore
+                filterOutputTable();
+            } catch (err) {
+                showToast('Errore eliminazione: ' + err.message, 'error');
             }
         }
 

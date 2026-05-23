@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cancellazione totale completata</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Segoe UI,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f4f5;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="background:#ffffff;border:1px solid #e4e4e7;border-radius:8px;overflow:hidden;">
+          <tr>
+            <td style="background:#067647;padding:16px 24px;">
+              <h1 style="margin:0;font-size:18px;color:#ffffff;font-weight:600;">
+                RSPP-APP — Cancellazione totale completata
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px;color:#18181b;font-size:14px;line-height:1.55;">
+              <p style="margin:0 0 16px;">
+                La richiesta di cancellazione del bucket <code style="background:#f4f4f5;padding:2px 6px;border-radius:4px;">output</code>
+                è stata <strong>approvata ed eseguita</strong>.
+              </p>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:12px 16px;font-size:13px;">
+                    <strong>File eliminati:</strong> {{ $('Code').item.json.deleted }}<br>
+                    <strong>Path totali trovati:</strong> {{ $('Code').item.json.paths_count }}<br>
+                    <strong>Eseguita il:</strong> {{ $now.toISO() }}
+                  </td>
+                </tr>
+              </table>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fafafa;border:1px solid #e4e4e7;border-radius:6px;margin-bottom:20px;">
+                <tr>
+                  <td style="padding:12px 16px;font-size:13px;">
+                    <strong>Richiesto da:</strong> {{ $('Webhook').item.json.body.full_name }}<br>
+                    <strong>Email richiedente:</strong> {{ $('Webhook').item.json.body.email }}<br>
+                    <strong>Ruolo:</strong> {{ $('Webhook').item.json.body.role }}<br>
+                    <strong>File segnalati in richiesta:</strong> {{ $('Webhook').item.json.body.output_file_count }}<br>
+                    <strong>Richiesta inviata:</strong> {{ $('Webhook').item.json.body.requested_at }}
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;color:#71717a;font-size:13px;">
+                Nessuna azione ulteriore richiesta. Conserva questa email come traccia dell'operazione.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:14px 24px;background:#fafafa;border-top:1px solid #e4e4e7;color:#71717a;font-size:11px;">
+              Messaggio automatico da n8n — RSPP-APP. Non rispondere a questa email.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -41,14 +41,14 @@
               <table role="presentation" cellspacing="0" cellpadding="0">
                 <tr>
                   <td style="padding-right:10px;">
-                    <a href="{{ $execution.resumeUrl }}?action=approve"
+                    <a href="{{ $execution.resumeUrl }}{{ $execution.resumeUrl.includes('?') ? '&' : '?' }}action=approve"
                        style="display:inline-block;background:#b42318;color:#ffffff;text-decoration:none;
                               padding:12px 22px;border-radius:6px;font-weight:600;font-size:14px;">
                       Approva cancellazione
                     </a>
                   </td>
                   <td>
-                    <a href="{{ $execution.resumeUrl }}?action=reject"
+                    <a href="{{ $execution.resumeUrl }}{{ $execution.resumeUrl.includes('?') ? '&' : '?' }}action=reject"
                        style="display:inline-block;background:#ffffff;color:#18181b;text-decoration:none;
                               padding:12px 22px;border-radius:6px;font-weight:600;font-size:14px;
                               border:1px solid #d4d4d8;">

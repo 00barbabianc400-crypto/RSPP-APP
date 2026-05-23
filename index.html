@@ -860,6 +860,9 @@
             },
             modelliAllowedExt: ['docx', 'doc', 'dotx', 'pdf'],
             loghiAllowedExt: ['png', 'jpg', 'jpeg', 'webp', 'svg'],
+            n8n: {
+                outputWipeWebhookUrl: RUNTIME_ENV.N8N_OUTPUT_WIPE_WEBHOOK_URL || '',
+            },
             TESTO_TRASCURABILE: 'Rischio non rilevato per il profilo professionale. Le caratteristiche dell\'attivita e dell\'ambiente di lavoro non comportano esposizione a tale tipologia di rischio.'
         };
 
@@ -1109,6 +1112,10 @@
 
         function canManageModelli() {
             return isActiveProfile() && (STATE.role === 'admin' || STATE.role === 'rspp');
+        }
+
+        function canWipeOutput() {
+            return canManageModelli();
         }
 
         async function loadCurrentProfile() {
@@ -4289,6 +4296,8 @@
             const canGenerate = canMutateData();
             await ensureAziendeLoaded();
             await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260523b');
+            await loadScriptOnce('js/generazione/output-export.js?v=20260523a');
+            await loadScriptOnce('js/generazione/output-wipe.js?v=20260523b');
 
             const aziendaOptions = (STATE.data.aziende || []).map(a =>
                 '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>'
@@ -4320,7 +4329,22 @@
                 + '<div id="genStorageChart" style="display:none;background:var(--sp-bg-secondary,#1e1e1e);border:1px solid var(--sp-border,#333);border-radius:6px;padding:16px;margin-bottom:18px;"></div>'
                 // ── tab panes ──
                 + '<div id="genPane-genera"><div id="generazioneDocumentiContainer"></div></div>'
-                + '<div id="genPane-output" style="display:none;"></div>';
+                + '<div id="genPane-output" style="display:none;">'
+                + '<div id="genOutputToolbar"></div>'
+                + '<div id="genOutputContent"></div>'
+                + '</div>';
+
+            // Listener unico per il pane output (evita duplicati a ogni reload)
+            document.getElementById('genPane-output').addEventListener('click', async function (e) {
+                const dlBtn = e.target.closest('[data-action="download-output-file"]');
+                if (dlBtn) { await downloadOutputFile(dlBtn.dataset.name, dlBtn.dataset.aziendaId); return; }
+                const delBtn = e.target.closest('[data-action="delete-output-file"]');
+                if (delBtn) { await deleteOutputFile(delBtn.dataset.name, delBtn.dataset.aziendaId, delBtn.closest('tr')); return; }
+                const expBtn = e.target.closest('[data-action="export-output-zip"]');
+                if (expBtn) { await exportOutputZip(expBtn.dataset.aziendaId); return; }
+                const wipeBtn = e.target.closest('[data-action="open-output-wipe"]');
+                if (wipeBtn) { openOutputWipeModal(); }
+            });
 
             // Mappa id → ragione sociale per la legenda
             window._genNomiMap = {};
@@ -4334,6 +4358,7 @@
                     if (tab === 'genera') loadGenerazioneDocumenti();
                     else {
                         loadOutputDocumenti();
+                        refreshGenOutputToolbar();
                         _refreshStorageChart();
                     }
                 });
@@ -4371,7 +4396,8 @@
             if (tab === 'genera') {
                 if (aziendaId) loadGenerazioneDocumenti();
             } else {
-                if (aziendaId) loadOutputDocumenti();
+                refreshGenOutputToolbar();
+                loadOutputDocumenti();
                 _refreshStorageChart();
             }
         }
@@ -4536,7 +4562,7 @@
                 MOD_MICROCLIMA: '20260520c',
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
                 MOD_CHIMICO: '20260521f',
-                MOD_EMERGENZE: '20260522v',
+                MOD_EMERGENZE: '20260523c',
                 MOD_VIBRAZIONI: '20260523b',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
@@ -4738,7 +4764,7 @@
             const adapterVer =
                 codice === 'MOD_STRESS_LC' ? '20260520stress22'
                 : codice === 'MOD_CHIMICO' ? '20260521f'
-                : codice === 'MOD_EMERGENZE' ? '20260522v'
+                : codice === 'MOD_EMERGENZE' ? '20260523c'
                 : codice === 'MOD_VIBRAZIONI' ? '20260523b'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
@@ -4846,6 +4872,131 @@
 
         // ─── TAB: Documenti generati ──────────────────────────────────────────────
 
+        window._outputGlobalFileCount = 0;
+
+        async function refreshGenOutputToolbar() {
+            const toolbar = document.getElementById('genOutputToolbar');
+            if (!toolbar) return;
+            if (!canWipeOutput()) {
+                toolbar.innerHTML = '';
+                return;
+            }
+            try {
+                if (!window.GEN_OUTPUT_WIPE) {
+                    await loadScriptOnce('js/generazione/output-wipe.js?v=20260523b');
+                }
+                window._outputGlobalFileCount = await GEN_OUTPUT_WIPE.countAllOutputFiles(
+                    supabaseClient, CONFIG.storage.output
+                );
+            } catch (_) {
+                window._outputGlobalFileCount = 0;
+            }
+            if (!window._outputGlobalFileCount) {
+                toolbar.innerHTML = '';
+                return;
+            }
+            toolbar.innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:12px;">'
+                + '<button type="button" class="btn" data-action="open-output-wipe" '
+                + 'style="background:var(--sp-error,#e53);color:#fff;border-color:var(--sp-error,#e53);font-weight:600;">'
+                + 'Cancellazione totale</button>'
+                + '</div>';
+        }
+
+        function openOutputWipeModal() {
+            if (!canWipeOutput()) { showToast('Permesso negato', 'error'); return; }
+            if (!window._outputGlobalFileCount) {
+                showToast('Nessun documento nel bucket output', 'warning');
+                return;
+            }
+            if (document.getElementById('outputWipeModal')) closeModal('outputWipeModal');
+
+            const n = window._outputGlobalFileCount;
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.id = 'outputWipeModal';
+            modal.innerHTML =
+                '<div class="modal" onclick="event.stopPropagation()" style="max-width:480px;">'
+                + '<div class="modal-header">'
+                + '<div class="modal-title" style="color:var(--sp-error,#e53);">Cancellazione totale</div>'
+                + '<button class="icon-btn" onclick="closeModal(\'outputWipeModal\')">✕</button>'
+                + '</div>'
+                + '<div class="modal-body">'
+                + '<p style="font-size:13px;line-height:1.5;margin-bottom:12px;">'
+                + 'Richiesta di <strong>cancellazione di tutti i documenti generati</strong> nel bucket '
+                + '<code>output</code> (<strong>' + esc(String(n)) + '</strong> file). '
+                + 'Dopo la verifica OTP, n8n invierà un\'email di alert. '
+                + '<strong>Nessun file viene eliminato automaticamente da questa schermata.</strong>'
+                + '</p>'
+                + '<div class="form-field" style="margin-bottom:12px;">'
+                + '<label>Codice OTP (Microsoft Authenticator)</label>'
+                + '<input type="text" id="inpWipeTotp" inputmode="numeric" autocomplete="one-time-code" '
+                + 'maxlength="6" placeholder="000000" style="letter-spacing:4px;font-family:monospace;">'
+                + '</div>'
+                + '<div class="form-field">'
+                + '<label>Conferma — digita <code>CANCELLA TUTTO</code></label>'
+                + '<input type="text" id="inpWipeConfirm" autocomplete="off" placeholder="CANCELLA TUTTO">'
+                + '</div>'
+                + '</div>'
+                + '<div class="modal-footer">'
+                + '<button class="btn" onclick="closeModal(\'outputWipeModal\')">Annulla</button>'
+                + '<button class="btn" id="btnSubmitOutputWipe" onclick="submitOutputWipeRequest()" '
+                + 'style="background:var(--sp-error,#e53);color:#fff;border-color:var(--sp-error,#e53);">Invia richiesta</button>'
+                + '</div>'
+                + '</div>';
+            document.body.appendChild(modal);
+            setTimeout(() => modal.classList.add('show'), 10);
+            modal.onclick = () => closeModal('outputWipeModal');
+            document.getElementById('inpWipeTotp')?.focus();
+        }
+
+        async function submitOutputWipeRequest() {
+            if (!canWipeOutput()) { showToast('Permesso negato', 'error'); return; }
+            const totp = (document.getElementById('inpWipeTotp')?.value || '').replace(/\s/g, '');
+            const confirm = (document.getElementById('inpWipeConfirm')?.value || '').trim();
+            if (!/^\d{6}$/.test(totp)) {
+                showToast('Inserisci un codice OTP a 6 cifre', 'warning');
+                return;
+            }
+            if (confirm !== 'CANCELLA TUTTO') {
+                showToast('Digita esattamente CANCELLA TUTTO per confermare', 'warning');
+                return;
+            }
+            const btn = document.getElementById('btnSubmitOutputWipe');
+            if (btn) { btn.disabled = true; btn.textContent = 'Invio…'; }
+            try {
+                const { data: sessionData, error: sessErr } = await supabaseClient.auth.getSession();
+                if (sessErr) throw sessErr;
+                const token = sessionData?.session?.access_token;
+                if (!token) throw new Error('Sessione non valida — effettua di nuovo il login');
+
+                if (!window.GEN_OUTPUT_WIPE) {
+                    await loadScriptOnce('js/generazione/output-wipe.js?v=20260523b');
+                }
+
+                const profile = STATE.profile || {};
+                await GEN_OUTPUT_WIPE.requestWipe(
+                    CONFIG.n8n.outputWipeWebhookUrl,
+                    token,
+                    {
+                        totp_code: totp,
+                        confirm_phrase: confirm,
+                        user_id: STATE.account?.id || '',
+                        email: profile.email || STATE.account?.email || '',
+                        full_name: profile.full_name || '',
+                        role: STATE.role || '',
+                        output_file_count: window._outputGlobalFileCount || 0,
+                    }
+                );
+                closeModal('outputWipeModal');
+                showToast('Richiesta inviata — verifica email di alert', 'success');
+            } catch (err) {
+                showToast('Errore richiesta: ' + err.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Invia richiesta'; }
+            }
+        }
+
         function parseOutputFileName(name) {
             // Formati attesi: MOD_XXX_YYYYMMDD.docx  oppure  MOD_XXX_YYYYMMDDTHHMMSS.docx
             const stem = name.replace(/\.[^.]+$/, '');
@@ -4866,12 +5017,19 @@
 
         async function loadOutputDocumenti() {
             const aziendaId = document.getElementById('generazioneAziendaSelect')?.value;
-            const pane = document.getElementById('genPane-output');
-            if (!pane) return;
-            if (!aziendaId) { pane.innerHTML = ''; return; }
+            const content = document.getElementById('genOutputContent');
+            if (!content) return;
+            if (!aziendaId) {
+                window._outputExportCtx = null;
+                content.innerHTML = '<div class="card"><div class="card-body">'
+                    + '<p class="hint">Seleziona un\'azienda per l\'elenco dei documenti generati. '
+                    + 'Il grafico storage sopra mostra l\'occupazione per azienda o per file.</p>'
+                    + '</div></div>';
+                return;
+            }
 
             const canDelete = hasRequiredRole('rspp');
-            pane.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento documenti generati…</div>';
+            content.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento documenti generati…</div>';
 
             try {
                 const { data: files, error } = await supabaseClient.storage
@@ -4884,11 +5042,15 @@
                     .sort((a, b) => b.ts - a.ts);
 
                 if (!items.length) {
-                    pane.innerHTML = '<div class="card"><div class="card-body">'
+                    window._outputExportCtx = null;
+                    content.innerHTML = '<div class="card"><div class="card-body">'
                         + '<p class="hint">Nessun documento generato per questa azienda.</p>'
                         + '</div></div>';
                     return;
                 }
+
+                const aziendaNome = (window._genNomiMap || {})[aziendaId] || aziendaId;
+                window._outputExportCtx = { aziendaId, aziendaNome, items };
 
                 // Ricava lista codici unici per filtro
                 const codiciSet = [...new Set(items.map(i => i.codice))].sort();
@@ -4906,6 +5068,9 @@
                     + '<option value="90">Ultimi 3 mesi</option>'
                     + '<option value="365">Ultimo anno</option>'
                     + '</select>'
+                    + '<button type="button" class="btn btn-primary" id="btnExportOutputZip" data-action="export-output-zip"'
+                    + ' data-azienda-id="' + attrEsc(aziendaId) + '" style="font-size:12px;"'
+                    + ' title="Scarica tutti i documenti in ZIP, ordinati per categoria catalogo">Esporta ZIP</button>'
                     + '<span id="outCount" style="font-size:12px;color:var(--sp-text-secondary,#aaa);margin-left:auto;"></span>'
                     + '</div>';
 
@@ -4924,7 +5089,7 @@
                         + '</tr>';
                 });
 
-                pane.innerHTML = '<div class="card"><div class="card-body" style="padding:12px 16px;">'
+                content.innerHTML = '<div class="card"><div class="card-body" style="padding:12px 16px;">'
                     + filterBar
                     + '<table class="data-table" id="outTable"><thead>'
                     + '<tr><th>Nome file</th><th>Modulo</th><th>Data generazione</th><th>Dim.</th><th></th></tr>'
@@ -4933,22 +5098,8 @@
 
                 filterOutputTable();
 
-                // Event delegation
-                pane.addEventListener('click', async function onOutClick(e) {
-                    const dlBtn = e.target.closest('[data-action="download-output-file"]');
-                    if (dlBtn) {
-                        const { name: fn, aziendaId: aid } = dlBtn.dataset;
-                        await downloadOutputFile(fn, aid);
-                        return;
-                    }
-                    const delBtn = e.target.closest('[data-action="delete-output-file"]');
-                    if (delBtn) {
-                        await deleteOutputFile(delBtn.dataset.name, delBtn.dataset.aziendaId, delBtn.closest('tr'));
-                    }
-                }, { once: false });
-
             } catch (err) {
-                pane.innerHTML = '<div class="card"><div class="card-body" style="color:var(--sp-error,#e53);">'
+                content.innerHTML = '<div class="card"><div class="card-body" style="color:var(--sp-error,#e53);">'
                     + esc(err.message) + '</div></div>';
             }
         }
@@ -4976,6 +5127,7 @@
         }
 
         async function downloadOutputFile(fileName, aziendaId) {
+            if (!hasRequiredRole('viewer')) { showToast('Permesso negato', 'error'); return; }
             try {
                 const { data, error } = await supabaseClient.storage
                     .from(CONFIG.storage.output)
@@ -4984,6 +5136,38 @@
                 window.open(data.signedUrl, '_blank', 'noopener');
             } catch (err) {
                 showToast('Errore download: ' + err.message, 'error');
+            }
+        }
+
+        async function exportOutputZip(aziendaId) {
+            if (!hasRequiredRole('viewer')) { showToast('Permesso negato', 'error'); return; }
+            const ctx = window._outputExportCtx;
+            if (!ctx || ctx.aziendaId !== aziendaId || !ctx.items?.length) {
+                showToast('Nessun documento da esportare', 'warning');
+                return;
+            }
+            const btn = document.getElementById('btnExportOutputZip');
+            if (btn) { btn.disabled = true; btn.textContent = 'Esportazione…'; }
+            showToast('Preparazione ZIP…', 'info');
+            try {
+                await loadScriptOnce('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
+                if (!window.GEN_OUTPUT_EXPORT) {
+                    await loadScriptOnce('js/generazione/output-export.js?v=20260523a');
+                }
+                await ensureDocumentiCatalogoLoaded();
+                const n = await GEN_OUTPUT_EXPORT.exportZip(
+                    supabaseClient,
+                    CONFIG,
+                    ctx.aziendaId,
+                    ctx.aziendaNome,
+                    ctx.items,
+                    STATE.data.documentiCatalogo || []
+                );
+                showToast('ZIP scaricato (' + n + ' file)', 'success');
+            } catch (err) {
+                showToast('Errore export: ' + err.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Esporta ZIP'; }
             }
         }
 

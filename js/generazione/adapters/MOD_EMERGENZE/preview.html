@@ -182,7 +182,7 @@
 
       <div id="wrapAffollamentoBassoScelta" class="choice-row hidden" style="margin-top:8px;">
         <p style="font-weight:600;margin-bottom:6px;">Quale paragrafo inserire nel Word?</p>
-        <p class="hint-str">Con rischio basso va compilato <strong>un solo</strong> tag tra <code>{{PARAGRAFO_AFFOLLAMENTO_1}}</code> e <code>{{PARAGRAFO_AFFOLLAMENTO_2}}</code>.</p>
+        <p class="hint-str">Va compilato <strong>un solo</strong> tag tra <code>{{PARAGRAFO_AFFOLLAMENTO_1}}</code> e <code>{{PARAGRAFO_AFFOLLAMENTO_2}}</code>.</p>
         <div class="radio-group">
           <label><input type="radio" name="affoll_basso_scelta" value="calcolo_dm" onchange="setAffollamentoBassoScelta('calcolo_dm')"> Calcolo D.M. (densità 0,7 persone/m²) — par. 1</label>
           <label><input type="radio" name="affoll_basso_scelta" value="dichiarazione_dl" onchange="setAffollamentoBassoScelta('dichiarazione_dl')"> Dichiarazione datore di lavoro — par. 2</label>
@@ -1101,6 +1101,8 @@
   function renderListaProtezioni(wrapId, rows, onInputFn, onRemoveFn) {
     const wrap = document.getElementById(wrapId);
     if (!wrap) return;
+    const _ae = document.activeElement;
+    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
     let html =
       '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
       '<th>Voce elenco</th><th style="width:28px;"></th></tr></thead><tbody>';
@@ -1205,6 +1207,8 @@
     ensureRigheRischiParticolari();
     const wrap = document.getElementById('wrapRigheRischiParticolari');
     if (!wrap) return;
+    const _ae = document.activeElement;
+    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
     const rows = WIZARD.righe_rischi_particolari;
     let html =
       '<table class="rischi-table"><thead><tr>' +
@@ -1363,6 +1367,8 @@
     ensureMisureEsigenze();
     const wrap = document.getElementById('wrapMisureEsigenze');
     if (!wrap) return;
+    const _ae = document.activeElement;
+    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
     const rows = WIZARD.misure_esigenze_speciali;
     let html =
       '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
@@ -1483,6 +1489,8 @@
     ensureRighePianoLuoghiArray();
     const wrap = document.getElementById('wrapRighePianoLuoghi');
     if (!wrap) return;
+    const _ae = document.activeElement;
+    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
     const rows = WIZARD.righe_piano_luoghi;
     let html =
       '<table class="luoghi-table"><thead><tr>' +
@@ -1602,20 +1610,17 @@
       el.checked = el.value === String(WIZARD.rischio_incendio_basso);
     });
     const wrapBassoScelta = document.getElementById('wrapAffollamentoBassoScelta');
-    if (wrapBassoScelta) wrapBassoScelta.classList.toggle('hidden', basso !== true);
+    // Mostra la scelta del paragrafo sempre, non solo con rischio basso
+    if (wrapBassoScelta) wrapBassoScelta.classList.toggle('hidden', basso === null);
     const sceltaBasso = WIZARD.affollamento_basso_scelta || 'calcolo_dm';
     document.querySelectorAll('input[name="affoll_basso_scelta"]').forEach((el) => {
       el.checked = el.value === sceltaBasso;
     });
     const wrapTa1 = document.getElementById('wrapTaAffollamento1');
     const wrapTa2 = document.getElementById('wrapTaAffollamento2');
-    if (basso === true) {
-      if (wrapTa1) wrapTa1.classList.toggle('hidden', sceltaBasso !== 'calcolo_dm');
-      if (wrapTa2) wrapTa2.classList.toggle('hidden', sceltaBasso !== 'dichiarazione_dl');
-    } else {
-      if (wrapTa1) wrapTa1.classList.remove('hidden');
-      if (wrapTa2) wrapTa2.classList.remove('hidden');
-    }
+    // Mostra solo la textarea corrispondente alla scelta (indipendentemente da rischio basso/non basso)
+    if (wrapTa1) wrapTa1.classList.toggle('hidden', basso === null || sceltaBasso !== 'calcolo_dm');
+    if (wrapTa2) wrapTa2.classList.toggle('hidden', basso === null || sceltaBasso !== 'dichiarazione_dl');
     // blocco modalità (visibile solo se basso === false)
     const wrapMod = document.getElementById('wrapModalitaAffollamento');
     if (wrapMod) wrapMod.classList.toggle('hidden', basso !== false);

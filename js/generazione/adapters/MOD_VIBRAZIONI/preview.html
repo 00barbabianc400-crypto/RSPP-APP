@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Vibrazioni</title>
-<script src="macchine-defaults.js?v=20260523a"></script>
-<script src="adapter.js?v=20260523a"></script>
+<script src="macchine-defaults.js?v=20260523b"></script>
+<script src="adapter.js?v=20260523b"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -146,18 +146,6 @@
       </p>
       <div id="wrapConclusioniGruppi"></div>
       <p id="hintNotaFasciaB" class="hint-str" style="margin-top:8px;"></p>
-
-      <h2 class="doc-section">Tabella misure vibrazioni (bozza)</h2>
-      <p class="hint-str">
-        Loop previsto nel Word: <code>{{#RIGHE_VIBRAZIONI}}</code> … <code>{{/RIGHE_VIBRAZIONI}}</code>
-        — vedi <code>fields-map.md</code>. Le righe sotto si precompilano dai rilevamenti dashboard
-        (tipi «Vibrazioni — sistema mano-braccio» / «corpo intero»).
-      </p>
-      <div class="vib-actions">
-        <button type="button" onclick="addRigaVibrazioni()">+ Aggiungi riga</button>
-        <button type="button" class="secondary" onclick="reloadRigheDaRilevamenti()">Ricarica da rilevamenti</button>
-      </div>
-      <div id="wrapTabellaVibrazioni"></div>
     </div>
   </div>
 </div>
@@ -178,8 +166,6 @@
     conclusioni_gruppi: [],
     macchine_hav: [],
     macchine_wbv: [],
-    righe_vibrazioni: [],
-    richiede_tabella_misure: false,
   };
 
   function esc(s) {
@@ -214,9 +200,7 @@
 
   function buildMerged() {
     if (!DATA || !ADAPTER?.applyWizard) return {};
-    const merged = ADAPTER.applyWizard(DATA, WIZARD);
-    merged._richiede_tabella_misure = !!WIZARD.richiede_tabella_misure;
-    return merged;
+    return ADAPTER.applyWizard(DATA, WIZARD);
   }
 
   function sendUpdate() {
@@ -239,7 +223,6 @@
     renderConclusioniGruppi();
     renderMacchine('hav');
     renderMacchine('wbv');
-    renderTabellaVibrazioni();
     if (activeView === 'docx' && errors.length === 0) {
       clearTimeout(previewTimer);
       previewTimer = setTimeout(requestPreviewDocx, 600);
@@ -416,60 +399,8 @@
     sendUpdate();
   };
 
-  function renderTabellaVibrazioni() {
-    const wrap = document.getElementById('wrapTabellaVibrazioni');
-    if (!wrap) return;
-    const rows = WIZARD.righe_vibrazioni || [];
-    if (!rows.length) {
-      wrap.innerHTML = '<p class="hint-str" style="margin-top:8px;">Nessuna riga — aggiungi una misura o importa dai rilevamenti.</p>';
-      return;
-    }
-    let html =
-      '<table class="vib-table"><thead><tr>' +
-      '<th style="width:28px;">#</th><th>Postazione</th><th>Data</th><th>Tipo</th>' +
-      '<th>Valore</th><th>Limite</th><th>Esito</th><th style="width:32px;"></th>' +
-      '</tr></thead><tbody>';
-    rows.forEach((r, idx) => {
-      html +=
-        '<tr><td>' + (idx + 1) + '</td>' +
-        '<td><input value="' + esc(r.postazione) + '" oninput="setRigaField(' + idx + ',\'postazione\',this.value)"></td>' +
-        '<td><input value="' + esc(r.data) + '" oninput="setRigaField(' + idx + ',\'data\',this.value)"></td>' +
-        '<td><input value="' + esc(r.tipo) + '" oninput="setRigaField(' + idx + ',\'tipo\',this.value)"></td>' +
-        '<td><input value="' + esc(r.valore) + '" oninput="setRigaField(' + idx + ',\'valore\',this.value)"></td>' +
-        '<td><input value="' + esc(r.limite) + '" oninput="setRigaField(' + idx + ',\'limite\',this.value)"></td>' +
-        '<td><input value="' + esc(r.esito) + '" oninput="setRigaField(' + idx + ',\'esito\',this.value)"></td>' +
-        '<td><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" onclick="removeRigaVibrazioni(' + idx + ')">✕</button></td></tr>';
-    });
-    html += '</tbody></table>';
-    wrap.innerHTML = html;
-  }
-
   window.setModuloNumero = function (v) {
     WIZARD.modulo_numero = v;
-    sendUpdate();
-  };
-
-  window.setRigaField = function (idx, field, val) {
-    if (!WIZARD.righe_vibrazioni[idx]) return;
-    WIZARD.righe_vibrazioni[idx][field] = val;
-    sendUpdate();
-  };
-
-  window.addRigaVibrazioni = function () {
-    if (!ADAPTER?.emptyRigaVibrazioni) return;
-    WIZARD.righe_vibrazioni.push(ADAPTER.emptyRigaVibrazioni());
-    sendUpdate();
-  };
-
-  window.removeRigaVibrazioni = function (idx) {
-    WIZARD.righe_vibrazioni.splice(idx, 1);
-    sendUpdate();
-  };
-
-  window.reloadRigheDaRilevamenti = function () {
-    if (!DATA || !ADAPTER) return;
-    const fromDb = ADAPTER.mergeRigheVibrazioniWizard({}, DATA._rilevamenti_vibrazioni || []);
-    WIZARD.righe_vibrazioni = fromDb;
     sendUpdate();
   };
 
@@ -541,11 +472,6 @@
       { macchine_wbv: prev.macchine_wbv || DATA._macchine_wbv },
       'wbv'
     );
-    WIZARD.righe_vibrazioni = ADAPTER.mergeRigheVibrazioniWizard(
-      { righe_vibrazioni: prev.righe_vibrazioni },
-      DATA._rilevamenti_vibrazioni || []
-    );
-    WIZARD.richiede_tabella_misure = !!prev.richiede_tabella_misure;
 
     sendUpdate();
   }

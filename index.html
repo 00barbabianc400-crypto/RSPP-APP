@@ -4505,7 +4505,7 @@
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
                 MOD_CHIMICO: '20260521f',
                 MOD_EMERGENZE: '20260522v',
-                MOD_VIBRAZIONI: '20260523a',
+                MOD_VIBRAZIONI: '20260523b',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -4707,7 +4707,7 @@
                 codice === 'MOD_STRESS_LC' ? '20260520stress22'
                 : codice === 'MOD_CHIMICO' ? '20260521f'
                 : codice === 'MOD_EMERGENZE' ? '20260522v'
-                : codice === 'MOD_VIBRAZIONI' ? '20260523a'
+                : codice === 'MOD_VIBRAZIONI' ? '20260523b'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

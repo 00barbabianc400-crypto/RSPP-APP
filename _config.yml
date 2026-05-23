@@ -6,3 +6,4 @@ exclude:
   - js/generazione/adapters/MOD_STRESS_LC/fields-map.md
   - js/generazione/adapters/MOD_CHIMICO/fields-map.md
   - js/generazione/adapters/MOD_EMERGENZE/fields-map.md
+  - js/generazione/adapters/MOD_VIBRAZIONI/fields-map.md

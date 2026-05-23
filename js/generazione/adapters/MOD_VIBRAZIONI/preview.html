@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Vibrazioni</title>
+<script src="macchine-defaults.js?v=20260522e"></script>
+<script src="adapter.js?v=20260522e"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 20px; }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .vib-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .vib-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .vib-actions button.secondary { border-color: #999; background: #f4f4f4; color: #333; font-weight: 500; }
+  .vib-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 10px; table-layout: fixed; }
+  .vib-table th { background: #2c3e50; color: #fff; padding: 5px 4px; text-align: center; font-size: 8.5pt; }
+  .vib-table td { border: 1px solid #bbb; padding: 2px; vertical-align: middle; }
+  .vib-table td input { width: 100%; border: none; background: transparent; font-size: 8.5pt; text-align: center; padding: 3px 2px; }
+  .vib-table td input:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .conc-cell { font-size: 8.5pt; vertical-align: top; }
+  .conc-cell .conc-static { color: #555; font-style: italic; padding: 4px; }
+  .conc-cell label { display: block; margin: 3px 0; cursor: pointer; }
+  .conc-cell label input { margin-right: 4px; }
+  .tag-pill { display: inline-block; font-family: monospace; font-size: 9pt; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; margin: 2px 4px 2px 0; }
+  .mans-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 10px; }
+  .mans-table th { background: #2c3e50; color: #fff; padding: 8px 6px; text-align: center; vertical-align: bottom; font-size: 9pt; line-height: 1.3; }
+  .mans-table td { border: 1px solid #bbb; padding: 8px 6px; vertical-align: middle; }
+  .mans-table td.nome-gruppo { font-weight: 600; text-align: left; }
+  .mans-table .espo-cell { text-align: center; }
+  .mans-table .espo-cell label { display: block; margin: 3px 0; font-size: 9.5pt; cursor: pointer; white-space: nowrap; }
+  .mans-table .espo-cell input { margin-right: 4px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">MOD_VIBRAZIONI — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Valutazione del rischio vibrazioni</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Modello di lavoro: <code>Modulo XXXXXXX- rischio vibrazioni.docx</code> —
+        per la generazione caricare <code>MOD_VIBRAZIONI.docx</code> nel bucket <code>modelli</code>.
+      </p>
+
+      <h2 class="doc-section">Dati documento</h2>
+      <p><strong>Ragione sociale</strong> <code>{{RAGIONE_SOCIALE}}</code>: <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong> <code>{{SEDE_OPERATIVA}}</code>: <span id="pSede" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong> <code>{{MODULO_NUMERO}}</code>:<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+          style="width:120px;margin-top:6px;" placeholder="es. 13" autocomplete="off"
+          oninput="setModuloNumero(this.value)">
+      </p>
+      <p class="hint-str">Suggerimento dall’ordine catalogo documenti; nel Word viene formattato a 2 cifre (es. 7 → 07).</p>
+      <p><strong>Data emissione</strong> <code>{{DATA_EMISSIONE}}</code>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Luogo</strong> <code>{{LUOGO}}</code> (quando inserito nel modello): <span id="pLuogo" class="field-auto">—</span></p>
+
+      <h2 class="doc-section">§4 — Mansioni / gruppi omogenei</h2>
+      <p class="hint-str">
+        Una riga per ogni <strong>profilo associato all’azienda</strong> (gruppo omogeneo).
+        Nel Word: loop <code>{{#MANSIONI_GRUPPI}}</code> con
+        <code>{{NOME_GRUPPO}}</code>, <code>{{CELLA_HAV}}</code>, <code>{{CELLA_WBV}}</code>
+        (valori <strong>X</strong> o <strong>NON ESPOSTO</strong>).
+      </p>
+      <div id="wrapMansioniGruppi"></div>
+      <p id="hintValutazioni" class="hint-str" style="margin-top:8px;"></p>
+
+      <h2 class="doc-section">§5.1 — HAV (macchine mano-braccio)</h2>
+      <p class="hint-str">
+        Tabella <strong>separata</strong> nel Word (dopo §4). Loop da inserire nella prima riga dati:
+        <code>{{#MACCHINE_HAV}}{{ID}}</code> · <code>{{TIPOLOGIA}}</code> · <code>{{MODELLO}}</code> · <code>{{AW_SUM}}{{/MACCHINE_HAV}}</code>
+        — poi elimina le altre righe fisse (02…25).
+      </p>
+      <div class="vib-actions">
+        <button type="button" onclick="addMacchina('hav')">+ Aggiungi riga</button>
+        <button type="button" class="secondary" onclick="resetMacchine('hav')">Ripristina elenco standard (25 voci)</button>
+      </div>
+      <div id="wrapMacchineHav"></div>
+
+      <h2 class="doc-section">§5.2 — WBV (macchine corpo intero)</h2>
+      <p class="hint-str">
+        Loop nella prima riga dati:
+        <code>{{#MACCHINE_WBV}}{{ID}}</code> · <code>{{TIPOLOGIA}}</code> · <code>{{MODELLO}}</code> · <code>{{AW_MAX}}{{/MACCHINE_WBV}}</code>
+        — elimina righe 02…12.
+      </p>
+      <div class="vib-actions">
+        <button type="button" onclick="addMacchina('wbv')">+ Aggiungi riga</button>
+        <button type="button" class="secondary" onclick="resetMacchine('wbv')">Ripristina elenco standard (12 voci)</button>
+      </div>
+      <div id="wrapMacchineWbv"></div>
+
+      <h2 class="doc-section">§9 — Conclusioni (tabella riepilogo)</h2>
+      <p class="hint-str">
+        Stessi gruppi del §4. Se in §4 è <strong>NON ESPOSTO</strong>, qui compare automaticamente.
+        Se è <strong>X</strong>, scegli Fascia A o Fascia B per HAV e/o WBV.
+        La nota sanitaria su Fascia B compare nel Word solo se almeno un gruppo ha Fascia B.
+      </p>
+      <div id="wrapConclusioniGruppi"></div>
+      <p id="hintNotaFasciaB" class="hint-str" style="margin-top:8px;"></p>
+
+      <h2 class="doc-section">Tabella misure vibrazioni (bozza)</h2>
+      <p class="hint-str">
+        Loop previsto nel Word: <code>{{#RIGHE_VIBRAZIONI}}</code> … <code>{{/RIGHE_VIBRAZIONI}}</code>
+        — vedi <code>fields-map.md</code>. Le righe sotto si precompilano dai rilevamenti dashboard
+        (tipi «Vibrazioni — sistema mano-braccio» / «corpo intero»).
+      </p>
+      <div class="vib-actions">
+        <button type="button" onclick="addRigaVibrazioni()">+ Aggiungi riga</button>
+        <button type="button" class="secondary" onclick="reloadRigheDaRilevamenti()">Ricarica da rilevamenti</button>
+      </div>
+      <div id="wrapTabellaVibrazioni"></div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"><p style="text-align:center;padding:40px;color:#888;">Apri «Anteprima Word» dopo la compilazione.</p></div>
+</div>
+
+<script>
+(function () {
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_VIBRAZIONI'];
+  let DATA = null;
+  let activeView = 'compile';
+  let previewTimer = null;
+  const WIZARD = {
+    modulo_numero: '',
+    mansioni_gruppi: [],
+    conclusioni_gruppi: [],
+    macchine_hav: [],
+    macchine_wbv: [],
+    righe_vibrazioni: [],
+    richiede_tabella_misure: false,
+  };
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const n = parseInt(String(padded || '').trim(), 10);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function buildMerged() {
+    if (!DATA || !ADAPTER?.applyWizard) return {};
+    const merged = ADAPTER.applyWizard(DATA, WIZARD);
+    merged._richiede_tabella_misure = !!WIZARD.richiede_tabella_misure;
+    return merged;
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    window.parent.postMessage({
+      type: 'DATA_UPDATE',
+      data: merged,
+      valid: errors.length === 0,
+      errors,
+    }, '*');
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    renderMansioniGruppi();
+    renderConclusioniGruppi();
+    renderMacchine('hav');
+    renderMacchine('wbv');
+    renderTabellaVibrazioni();
+    if (activeView === 'docx' && errors.length === 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 600);
+    }
+  }
+
+  function renderMansioniGruppi() {
+    const wrap = document.getElementById('wrapMansioniGruppi');
+    if (!wrap || !ADAPTER) return;
+    const rows = WIZARD.mansioni_gruppi || [];
+    if (!rows.length) {
+      wrap.innerHTML =
+        '<p class="hint-str" style="margin-top:8px;">Nessun profilo/gruppo omogeneo associato all\u2019azienda. '
+        + 'Associa i profili in Anagrafica azienda.</p>';
+      return;
+    }
+    let html =
+      '<table class="mans-table"><thead><tr>' +
+      '<th style="width:34%;">Gruppo omogeneo</th>' +
+      '<th>Esposizione HAV<br><span style="font-weight:normal;font-size:8pt;">(mano-braccio)</span></th>' +
+      '<th>Esposizione WBV<br><span style="font-weight:normal;font-size:8pt;">(corpo intero)</span></th>' +
+      '</tr></thead><tbody>';
+    rows.forEach((row, idx) => {
+      const hav = row.hav || 'non_esposto';
+      const wbv = row.wbv || 'non_esposto';
+      html +=
+        '<tr><td class="nome-gruppo">' + esc(row.nome) + '</td>' +
+        '<td class="espo-cell">' +
+        '<label><input type="radio" name="hav_' + idx + '" value="esposto"' +
+        (hav === 'esposto' ? ' checked' : '') +
+        ' onchange="setEspostoMansione(' + idx + ',\'hav\',\'esposto\')"> X</label>' +
+        '<label><input type="radio" name="hav_' + idx + '" value="non_esposto"' +
+        (hav === 'non_esposto' ? ' checked' : '') +
+        ' onchange="setEspostoMansione(' + idx + ',\'hav\',\'non_esposto\')"> NON ESPOSTO</label>' +
+        '</td><td class="espo-cell">' +
+        '<label><input type="radio" name="wbv_' + idx + '" value="esposto"' +
+        (wbv === 'esposto' ? ' checked' : '') +
+        ' onchange="setEspostoMansione(' + idx + ',\'wbv\',\'esposto\')"> X</label>' +
+        '<label><input type="radio" name="wbv_' + idx + '" value="non_esposto"' +
+        (wbv === 'non_esposto' ? ' checked' : '') +
+        ' onchange="setEspostoMansione(' + idx + ',\'wbv\',\'non_esposto\')"> NON ESPOSTO</label>' +
+        '</td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    renderHintValutazioni();
+  }
+
+  function renderHintValutazioni() {
+    const el = document.getElementById('hintValutazioni');
+    if (!el || !ADAPTER || !DATA) return;
+    const profili = DATA._profili_azienda || [];
+    const hav = ADAPTER.valutazioniForTemplate({ mansioni_gruppi: WIZARD.mansioni_gruppi }, profili, 'hav');
+    const wbv = ADAPTER.valutazioniForTemplate({ mansioni_gruppi: WIZARD.mansioni_gruppi }, profili, 'wbv');
+    el.innerHTML =
+      'Da §4: <strong>' + hav.length + '</strong> blocco/i §7 HAV (X) e <strong>' + wbv.length +
+      '</strong> blocco/i §8 WBV — nel Word loop <code>{{#VALUTAZIONI_HAV}}</code> / ' +
+      '<code>{{#VALUTAZIONI_WBV}}</code> con <code>{{NOME_GRUPPO}}</code> + foglio Excel (copia del modello).';
+  }
+
+  function renderMacchine(kind) {
+    const wrap = document.getElementById(kind === 'wbv' ? 'wrapMacchineWbv' : 'wrapMacchineHav');
+    const key = kind === 'wbv' ? 'macchine_wbv' : 'macchine_hav';
+    const awLabel = kind === 'wbv' ? 'Aw(max)' : 'Aw(sum)';
+    if (!wrap) return;
+    const rows = WIZARD[key] || [];
+    let html =
+      '<table class="vib-table"><thead><tr>' +
+      '<th style="width:40px;">ID</th><th>Tipologia</th><th>Modello</th><th style="width:70px;">' + awLabel + '</th>' +
+      '<th style="width:32px;"></th></tr></thead><tbody>';
+    rows.forEach((r, idx) => {
+      html +=
+        '<tr>' +
+        '<td><input value="' + esc(r.id) + '" oninput="setMacchinaField(\'' + kind + '\',' + idx + ',\'id\',this.value)"></td>' +
+        '<td><input value="' + esc(r.tipologia) + '" oninput="setMacchinaField(\'' + kind + '\',' + idx + ',\'tipologia\',this.value)"></td>' +
+        '<td><input value="' + esc(r.modello) + '" oninput="setMacchinaField(\'' + kind + '\',' + idx + ',\'modello\',this.value)"></td>' +
+        '<td><input value="' + esc(r.aw) + '" oninput="setMacchinaField(\'' + kind + '\',' + idx + ',\'aw\',this.value)"></td>' +
+        '<td><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" onclick="removeMacchina(\'' + kind + '\',' + idx + ')">✕</button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  window.setMacchinaField = function (kind, idx, field, val) {
+    const key = kind === 'wbv' ? 'macchine_wbv' : 'macchine_hav';
+    if (!WIZARD[key][idx]) return;
+    WIZARD[key][idx][field] = val;
+    sendUpdate();
+  };
+
+  window.addMacchina = function (kind) {
+    const key = kind === 'wbv' ? 'macchine_wbv' : 'macchine_hav';
+    WIZARD[key].push(ADAPTER?.emptyMacchinaRow?.() || { id: '', tipologia: '', modello: '', aw: '' });
+    sendUpdate();
+  };
+
+  window.removeMacchina = function (kind, idx) {
+    const key = kind === 'wbv' ? 'macchine_wbv' : 'macchine_hav';
+    WIZARD[key].splice(idx, 1);
+    sendUpdate();
+  };
+
+  window.resetMacchine = function (kind) {
+    WIZARD[kind === 'wbv' ? 'macchine_wbv' : 'macchine_hav'] = ADAPTER?.defaultMacchineFromSeed?.(kind) || [];
+    sendUpdate();
+  };
+
+  window.setEspostoMansione = function (idx, col, val) {
+    if (!WIZARD.mansioni_gruppi[idx]) return;
+    WIZARD.mansioni_gruppi[idx][col] = val;
+    sendUpdate();
+  };
+
+  function renderConclusioniGruppi() {
+    const wrap = document.getElementById('wrapConclusioniGruppi');
+    const hintB = document.getElementById('hintNotaFasciaB');
+    if (!wrap || !ADAPTER) return;
+    const profili = DATA?._profili_azienda || [];
+    WIZARD.conclusioni_gruppi = ADAPTER.mergeConclusioniGruppiWizard(
+      { mansioni_gruppi: WIZARD.mansioni_gruppi, conclusioni_gruppi: WIZARD.conclusioni_gruppi },
+      profili
+    );
+    const rows = WIZARD.conclusioni_gruppi || [];
+    if (!rows.length) {
+      wrap.innerHTML = '<p class="hint-str">Nessun gruppo — compila prima il §4.</p>';
+      if (hintB) hintB.textContent = '';
+      return;
+    }
+    let html =
+      '<table class="mans-table"><thead><tr>' +
+      '<th style="width:28%;">Gruppo omogeneo</th>' +
+      '<th>Esposizione a vibrazioni HAV</th>' +
+      '<th>Esposizione a vibrazioni WBV</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach((row, idx) => {
+      html += '<tr><td class="nome-gruppo">' + esc(row.nome) + '</td>';
+      html += '<td class="conc-cell">' + cellaConclusioniHtml(row, idx, 'hav') + '</td>';
+      html += '<td class="conc-cell">' + cellaConclusioniHtml(row, idx, 'wbv') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    if (hintB) {
+      const showB = ADAPTER.hasFasciaBConclusioni(rows);
+      hintB.innerHTML = showB
+        ? 'Nel Word verrà inclusa la nota: «Si precisa che gli addetti ricadenti in fascia B…» (<code>{{#MOSTRA_NOTA_FASCIA_B}}</code>).'
+        : 'Nessun gruppo in Fascia B: la nota sanitaria non verrà stampata.';
+    }
+  }
+
+  function cellaConclusioniHtml(row, idx, tipo) {
+    const key = tipo === 'wbv' ? 'wbv' : 'hav';
+    const fasciaKey = tipo === 'wbv' ? 'wbv_fascia' : 'hav_fascia';
+    if ((row[key] || 'non_esposto') !== 'esposto') {
+      return '<span class="conc-static">NON ESPOSTO</span>';
+    }
+    const f = row[fasciaKey] || 'A';
+    return (
+      '<label><input type="radio" name="conc_' + tipo + '_' + idx + '" value="A"' +
+      (f === 'A' ? ' checked' : '') +
+      ' onchange="setConclusioneFascia(' + idx + ',\'' + tipo + '\',\'A\')"> Fascia A</label>' +
+      '<label><input type="radio" name="conc_' + tipo + '_' + idx + '" value="B"' +
+      (f === 'B' ? ' checked' : '') +
+      ' onchange="setConclusioneFascia(' + idx + ',\'' + tipo + '\',\'B\')"> Fascia B</label>'
+    );
+  }
+
+  window.setConclusioneFascia = function (idx, tipo, fascia) {
+    if (!WIZARD.conclusioni_gruppi[idx]) return;
+    const fk = tipo === 'wbv' ? 'wbv_fascia' : 'hav_fascia';
+    WIZARD.conclusioni_gruppi[idx][fk] = fascia;
+    sendUpdate();
+  };
+
+  function renderTabellaVibrazioni() {
+    const wrap = document.getElementById('wrapTabellaVibrazioni');
+    if (!wrap) return;
+    const rows = WIZARD.righe_vibrazioni || [];
+    if (!rows.length) {
+      wrap.innerHTML = '<p class="hint-str" style="margin-top:8px;">Nessuna riga — aggiungi una misura o importa dai rilevamenti.</p>';
+      return;
+    }
+    let html =
+      '<table class="vib-table"><thead><tr>' +
+      '<th style="width:28px;">#</th><th>Postazione</th><th>Data</th><th>Tipo</th>' +
+      '<th>Valore</th><th>Limite</th><th>Esito</th><th style="width:32px;"></th>' +
+      '</tr></thead><tbody>';
+    rows.forEach((r, idx) => {
+      html +=
+        '<tr><td>' + (idx + 1) + '</td>' +
+        '<td><input value="' + esc(r.postazione) + '" oninput="setRigaField(' + idx + ',\'postazione\',this.value)"></td>' +
+        '<td><input value="' + esc(r.data) + '" oninput="setRigaField(' + idx + ',\'data\',this.value)"></td>' +
+        '<td><input value="' + esc(r.tipo) + '" oninput="setRigaField(' + idx + ',\'tipo\',this.value)"></td>' +
+        '<td><input value="' + esc(r.valore) + '" oninput="setRigaField(' + idx + ',\'valore\',this.value)"></td>' +
+        '<td><input value="' + esc(r.limite) + '" oninput="setRigaField(' + idx + ',\'limite\',this.value)"></td>' +
+        '<td><input value="' + esc(r.esito) + '" oninput="setRigaField(' + idx + ',\'esito\',this.value)"></td>' +
+        '<td><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" onclick="removeRigaVibrazioni(' + idx + ')">✕</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
+  window.setRigaField = function (idx, field, val) {
+    if (!WIZARD.righe_vibrazioni[idx]) return;
+    WIZARD.righe_vibrazioni[idx][field] = val;
+    sendUpdate();
+  };
+
+  window.addRigaVibrazioni = function () {
+    if (!ADAPTER?.emptyRigaVibrazioni) return;
+    WIZARD.righe_vibrazioni.push(ADAPTER.emptyRigaVibrazioni());
+    sendUpdate();
+  };
+
+  window.removeRigaVibrazioni = function (idx) {
+    WIZARD.righe_vibrazioni.splice(idx, 1);
+    sendUpdate();
+  };
+
+  window.reloadRigheDaRilevamenti = function () {
+    if (!DATA || !ADAPTER) return;
+    const fromDb = ADAPTER.mergeRigheVibrazioniWizard({}, DATA._rilevamenti_vibrazioni || []);
+    WIZARD.righe_vibrazioni = fromDb;
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_VIBRAZIONI — Compila' : 'MOD_VIBRAZIONI — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+
+    const prev = DATA._vibrazioni_wizard || {};
+    WIZARD.mansioni_gruppi = ADAPTER.mergeMansioniGruppiWizard(
+      { mansioni_gruppi: prev.mansioni_gruppi || DATA._mansioni_gruppi },
+      DATA._profili_azienda || []
+    );
+    WIZARD.conclusioni_gruppi = ADAPTER.mergeConclusioniGruppiWizard(
+      {
+        mansioni_gruppi: WIZARD.mansioni_gruppi,
+        conclusioni_gruppi: prev.conclusioni_gruppi || DATA._conclusioni_gruppi,
+      },
+      DATA._profili_azienda || []
+    );
+    WIZARD.macchine_hav = ADAPTER.mergeMacchineWizard(
+      { macchine_hav: prev.macchine_hav || DATA._macchine_hav },
+      'hav'
+    );
+    WIZARD.macchine_wbv = ADAPTER.mergeMacchineWizard(
+      { macchine_wbv: prev.macchine_wbv || DATA._macchine_wbv },
+      'wbv'
+    );
+    WIZARD.righe_vibrazioni = ADAPTER.mergeRigheVibrazioniWizard(
+      { righe_vibrazioni: prev.righe_vibrazioni },
+      DATA._rilevamenti_vibrazioni || []
+    );
+    WIZARD.richiede_tabella_misure = !!prev.richiede_tabella_misure;
+
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

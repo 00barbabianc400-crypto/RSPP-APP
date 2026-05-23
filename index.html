@@ -4513,6 +4513,7 @@
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
                 MOD_CHIMICO: '20260521f',
                 MOD_EMERGENZE: '20260522v',
+                MOD_VIBRAZIONI: '20260522e',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -4694,7 +4695,7 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
@@ -4714,6 +4715,7 @@
                 codice === 'MOD_STRESS_LC' ? '20260520stress22'
                 : codice === 'MOD_CHIMICO' ? '20260521f'
                 : codice === 'MOD_EMERGENZE' ? '20260522v'
+                : codice === 'MOD_VIBRAZIONI' ? '20260522e'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

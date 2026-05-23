@@ -4925,8 +4925,8 @@
                 + '<p style="font-size:13px;line-height:1.5;margin-bottom:12px;">'
                 + 'Richiesta di <strong>cancellazione di tutti i documenti generati</strong> nel bucket '
                 + '<code>output</code> (<strong>' + esc(String(n)) + '</strong> file). '
-                + 'Dopo la verifica OTP, n8n invierà un\'email di alert. '
-                + '<strong>Nessun file viene eliminato automaticamente da questa schermata.</strong>'
+                + 'Dopo la verifica OTP, n8n invierà un\'email con link di approvazione. '
+                + '<strong>I file vengono cancellati solo dopo aver cliccato Approva nell\'email.</strong>'
                 + '</p>'
                 + '<div class="form-field" style="margin-bottom:12px;">'
                 + '<label>Codice OTP (Microsoft Authenticator)</label>'
@@ -4989,7 +4989,7 @@
                     }
                 );
                 closeModal('outputWipeModal');
-                showToast('Richiesta inviata — verifica email di alert', 'success');
+                showToast('Richiesta inviata — controlla email e clicca Approva', 'success');
             } catch (err) {
                 showToast('Errore richiesta: ' + err.message, 'error');
             } finally {

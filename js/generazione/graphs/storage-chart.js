@@ -1,246 +1,232 @@
 /**
- * GEN_STORAGE_CHART  —  grafico a torta (donut SVG) per lo spazio Supabase Storage.
+ * GEN_STORAGE_CHART  —  donut SVG per lo Storage nella tab «Documenti generati».
  *
- * API pubblica:
- *   GEN_STORAGE_CHART.render(containerEl, supabaseClient, config)
- *   GEN_STORAGE_CHART.renderAziendaBadge(containerEl, supabaseClient, config, aziendaId)
+ * Comportamento:
+ *   renderOutputByAzienda(el, client, cfg, nomiMap)
+ *     → donut: spicchio per ogni azienda, basato su output/{id}/*
  *
- * config: { storage: { modelli, output, loghi }, QUOTA_BYTES? }   (QUOTA_BYTES default 1 GB)
+ *   renderOutputByDocumento(el, client, cfg, aziendaId, aziendaNome)
+ *     → donut: spicchio per ogni file generato di quell'azienda
  *
- * Usa solo list() sugli stessi bucket già usati dall'app — nessuna API nuova.
+ * config richiede: { storage: { output }, QUOTA_BYTES? }
+ * QUOTA_BYTES default: 1 GB (plan Free Supabase)
+ *
+ * Nessuna libreria esterna — SVG puro.
  */
 (function () {
   'use strict';
 
   const DEFAULT_QUOTA = 1 * 1024 * 1024 * 1024; // 1 GB
 
-  // Palette — un colore per azienda, poi uno per modelli, uno per libero
   const PALETTE = [
     '#3498db','#2ecc71','#e67e22','#9b59b6','#e74c3c',
     '#1abc9c','#f39c12','#d35400','#16a085','#8e44ad',
     '#27ae60','#c0392b','#2980b9','#f1c40f','#7f8c8d',
+    '#00b894','#fd79a8','#6c5ce7','#fdcb6e','#00cec9',
   ];
-  const COLOR_MODELLI = '#4a90d9';
-  const COLOR_FREE    = '#2a2a2a';
+  const COLOR_FREE        = '#222';
   const COLOR_FREE_STROKE = '#444';
 
-  function formatBytes(bytes) {
+  // ── utilità ────────────────────────────────────────────────────────────────
+
+  function fmt(bytes) {
     if (!bytes || bytes <= 0) return '0 B';
     if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    if (bytes < 1024 * 1024 * 1024) return (bytes / 1024 / 1024).toFixed(1) + ' MB';
-    return (bytes / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+    if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    return (bytes / 1073741824).toFixed(2) + ' GB';
   }
 
-  function pct(bytes, quota) {
-    return Math.min(100, (bytes / quota) * 100);
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // ── raccolta dati ─────────────────────────────────────────────────────────
-
-  async function listAllFiles(client, bucket, prefix) {
+  async function listFiles(client, bucket, prefix) {
     const { data } = await client.storage.from(bucket).list(prefix || '', {
       limit: 1000,
-      sortBy: { column: 'name', order: 'asc' },
+      sortBy: { column: 'name', order: 'desc' },
     });
-    return data || [];
+    return (data || []).filter(f => f.name && !f.name.endsWith('/'));
   }
 
-  /**
-   * Restituisce { modelliBytes, byAzienda: { [id]: bytes }, loghiBytes }
-   */
-  async function collectUsage(client, cfg) {
-    const [modelliFiles, loghiFiles] = await Promise.all([
-      listAllFiles(client, cfg.storage.modelli),
-      listAllFiles(client, cfg.storage.loghi),
-    ]);
+  // ── SVG donut ──────────────────────────────────────────────────────────────
 
-    const modelliBytes = modelliFiles
-      .filter(f => f.name && !f.name.endsWith('/'))
-      .reduce((s, f) => s + (f.metadata?.size || 0), 0);
-
-    const loghiBytes = loghiFiles
-      .filter(f => f.name && !f.name.endsWith('/'))
-      .reduce((s, f) => s + (f.metadata?.size || 0), 0);
-
-    // Per output dobbiamo listare ogni sotto-cartella (una per azienda)
-    // Prima otteniamo le cartelle radice del bucket output
-    const rootOutput = await listAllFiles(client, cfg.storage.output);
-    const aziendaFolders = rootOutput.filter(f => f.id == null || f.name.endsWith('/')).map(f => f.name.replace(/\/$/, ''));
-    // Supabase restituisce le cartelle come oggetti senza estensione; se la list restituisce
-    // file diretti (formato bucket flat), usiamo il path come azienda_id
-    const byAzienda = {};
-
-    if (aziendaFolders.length > 0) {
-      await Promise.all(aziendaFolders.map(async (folder) => {
-        const files = await listAllFiles(client, cfg.storage.output, folder);
-        const size = files.filter(f => f.name && !f.name.endsWith('/'))
-          .reduce((s, f) => s + (f.metadata?.size || 0), 0);
-        byAzienda[folder] = (byAzienda[folder] || 0) + size;
-      }));
-    } else {
-      // Bucket flat: ogni file si chiama aziendaId/filename
-      // Proviamo a listare tutte le cartelle tramite prefisso vuoto con delimiter
-      // Fallback: rendiamo tutto come un bucket unico
-      const allOut = await listAllFiles(client, cfg.storage.output, '');
-      allOut.filter(f => f.name && !f.name.endsWith('/')).forEach(f => {
-        // Il nome di lista al livello radice restituisce solo il nome della sotto-cartella
-        byAzienda['output'] = (byAzienda['output'] || 0) + (f.metadata?.size || 0);
-      });
-    }
-
-    return { modelliBytes, loghiBytes, byAzienda };
+  function arc(cx, cy, r, a1, a2) {
+    const rad = a => (a - 90) * Math.PI / 180;
+    const x1 = cx + r * Math.cos(rad(a1)), y1 = cy + r * Math.sin(rad(a1));
+    const x2 = cx + r * Math.cos(rad(a2)), y2 = cy + r * Math.sin(rad(a2));
+    return `M${x1} ${y1} A${r} ${r} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`;
   }
 
-  // ── SVG donut ─────────────────────────────────────────────────────────────
-
-  function describeArc(cx, cy, r, startAngle, endAngle) {
-    const toRad = a => (a - 90) * Math.PI / 180;
-    const x1 = cx + r * Math.cos(toRad(startAngle));
-    const y1 = cy + r * Math.sin(toRad(startAngle));
-    const x2 = cx + r * Math.cos(toRad(endAngle));
-    const y2 = cy + r * Math.sin(toRad(endAngle));
-    const large = (endAngle - startAngle) > 180 ? 1 : 0;
-    return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
-  }
-
-  function buildDonutSvg(segments, cx, cy, r, stroke, centerLabel, centerSub) {
-    let svg = `<svg viewBox="0 0 ${cx * 2} ${cy * 2}" width="${cx * 2}" height="${cy * 2}" style="display:block;">`;
-    // sfondo cerchio
-    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${COLOR_FREE_STROKE}" stroke-width="${stroke}" opacity="0.4"/>`;
-
-    let angle = 0;
+  function donut(segments, quota, centerTop, centerBot) {
+    const S = 180, cx = S / 2, cy = S / 2, r = 68, sw = 22;
+    let svg = `<svg viewBox="0 0 ${S} ${S}" width="${S}" height="${S}" style="display:block;flex-shrink:0;">`;
+    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${COLOR_FREE_STROKE}" stroke-width="${sw}" opacity="0.35"/>`;
+    let ang = 0;
     for (const seg of segments) {
-      const sweep = (seg.bytes / seg.total) * 360;
-      if (sweep < 0.5) { angle += sweep; continue; }
-      const end = angle + sweep;
-      const path = describeArc(cx, cy, r, angle, end);
-      svg += `<path d="${path}" fill="none" stroke="${seg.color}" stroke-width="${stroke}" stroke-linecap="butt">
-        <title>${seg.label}: ${formatBytes(seg.bytes)}</title>
-      </path>`;
-      angle = end;
+      const sweep = Math.min(359.99, (seg.bytes / quota) * 360);
+      if (sweep < 0.3) { ang += sweep; continue; }
+      svg += `<path d="${arc(cx, cy, r, ang, ang + sweep)}" fill="none" stroke="${seg.color}"
+        stroke-width="${sw}" stroke-linecap="butt"><title>${esc(seg.label)}: ${esc(fmt(seg.bytes))}</title></path>`;
+      ang += sweep;
     }
-
-    // testo centrale
-    svg += `<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">${centerLabel}</text>`;
-    svg += `<text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="11" fill="#aaa">${centerSub}</text>`;
+    svg += `<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="17" font-weight="700" fill="#f0f0f0">${esc(centerTop)}</text>`;
+    svg += `<text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="11" fill="#888">${esc(centerBot)}</text>`;
     svg += `</svg>`;
     return svg;
   }
 
-  // ── legenda ───────────────────────────────────────────────────────────────
-
-  function buildLegend(segments, quota) {
-    return segments.map(seg => {
-      const p = ((seg.bytes / quota) * 100).toFixed(1);
-      return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
-        <span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${seg.color};flex-shrink:0;"></span>
-        <span style="font-size:11.5px;color:#ccc;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${seg.label}">${seg.label}</span>
-        <span style="font-size:11px;color:#aaa;white-space:nowrap;">${formatBytes(seg.bytes)} <span style="color:#666;">(${p}%)</span></span>
-      </div>`;
-    }).join('');
+  function legend(segments) {
+    return segments.map(s => `
+      <div style="display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0;">
+        <span style="flex-shrink:0;width:11px;height:11px;border-radius:2px;background:${s.color};"></span>
+        <span style="flex:1;font-size:11.5px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(s.label)}">${esc(s.label)}</span>
+        <span style="font-size:11px;color:#888;white-space:nowrap;">${fmt(s.bytes)}</span>
+      </div>`).join('');
   }
 
-  // ── render principale (nessuna azienda selezionata) ───────────────────────
+  function shell(svgHtml, legendHtml, usedBytes, quota, subtitle) {
+    const p = Math.min(100, (usedBytes / quota) * 100);
+    const barColor = p > 90 ? '#e74c3c' : p > 70 ? '#e67e22' : '#2ecc71';
+    return `
+      <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;">
+        ${svgHtml}
+        <div style="flex:1;min-width:160px;padding-top:4px;">
+          <div style="font-size:11px;color:#666;margin-bottom:6px;">${esc(subtitle)}</div>
+          <div style="background:#1a1a1a;border-radius:4px;height:6px;overflow:hidden;margin-bottom:10px;">
+            <div style="width:${p.toFixed(1)}%;height:100%;background:${barColor};transition:width .5s;"></div>
+          </div>
+          <div style="max-height:200px;overflow-y:auto;">${legendHtml}</div>
+        </div>
+      </div>`;
+  }
 
-  async function render(containerEl, client, cfg, aziendaNomiMap) {
+  // ── renderOutputByAzienda ──────────────────────────────────────────────────
+  // Tab «Documenti generati», nessuna azienda selezionata.
+  // Mostra spicchi per ogni azienda (solo bucket output).
+
+  async function renderOutputByAzienda(containerEl, client, cfg, nomiMap) {
     if (!containerEl) return;
-    containerEl.innerHTML = '<p style="font-size:12px;color:#aaa;padding:12px;">Caricamento utilizzo storage…</p>';
-
+    containerEl.style.display = '';
+    containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Calcolo spazio documenti generati…</p>';
     try {
       const quota = cfg.QUOTA_BYTES || DEFAULT_QUOTA;
-      const { modelliBytes, loghiBytes, byAzienda } = await collectUsage(client, cfg);
+
+      // Elenca cartelle/prefissi radice del bucket output
+      const rootItems = await listFiles(client, cfg.storage.output);
+      // Supabase restituisce le sottocartelle come item senza estensione con id=null
+      const { data: rawRoot } = await client.storage.from(cfg.storage.output).list('', { limit: 1000 });
+      const folders = (rawRoot || []).filter(f => f.id == null || !f.name.includes('.'));
+
+      const byAzienda = {};
+      if (folders.length > 0) {
+        await Promise.all(folders.map(async f => {
+          const id = f.name.replace(/\/$/, '');
+          const files = await listFiles(client, cfg.storage.output, id);
+          byAzienda[id] = files.reduce((s, ff) => s + (ff.metadata?.size || 0), 0);
+        }));
+      } else {
+        // Bucket flat (tutti i file alla radice) — usa il rootItems
+        rootItems.forEach(f => {
+          const parts = f.name.split('/');
+          const id = parts.length > 1 ? parts[0] : 'output';
+          byAzienda[id] = (byAzienda[id] || 0) + (f.metadata?.size || 0);
+        });
+      }
 
       const totalOutput = Object.values(byAzienda).reduce((s, v) => s + v, 0);
-      const totalUsed = modelliBytes + loghiBytes + totalOutput;
-      const freeBytes = Math.max(0, quota - totalUsed);
 
-      // Costruisci segmenti
-      const segments = [];
-
-      // Modelli (bucket condiviso)
-      if (modelliBytes > 0) {
-        segments.push({ label: 'Modelli (template)', bytes: modelliBytes, color: COLOR_MODELLI, total: quota });
-      }
-
-      // Loghi (se significativi)
-      if (loghiBytes > 0) {
-        segments.push({ label: 'Loghi', bytes: loghiBytes, color: '#95a5a6', total: quota });
-      }
-
-      // Output per azienda
-      const sortedAziende = Object.entries(byAzienda)
+      const sorted = Object.entries(byAzienda)
         .filter(([, v]) => v > 0)
         .sort((a, b) => b[1] - a[1]);
 
-      sortedAziende.forEach(([id, bytes], idx) => {
-        const nome = (aziendaNomiMap && aziendaNomiMap[id]) || id;
-        segments.push({
-          label: nome,
-          bytes,
-          color: PALETTE[idx % PALETTE.length],
-          total: quota,
-        });
-      });
-
-      // Spazio libero
-      if (freeBytes > 0) {
-        segments.push({ label: 'Libero', bytes: freeBytes, color: COLOR_FREE, total: quota });
+      if (!sorted.length) {
+        containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Nessun documento generato ancora.</p>';
+        return;
       }
 
-      const usedPct = pct(totalUsed, quota);
-      const centerLabel = formatBytes(freeBytes);
-      const centerSub = 'liberi';
+      const segments = sorted.map(([id, bytes], i) => ({
+        label: (nomiMap && nomiMap[id]) || id,
+        bytes,
+        color: PALETTE[i % PALETTE.length],
+      }));
 
-      const svgHtml = buildDonutSvg(segments, 90, 90, 68, 18, centerLabel, centerSub);
-      const legendHtml = buildLegend(segments.filter(s => s.label !== 'Libero'), quota);
+      const freeInOutput = Math.max(0, quota - totalOutput);
+      const centerTop = fmt(totalOutput);
+      const centerBot = 'documenti';
 
-      // Barra % uso
-      const barColor = usedPct > 90 ? '#e74c3c' : usedPct > 70 ? '#e67e22' : '#2ecc71';
+      const segsForDonut = segments.map(s => ({ ...s, bytes: s.bytes }));
+      if (freeInOutput > 0) segsForDonut.push({ label: 'Libero', bytes: freeInOutput, color: COLOR_FREE });
 
-      containerEl.innerHTML = `
-        <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;">
-          <div style="flex-shrink:0;">${svgHtml}</div>
-          <div style="flex:1;min-width:180px;">
-            <div style="font-size:11px;color:#888;margin-bottom:4px;">
-              ${formatBytes(totalUsed)} usati di ${formatBytes(quota)} totali
-            </div>
-            <div style="background:#1a1a1a;border-radius:4px;height:8px;overflow:hidden;margin-bottom:12px;">
-              <div style="width:${usedPct.toFixed(1)}%;height:100%;background:${barColor};transition:width .5s;"></div>
-            </div>
-            <div style="max-height:220px;overflow-y:auto;">${legendHtml}</div>
-          </div>
-        </div>`;
+      containerEl.innerHTML = shell(
+        donut(segsForDonut, quota, centerTop, centerBot),
+        legend(segments),
+        totalOutput,
+        quota,
+        fmt(totalOutput) + ' usati di ' + fmt(quota) + ' — solo documenti generati'
+      );
     } catch (err) {
-      containerEl.innerHTML = '<p style="font-size:12px;color:#e74c3c;padding:8px;">Errore caricamento storage: ' + err.message + '</p>';
+      containerEl.innerHTML = '<p style="font-size:12px;color:#e74c3c;padding:8px 0;">Errore storage: ' + esc(err.message) + '</p>';
     }
   }
 
-  // ── badge singola azienda ─────────────────────────────────────────────────
+  // ── renderOutputByDocumento ────────────────────────────────────────────────
+  // Tab «Documenti generati», azienda selezionata.
+  // Mostra uno spicchio per ogni file generato di quell'azienda.
 
-  async function renderAziendaBadge(containerEl, client, cfg, aziendaId, aziendaNome) {
+  async function renderOutputByDocumento(containerEl, client, cfg, aziendaId, aziendaNome) {
     if (!containerEl || !aziendaId) return;
-    containerEl.innerHTML = '<span style="font-size:11px;color:#888;">Caricamento…</span>';
+    containerEl.style.display = '';
+    containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Calcolo spazio ' + esc(aziendaNome || aziendaId) + '…</p>';
     try {
       const quota = cfg.QUOTA_BYTES || DEFAULT_QUOTA;
-      const files = await listAllFiles(client, cfg.storage.output, aziendaId);
-      const bytes = files.filter(f => f.name && !f.name.endsWith('/'))
-        .reduce((s, f) => s + (f.metadata?.size || 0), 0);
+      const files = await listFiles(client, cfg.storage.output, aziendaId);
 
-      const p = pct(bytes, quota);
-      const color = p > 10 ? '#e67e22' : '#2ecc71';
+      if (!files.length) {
+        containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Nessun documento generato per questa azienda.</p>';
+        return;
+      }
 
-      containerEl.innerHTML = `
-        <span style="font-size:11.5px;color:#aaa;">
-          <span style="font-weight:600;color:${color};">${formatBytes(bytes)}</span>
-          nel cloud (${p.toFixed(2)}% quota)
-        </span>`;
-    } catch (_) {
-      containerEl.innerHTML = '';
+      // Raggruppa per codice documento (MOD_XXX)
+      const byDoc = {};
+      files.forEach(f => {
+        const stem = f.name.replace(/\.[^.]+$/, '');
+        // Formato atteso: MOD_XXX_YYYYMMDD — estraiamo MOD_XXX
+        const m = stem.match(/^(.+?)_\d{8}/);
+        const codice = m ? m[1] : stem;
+        byDoc[codice] = (byDoc[codice] || 0) + (f.metadata?.size || 0);
+      });
+
+      const totalAz = Object.values(byDoc).reduce((s, v) => s + v, 0);
+      const sorted = Object.entries(byDoc).sort((a, b) => b[1] - a[1]);
+
+      const segments = sorted.map(([cod, bytes], i) => ({
+        label: cod,
+        bytes,
+        color: PALETTE[i % PALETTE.length],
+      }));
+
+      const freeSlice = Math.max(0, quota - totalAz);
+      const segsForDonut = [...segments];
+      if (freeSlice > 0) segsForDonut.push({ label: 'Resto quota', bytes: freeSlice, color: COLOR_FREE });
+
+      containerEl.innerHTML = shell(
+        donut(segsForDonut, quota, fmt(totalAz), esc(aziendaNome || aziendaId)),
+        legend(segments),
+        totalAz,
+        quota,
+        fmt(totalAz) + ' — ' + files.length + ' file generati'
+      );
+    } catch (err) {
+      containerEl.innerHTML = '<p style="font-size:12px;color:#e74c3c;padding:8px 0;">Errore storage: ' + esc(err.message) + '</p>';
     }
   }
 
-  // ── export ────────────────────────────────────────────────────────────────
+  // ── export ─────────────────────────────────────────────────────────────────
 
-  window.GEN_STORAGE_CHART = { render, renderAziendaBadge, formatBytes };
+  window.GEN_STORAGE_CHART = {
+    renderOutputByAzienda,
+    renderOutputByDocumento,
+    fmt,
+  };
 })();

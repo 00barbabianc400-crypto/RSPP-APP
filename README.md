@@ -33,7 +33,7 @@ RSPP DVR Suite centralizza l’intero ciclo operativo del DVR: anagrafiche azien
 | 📝 **Testi DVR** | Catalogo testi per rischio e livello |
 | 📁 **Modelli** | Template DOCX nel bucket `modelli` (admin/RSPP) |
 | 🖼️ **Loghi** | Logo per azienda nel bucket `loghi` (editor+) |
-| 📄 **Genera DVR** | Bozza esportabile *(generazione DOCX in roadmap)* |
+| 📄 **Generazione** | Documentazione pronta ed esportabile |
 
 ---
 

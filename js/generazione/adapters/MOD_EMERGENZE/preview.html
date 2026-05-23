@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Emergenze</title>
-<script src="adapter.js?v=20260522v"></script>
+<script src="adapter.js?v=20260523d"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -676,16 +676,80 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  /** Salta innerHTML solo se l'utente sta scrivendo in input/textarea (non su bottoni/checkbox). */
-  function shouldDeferTableRender(wrap) {
-    const ae = document.activeElement;
-    if (!ae || !wrap.contains(ae)) return false;
-    if (ae.tagName === 'TEXTAREA') return true;
-    if (ae.tagName === 'INPUT') {
-      const t = (ae.type || 'text').toLowerCase();
-      return t === 'text' || t === 'search' || t === 'number';
-    }
-    return false;
+  function syncRighePianoLuoghiFromTable() {
+    const wrap = document.getElementById('wrapRighePianoLuoghi');
+    if (!wrap || !wrap.querySelector('tbody tr')) return;
+    const rows = [];
+    wrap.querySelectorAll('tbody tr').forEach((tr) => {
+      if (tr.querySelector('.hint-str')) return;
+      const textInputs = tr.querySelectorAll('input[type="text"]');
+      const ta = tr.querySelector('textarea');
+      if (!textInputs.length) return;
+      rows.push({
+        edificio: textInputs[0].value,
+        attivita: ta ? ta.value : '',
+        numero_persone: textInputs[1] ? textInputs[1].value : 'x',
+      });
+    });
+    if (rows.length) WIZARD.righe_piano_luoghi = rows;
+  }
+
+  function syncRigheRischiParticolariFromTable() {
+    const wrap = document.getElementById('wrapRigheRischiParticolari');
+    if (!wrap || !wrap.querySelector('tbody tr')) return;
+    const rows = [];
+    wrap.querySelectorAll('tbody tr').forEach((tr, idx) => {
+      if (tr.querySelector('.hint-str')) return;
+      const cb = tr.querySelector('input[type="checkbox"]');
+      const tas = tr.querySelectorAll('textarea');
+      if (!tas.length) return;
+      const base = WIZARD.righe_rischi_particolari[idx] || {};
+      rows.push({
+        ...base,
+        id: base.id || ('custom_' + Date.now() + '_' + idx),
+        selezionato: cb ? cb.checked : true,
+        situazione: tas[0].value,
+        misure: tas[1] ? tas[1].value : '',
+      });
+    });
+    if (rows.length) WIZARD.righe_rischi_particolari = rows;
+  }
+
+  function syncMisureEsigenzeFromTable() {
+    const wrap = document.getElementById('wrapMisureEsigenze');
+    if (!wrap || !wrap.querySelector('tbody tr')) return;
+    const rows = [];
+    wrap.querySelectorAll('tbody tr').forEach((tr, idx) => {
+      const cb = tr.querySelector('input[type="checkbox"]');
+      const inp = tr.querySelector('input[type="text"]');
+      if (!inp) return;
+      const base = WIZARD.misure_esigenze_speciali[idx] || {};
+      rows.push({
+        ...base,
+        id: base.id || ('custom_' + Date.now() + '_' + idx),
+        selezionato: cb ? cb.checked : true,
+        testo: inp.value,
+      });
+    });
+    if (rows.length) WIZARD.misure_esigenze_speciali = rows;
+  }
+
+  function syncProtezioniFromTable(wrapId, wizardKey) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap || !wrap.querySelector('tbody tr')) return;
+    const rows = [];
+    wrap.querySelectorAll('tbody tr').forEach((tr, idx) => {
+      if (tr.querySelector('.hint-str')) return;
+      const inp = tr.querySelector('input[type="text"]');
+      if (!inp) return;
+      const base = (WIZARD[wizardKey] || [])[idx] || {};
+      rows.push({
+        ...base,
+        id: base.id || ('custom_' + Date.now() + '_' + idx),
+        testo: inp.value,
+      });
+    });
+    if (rows.length) WIZARD[wizardKey] = rows;
   }
 
   function ensureRighePianoLuoghiArray() {
@@ -1113,7 +1177,6 @@
   function renderListaProtezioni(wrapId, rows, onInputFn, onRemoveFn) {
     const wrap = document.getElementById(wrapId);
     if (!wrap) return;
-    if (shouldDeferTableRender(wrap)) return;
     let html =
       '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
       '<th>Voce elenco</th><th style="width:28px;"></th></tr></thead><tbody>';
@@ -1152,6 +1215,7 @@
   };
 
   window.removeProtezioneAttiva = function (idx) {
+    syncProtezioniFromTable('wrapProtezioniAttive', 'protezioni_attive');
     ensureProtezioniListe();
     WIZARD.protezioni_attive.splice(idx, 1);
     applyProtezioniToData();
@@ -1160,6 +1224,7 @@
   };
 
   window.addProtezioneAttiva = function () {
+    syncProtezioniFromTable('wrapProtezioniAttive', 'protezioni_attive');
     ensureProtezioniListe();
     WIZARD.protezioni_attive.push({ id: 'custom_' + Date.now(), testo: '' });
     applyProtezioniToData();
@@ -1184,6 +1249,7 @@
   };
 
   window.removeProtezionePassiva = function (idx) {
+    syncProtezioniFromTable('wrapProtezioniPassive', 'protezioni_passive');
     ensureProtezioniListe();
     WIZARD.protezioni_passive.splice(idx, 1);
     applyProtezioniToData();
@@ -1192,6 +1258,7 @@
   };
 
   window.addProtezionePassiva = function () {
+    syncProtezioniFromTable('wrapProtezioniPassive', 'protezioni_passive');
     ensureProtezioniListe();
     WIZARD.protezioni_passive.push({ id: 'custom_' + Date.now(), testo: '' });
     applyProtezioniToData();
@@ -1218,7 +1285,6 @@
     ensureRigheRischiParticolari();
     const wrap = document.getElementById('wrapRigheRischiParticolari');
     if (!wrap) return;
-    if (shouldDeferTableRender(wrap)) return;
     const rows = WIZARD.righe_rischi_particolari;
     let html =
       '<table class="rischi-table"><thead><tr>' +
@@ -1302,6 +1368,7 @@
   };
 
   window.addRigaRischiParticolari = function () {
+    syncRigheRischiParticolariFromTable();
     ensureRigheRischiParticolari();
     WIZARD.righe_rischi_particolari.push({
       id: 'custom_' + Date.now(),
@@ -1313,9 +1380,10 @@
   };
 
   window.removeRigaRischi = function (idx) {
+    syncRigheRischiParticolariFromTable();
     ensureRigheRischiParticolari();
     WIZARD.righe_rischi_particolari.splice(idx, 1);
-    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderTabellaRischiParticolari(); sendUpdate(); }
   };
 
   window.resetRigheRischiDefault = function () {
@@ -1377,7 +1445,6 @@
     ensureMisureEsigenze();
     const wrap = document.getElementById('wrapMisureEsigenze');
     if (!wrap) return;
-    if (shouldDeferTableRender(wrap)) return;
     const rows = WIZARD.misure_esigenze_speciali;
     let html =
       '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
@@ -1477,15 +1544,17 @@
   };
 
   window.addMisuraEsigenze = function () {
+    syncMisureEsigenzeFromTable();
     ensureMisureEsigenze();
     WIZARD.misure_esigenze_speciali.push({ id: 'custom_' + Date.now(), selezionato: true, testo: '' });
     if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderTabellaMisureEsigenze(); sendUpdate(); }
   };
 
   window.removeMisuraEsigenze = function (idx) {
+    syncMisureEsigenzeFromTable();
     ensureMisureEsigenze();
     WIZARD.misure_esigenze_speciali.splice(idx, 1);
-    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderFields(); sendUpdate(); }
+    if (DATA) { DATA = ADAPTER.applyWizard(DATA, WIZARD); renderTabellaMisureEsigenze(); sendUpdate(); }
   };
 
   window.resetMisureEsigenzeDefault = function () {
@@ -1498,7 +1567,6 @@
     ensureRighePianoLuoghiArray();
     const wrap = document.getElementById('wrapRighePianoLuoghi');
     if (!wrap) return;
-    if (shouldDeferTableRender(wrap)) return;
     const rows = WIZARD.righe_piano_luoghi;
     let html =
       '<table class="luoghi-table"><thead><tr>' +
@@ -1542,6 +1610,7 @@
   };
 
   window.addRigaPianoLuoghi = function () {
+    syncRighePianoLuoghiFromTable();
     ensureRighePianoLuoghiArray();
     WIZARD.righe_piano_luoghi.push({ edificio: '', attivita: '', numero_persone: 'x' });
     applyRigheToData();
@@ -1550,6 +1619,7 @@
   };
 
   window.removeRigaPianoLuoghi = function (idx) {
+    syncRighePianoLuoghiFromTable();
     ensureRighePianoLuoghiArray();
     WIZARD.righe_piano_luoghi.splice(idx, 1);
     applyRigheToData();
@@ -1842,7 +1912,6 @@
     } else {
       document.getElementById('stopBadge').title = '';
     }
-    renderFields();
     if (activeView === 'docx' && errors.length === 0) {
       clearTimeout(previewTimer);
       previewTimer = setTimeout(requestPreviewDocx, 600);
@@ -1989,6 +2058,7 @@
     }
     loadWizardFromSaved(DATA._emergenze_wizard || {});
     buildDensitaSelect();
+    renderFields();
     sendUpdate();
   }
 

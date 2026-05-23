@@ -676,6 +676,18 @@
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  /** Salta innerHTML solo se l'utente sta scrivendo in input/textarea (non su bottoni/checkbox). */
+  function shouldDeferTableRender(wrap) {
+    const ae = document.activeElement;
+    if (!ae || !wrap.contains(ae)) return false;
+    if (ae.tagName === 'TEXTAREA') return true;
+    if (ae.tagName === 'INPUT') {
+      const t = (ae.type || 'text').toLowerCase();
+      return t === 'text' || t === 'search' || t === 'number';
+    }
+    return false;
+  }
+
   function ensureRighePianoLuoghiArray() {
     if (!Array.isArray(WIZARD.righe_piano_luoghi)) WIZARD.righe_piano_luoghi = [];
   }
@@ -1101,8 +1113,7 @@
   function renderListaProtezioni(wrapId, rows, onInputFn, onRemoveFn) {
     const wrap = document.getElementById(wrapId);
     if (!wrap) return;
-    const _ae = document.activeElement;
-    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
+    if (shouldDeferTableRender(wrap)) return;
     let html =
       '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
       '<th>Voce elenco</th><th style="width:28px;"></th></tr></thead><tbody>';
@@ -1207,8 +1218,7 @@
     ensureRigheRischiParticolari();
     const wrap = document.getElementById('wrapRigheRischiParticolari');
     if (!wrap) return;
-    const _ae = document.activeElement;
-    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
+    if (shouldDeferTableRender(wrap)) return;
     const rows = WIZARD.righe_rischi_particolari;
     let html =
       '<table class="rischi-table"><thead><tr>' +
@@ -1367,8 +1377,7 @@
     ensureMisureEsigenze();
     const wrap = document.getElementById('wrapMisureEsigenze');
     if (!wrap) return;
-    const _ae = document.activeElement;
-    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
+    if (shouldDeferTableRender(wrap)) return;
     const rows = WIZARD.misure_esigenze_speciali;
     let html =
       '<table class="rischi-table misure-esigenze-table"><thead><tr>' +
@@ -1489,8 +1498,7 @@
     ensureRighePianoLuoghiArray();
     const wrap = document.getElementById('wrapRighePianoLuoghi');
     if (!wrap) return;
-    const _ae = document.activeElement;
-    if (_ae && wrap.contains(_ae) && _ae.type !== 'checkbox') return;
+    if (shouldDeferTableRender(wrap)) return;
     const rows = WIZARD.righe_piano_luoghi;
     let html =
       '<table class="luoghi-table"><thead><tr>' +

@@ -4288,6 +4288,7 @@
             const main = document.getElementById('mainContent');
             const canGenerate = canMutateData();
             await ensureAziendeLoaded();
+            await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260523a');
 
             const aziendaOptions = (STATE.data.aziende || []).map(a =>
                 '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>'
@@ -4315,16 +4316,62 @@
                 + '</select>'
                 + '</div></div>'
                 + '</div></div>'
+                // ── storage chart (nessuna azienda) ──
+                + '<div id="genStorageChart" style="background:var(--sp-bg-secondary,#1e1e1e);border:1px solid var(--sp-border,#333);border-radius:6px;padding:16px;margin-bottom:18px;"></div>'
                 // ── tab panes ──
                 + '<div id="genPane-genera"><div id="generazioneDocumentiContainer"></div></div>'
                 + '<div id="genPane-output" style="display:none;"></div>';
 
+            // Mappa id → ragione sociale per la legenda
+            const aziendaNomiMap = {};
+            (STATE.data.aziende || []).forEach(a => {
+                aziendaNomiMap[a.id] = a.fields?.RagioneSociale || a.id;
+            });
+
+            // Chart globale (subito, senza attendere la selezione)
+            if (window.GEN_STORAGE_CHART) {
+                GEN_STORAGE_CHART.render(
+                    document.getElementById('genStorageChart'),
+                    supabaseClient,
+                    CONFIG,
+                    aziendaNomiMap
+                );
+            }
+
             document.getElementById('generazioneAziendaSelect')
                 ?.addEventListener('change', () => {
+                    const aziendaId = document.getElementById('generazioneAziendaSelect')?.value;
                     const tab = document.getElementById('genPane-output').style.display === 'none' ? 'genera' : 'output';
                     if (tab === 'genera') loadGenerazioneDocumenti();
                     else loadOutputDocumenti();
+                    // Badge per singola azienda
+                    window._updateAziendaStorageBadge(aziendaId, aziendaNomiMap);
                 });
+        }
+
+        window._updateAziendaStorageBadge = function _updateAziendaStorageBadge(aziendaId, nomiMap) {
+            const chart = document.getElementById('genStorageChart');
+            if (!chart || !window.GEN_STORAGE_CHART) return;
+            if (!aziendaId) {
+                // Torna al grafico globale
+                GEN_STORAGE_CHART.render(chart, supabaseClient, CONFIG, nomiMap || {});
+                return;
+            }
+            // Nella stessa card: sostituisce con badge singola azienda + link "torna alla panoramica"
+            const nome = (nomiMap || {})[aziendaId] || aziendaId;
+            chart.innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">'
+                + '<span style="font-size:12px;color:#888;">Storage — <strong style="color:#ccc;">' + esc(nome) + '</strong></span>'
+                + '<span id="genStorageBadgeAzienda"></span>'
+                + '<button onclick="window._updateAziendaStorageBadge(null)" style="background:none;border:none;color:var(--sp-primary,#0066ff);cursor:pointer;font-size:11px;padding:0;">↩ Panoramica</button>'
+                + '</div>';
+            GEN_STORAGE_CHART.renderAziendaBadge(
+                document.getElementById('genStorageBadgeAzienda'),
+                supabaseClient,
+                CONFIG,
+                aziendaId,
+                nome
+            );
         }
 
         function switchGenTab(tab) {

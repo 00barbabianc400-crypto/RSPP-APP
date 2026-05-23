@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Vibrazioni</title>
-<script src="macchine-defaults.js?v=20260522e"></script>
-<script src="adapter.js?v=20260522e"></script>
+<script src="macchine-defaults.js?v=20260523a"></script>
+<script src="adapter.js?v=20260523a"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -99,6 +99,10 @@
       <p class="hint-str">Suggerimento dall’ordine catalogo documenti; nel Word viene formattato a 2 cifre (es. 7 → 07).</p>
       <p><strong>Data emissione</strong> <code>{{DATA_EMISSIONE}}</code>: <span id="pData" class="field-auto">—</span></p>
       <p><strong>Luogo</strong> <code>{{LUOGO}}</code> (quando inserito nel modello): <span id="pLuogo" class="field-auto">—</span></p>
+      <p style="margin-top:10px;">
+        <strong>Logo committente</strong> <code>{%LOGO}</code>
+        <span id="pLogo" class="field-auto" style="display:inline-block;vertical-align:middle;margin-left:8px;">—</span>
+      </p>
 
       <h2 class="doc-section">§4 — Mansioni / gruppi omogenei</h2>
       <p class="hint-str">
@@ -180,6 +184,27 @@
 
   function esc(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;');
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el || !DATA) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML =
+        '<img src="' + escAttr(url) + '" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;vertical-align:middle;">';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.innerHTML = '<span class="hint-str">Logo caricato (visibile nel Word generato)</span>';
+      return;
+    }
+    el.textContent = '—';
+    el.className = 'field-missing';
   }
 
   function displayModuloInputFromPadded(padded) {
@@ -319,7 +344,9 @@
   };
 
   window.resetMacchine = function (kind) {
-    WIZARD[kind === 'wbv' ? 'macchine_wbv' : 'macchine_hav'] = ADAPTER?.defaultMacchineFromSeed?.(kind) || [];
+    const key = kind === 'wbv' ? 'macchine_wbv' : 'macchine_hav';
+    const seed = ADAPTER?.defaultMacchineFromSeed?.(kind) || [];
+    WIZARD[key] = seed.map((r) => ({ id: r.id, tipologia: r.tipologia, modello: r.modello, aw: r.aw }));
     sendUpdate();
   };
 
@@ -489,6 +516,7 @@
     document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
     document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
     document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    renderLogoPreview();
     const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
     document.getElementById('inpModuloNumero').value = pref;
     WIZARD.modulo_numero = pref;

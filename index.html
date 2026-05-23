@@ -4426,14 +4426,6 @@
                                 + ' data-azienda-id="' + attrEsc(aziendaId) + '"'
                                 + disabled + '>Genera</button>';
                         }
-                        if (hasOutput) {
-                            actions += ' <button class="btn"'
-                                + ' data-action="download-output"'
-                                + ' data-codice="' + attrEsc(codice) + '"'
-                                + ' data-azienda-id="' + attrEsc(aziendaId) + '"'
-                                + '>Scarica</button>';
-                        }
-
                         html += '<tr>'
                             + '<td>' + esc(s.documento?.nome || '—') + '</td>'
                             + '<td>' + templateBadge + '</td>'
@@ -4513,7 +4505,7 @@
                 MOD_VDT_ILLUMINAMENTO: '20260520d',
                 MOD_CHIMICO: '20260521f',
                 MOD_EMERGENZE: '20260522v',
-                MOD_VIBRAZIONI: '20260522e',
+                MOD_VIBRAZIONI: '20260523a',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -4715,7 +4707,7 @@
                 codice === 'MOD_STRESS_LC' ? '20260520stress22'
                 : codice === 'MOD_CHIMICO' ? '20260521f'
                 : codice === 'MOD_EMERGENZE' ? '20260522v'
-                : codice === 'MOD_VIBRAZIONI' ? '20260522e'
+                : codice === 'MOD_VIBRAZIONI' ? '20260523a'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }
@@ -4797,17 +4789,6 @@
                     rowBadge.className = 'badge success';
                     rowBadge.textContent = 'Generato';
                 }
-                // Aggiorna anche il bottone Scarica se non c'era
-                const rowActions = document.querySelector('[data-output-actions="' + CSS.escape(codice) + '"]');
-                if (rowActions && !rowActions.querySelector('[data-action="download-output"]')) {
-                    const dlBtn = document.createElement('button');
-                    dlBtn.className = 'btn';
-                    dlBtn.dataset.action = 'download-output';
-                    dlBtn.dataset.codice = codice;
-                    dlBtn.dataset.aziendaId = aziendaId;
-                    dlBtn.textContent = 'Scarica';
-                    rowActions.appendChild(dlBtn);
-                }
 
             } catch (err) {
                 console.error(err);
@@ -4886,13 +4867,20 @@
                     + '<option value="">Tutti i moduli</option>'
                     + codiciSet.map(c => '<option value="' + attrEsc(c) + '">' + esc(c) + '</option>').join('')
                     + '</select>'
+                    + '<select id="outPeriodFilter" onchange="filterOutputTable()" style="padding:6px 10px;font-size:12px;" title="Periodo">'
+                    + '<option value="">Tutto il periodo</option>'
+                    + '<option value="7">Ultima settimana</option>'
+                    + '<option value="30">Ultimo mese</option>'
+                    + '<option value="90">Ultimi 3 mesi</option>'
+                    + '<option value="365">Ultimo anno</option>'
+                    + '</select>'
                     + '<span id="outCount" style="font-size:12px;color:var(--sp-text-secondary,#aaa);margin-left:auto;"></span>'
                     + '</div>';
 
                 let rows = '';
                 items.forEach((item, idx) => {
                     const sizeKb = item.size ? (item.size / 1024).toFixed(0) + ' KB' : '';
-                    rows += '<tr data-out-codice="' + attrEsc(item.codice) + '" data-out-name="' + attrEsc(item.name.toLowerCase()) + '">'
+                    rows += '<tr data-out-codice="' + attrEsc(item.codice) + '" data-out-name="' + attrEsc(item.name.toLowerCase()) + '" data-out-ts="' + esc(String(item.ts || 0)) + '">'
                         + '<td style="font-family:monospace;font-size:11.5px;">' + esc(item.name) + '</td>'
                         + '<td><span class="badge info">' + esc(item.codice) + '</span></td>'
                         + '<td>' + esc(item.label) + '</td>'
@@ -4936,14 +4924,20 @@
         function filterOutputTable() {
             const q = (document.getElementById('outSearch')?.value || '').toLowerCase().trim();
             const codice = document.getElementById('outCodiceFilter')?.value || '';
+            const periodDays = parseInt(document.getElementById('outPeriodFilter')?.value || '', 10);
+            const cutoff = Number.isFinite(periodDays) && periodDays > 0
+                ? Date.now() - periodDays * 86400000
+                : 0;
             const tbody = document.querySelector('#outTable tbody');
             if (!tbody) return;
             let vis = 0;
             tbody.querySelectorAll('tr').forEach(tr => {
                 const matchQ = !q || tr.dataset.outName?.includes(q);
                 const matchC = !codice || tr.dataset.outCodice === codice;
-                tr.style.display = (matchQ && matchC) ? '' : 'none';
-                if (matchQ && matchC) vis++;
+                const ts = parseInt(tr.dataset.outTs || '0', 10);
+                const matchP = !cutoff || (ts > 0 && ts >= cutoff);
+                tr.style.display = (matchQ && matchC && matchP) ? '' : 'none';
+                if (matchQ && matchC && matchP) vis++;
             });
             const cnt = document.getElementById('outCount');
             if (cnt) cnt.textContent = vis + ' file';

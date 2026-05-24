@@ -212,6 +212,11 @@ security definer
 set search_path = public
 as $$
 begin
+  -- n8n / backend con service role: auth.uid() è null, RLS già bypassato
+  if coalesce(auth.jwt()->>'role', '') = 'service_role' then
+    return new;
+  end if;
+
   if public.app_is_admin_user() then
     return new;
   end if;

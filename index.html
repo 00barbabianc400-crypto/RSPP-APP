@@ -4297,7 +4297,7 @@
             await ensureAziendeLoaded();
             await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260523b');
             await loadScriptOnce('js/generazione/output-export.js?v=20260523a');
-            await loadScriptOnce('js/generazione/output-wipe.js?v=20260523b');
+            await loadScriptOnce('js/generazione/output-wipe.js?v=20260523e');
 
             const aziendaOptions = (STATE.data.aziende || []).map(a =>
                 '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>'
@@ -4873,6 +4873,46 @@
         // ─── TAB: Documenti generati ──────────────────────────────────────────────
 
         window._outputGlobalFileCount = 0;
+        const OUTPUT_WIPE_COOLDOWN_MS = 60 * 60 * 1000;
+
+        function getOutputWipeRateLimitState() {
+            const lastAt = STATE.profile?.last_output_wipe_requested_at;
+            if (!lastAt) return { blocked: false, remainingMs: 0, nextAt: null };
+            const lastMs = new Date(lastAt).getTime();
+            if (!Number.isFinite(lastMs)) return { blocked: false, remainingMs: 0, nextAt: null };
+            const remainingMs = OUTPUT_WIPE_COOLDOWN_MS - (Date.now() - lastMs);
+            if (remainingMs <= 0) return { blocked: false, remainingMs: 0, nextAt: null };
+            return { blocked: true, remainingMs, nextAt: new Date(lastMs + OUTPUT_WIPE_COOLDOWN_MS) };
+        }
+
+        function formatOutputWipeCooldown(remainingMs) {
+            const totalMin = Math.ceil(remainingMs / 60000);
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            if (h > 0 && m > 0) return 'tra ' + h + ' h e ' + m + ' min';
+            if (h > 0) return 'tra ' + h + ' h';
+            return 'tra ' + Math.max(1, m) + ' min';
+        }
+
+        function outputWipeRateLimitToastMessage(remainingMs, nextAt) {
+            const when = nextAt
+                ? nextAt.toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                : '';
+            const suffix = when ? ' (alle ' + when + ')' : ' (' + formatOutputWipeCooldown(remainingMs) + ')';
+            return 'Puoi inviare al massimo una richiesta di cancellazione totale all\'ora. Riprova ' + suffix + '.';
+        }
+
+        async function refreshOutputWipeRateLimitFromProfile() {
+            if (!STATE.account?.id || !canWipeOutput()) return;
+            const { data, error } = await supabaseClient
+                .from('profiles')
+                .select('last_output_wipe_requested_at')
+                .eq('id', STATE.account.id)
+                .maybeSingle();
+            if (error) return;
+            if (!STATE.profile) STATE.profile = {};
+            STATE.profile.last_output_wipe_requested_at = data?.last_output_wipe_requested_at ?? null;
+        }
 
         async function refreshGenOutputToolbar() {
             const toolbar = document.getElementById('genOutputToolbar');
@@ -4883,8 +4923,9 @@
             }
             try {
                 if (!window.GEN_OUTPUT_WIPE) {
-                    await loadScriptOnce('js/generazione/output-wipe.js?v=20260523b');
+                    await loadScriptOnce('js/generazione/output-wipe.js?v=20260523e');
                 }
+                await refreshOutputWipeRateLimitFromProfile();
                 window._outputGlobalFileCount = await GEN_OUTPUT_WIPE.countAllOutputFiles(
                     supabaseClient, CONFIG.storage.output
                 );
@@ -4893,6 +4934,18 @@
             }
             if (!window._outputGlobalFileCount) {
                 toolbar.innerHTML = '';
+                return;
+            }
+            const rl = getOutputWipeRateLimitState();
+            if (rl.blocked) {
+                const hint = esc(outputWipeRateLimitToastMessage(rl.remainingMs, rl.nextAt));
+                toolbar.innerHTML =
+                    '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-bottom:12px;">'
+                    + '<button type="button" class="btn" disabled '
+                    + 'style="background:#999;color:#fff;border-color:#999;font-weight:600;cursor:not-allowed;opacity:0.85;">'
+                    + 'Cancellazione totale</button>'
+                    + '<span class="hint" style="font-size:12px;max-width:360px;text-align:right;">' + hint + '</span>'
+                    + '</div>';
                 return;
             }
             toolbar.innerHTML =
@@ -4905,6 +4958,11 @@
 
         function openOutputWipeModal() {
             if (!canWipeOutput()) { showToast('Permesso negato', 'error'); return; }
+            const rl = getOutputWipeRateLimitState();
+            if (rl.blocked) {
+                showToast(outputWipeRateLimitToastMessage(rl.remainingMs, rl.nextAt), 'warning');
+                return;
+            }
             if (!window._outputGlobalFileCount) {
                 showToast('Nessun documento nel bucket output', 'warning');
                 return;
@@ -4952,6 +5010,12 @@
 
         async function submitOutputWipeRequest() {
             if (!canWipeOutput()) { showToast('Permesso negato', 'error'); return; }
+            await refreshOutputWipeRateLimitFromProfile();
+            const rl = getOutputWipeRateLimitState();
+            if (rl.blocked) {
+                showToast(outputWipeRateLimitToastMessage(rl.remainingMs, rl.nextAt), 'warning');
+                return;
+            }
             const totp = (document.getElementById('inpWipeTotp')?.value || '').replace(/\s/g, '');
             const confirm = (document.getElementById('inpWipeConfirm')?.value || '').trim();
             if (!/^\d{6}$/.test(totp)) {
@@ -4971,7 +5035,7 @@
                 if (!token) throw new Error('Sessione non valida — effettua di nuovo il login');
 
                 if (!window.GEN_OUTPUT_WIPE) {
-                    await loadScriptOnce('js/generazione/output-wipe.js?v=20260523b');
+                    await loadScriptOnce('js/generazione/output-wipe.js?v=20260523e');
                 }
 
                 const profile = STATE.profile || {};
@@ -4988,10 +5052,28 @@
                         output_file_count: window._outputGlobalFileCount || 0,
                     }
                 );
+                if (STATE.profile) {
+                    STATE.profile.last_output_wipe_requested_at = new Date().toISOString();
+                }
                 closeModal('outputWipeModal');
-                showToast('Avviso di controllo individuato all\'amministratore del sistema per verifica', 'success');
+                showToast('Avviso di controllo inviato all\'amministratore del sistema per verifica - Attendere un riscontro', 'success');
+                await refreshGenOutputToolbar();
             } catch (err) {
-                showToast('Errore richiesta: ' + err.message, 'error');
+                const rateLimited = err.status === 429
+                    || err.body?.code === 'rate_limited'
+                    || /rate.?limit|troppo presto|un.?ora/i.test(String(err.message || ''));
+                if (rateLimited) {
+                    await refreshOutputWipeRateLimitFromProfile();
+                    const rlAfter = getOutputWipeRateLimitState();
+                    const msg = err.body?.message
+                        || (rlAfter.blocked
+                            ? outputWipeRateLimitToastMessage(rlAfter.remainingMs, rlAfter.nextAt)
+                            : outputWipeRateLimitToastMessage(OUTPUT_WIPE_COOLDOWN_MS, null));
+                    showToast(msg, 'warning');
+                    await refreshGenOutputToolbar();
+                } else {
+                    showToast('Errore richiesta: ' + err.message, 'error');
+                }
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'Invia richiesta'; }
             }

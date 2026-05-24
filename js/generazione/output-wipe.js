@@ -61,7 +61,10 @@
 
     if (!res.ok) {
       const msg = body.message || body.error || ('HTTP ' + res.status);
-      throw new Error(msg);
+      const err = new Error(msg);
+      err.status = res.status;
+      err.body = body;
+      throw err;
     }
     return body;
   }

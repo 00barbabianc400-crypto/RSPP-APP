@@ -45,9 +45,13 @@ create table if not exists public.profiles (
   full_name text,
   role public.app_role_enum not null default 'viewer',
   is_active boolean not null default true,
+  last_output_wipe_requested_at timestamptz,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now())
 );
+
+alter table public.profiles
+  add column if not exists last_output_wipe_requested_at timestamptz;
 
 create table if not exists public.catalogo_rischi (
   id uuid primary key default gen_random_uuid(),

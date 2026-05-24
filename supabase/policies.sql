@@ -228,6 +228,10 @@ begin
     raise exception 'Permessi insufficienti: lo stato attivo può essere modificato solo da un admin';
   end if;
 
+  if new.last_output_wipe_requested_at is distinct from old.last_output_wipe_requested_at then
+    raise exception 'Permessi insufficienti: timestamp cancellazione output modificabile solo dal server';
+  end if;
+
   new.email := old.email;
 
   return new;

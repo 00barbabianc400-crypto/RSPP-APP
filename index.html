@@ -4296,7 +4296,7 @@
             const canGenerate = canMutateData();
             await ensureAziendeLoaded();
             await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260523b');
-            await loadScriptOnce('js/generazione/output-export.js?v=20260523a');
+            await loadScriptOnce('js/generazione/output-export.js?v=20260523f');
             await loadScriptOnce('js/generazione/output-wipe.js?v=20260523e');
 
             const aziendaOptions = (STATE.data.aziende || []).map(a =>
@@ -4342,6 +4342,8 @@
                 if (delBtn) { await deleteOutputFile(delBtn.dataset.name, delBtn.dataset.aziendaId, delBtn.closest('tr')); return; }
                 const expBtn = e.target.closest('[data-action="export-output-zip"]');
                 if (expBtn) { await exportOutputZip(expBtn.dataset.aziendaId); return; }
+                const expAllBtn = e.target.closest('[data-action="export-output-zip-all"]');
+                if (expAllBtn) { await exportOutputZipAll(); return; }
                 const wipeBtn = e.target.closest('[data-action="open-output-wipe"]');
                 if (wipeBtn) { openOutputWipeModal(); }
             });
@@ -5103,9 +5105,19 @@
             if (!content) return;
             if (!aziendaId) {
                 window._outputExportCtx = null;
-                content.innerHTML = '<div class="card"><div class="card-body">'
-                    + '<p class="hint">Seleziona un\'azienda per l\'elenco dei documenti generati. '
-                    + 'Il grafico storage sopra mostra l\'occupazione per azienda o per file.</p>'
+                content.innerHTML = '<div class="card"><div class="card-body" style="text-align:center;padding:32px 24px;">'
+                    + '<p class="hint" style="margin:0 auto 24px;max-width:520px;line-height:1.55;">'
+                    + 'Seleziona un\'azienda per l\'elenco dei documenti generati. '
+                    + 'Il grafico storage sopra mostra l\'occupazione per azienda o per file.'
+                    + '</p>'
+                    + '<button type="button" class="btn btn-primary" id="btnExportOutputZipAll" '
+                    + 'data-action="export-output-zip-all" '
+                    + 'style="font-size:15px;padding:12px 32px;font-weight:600;" '
+                    + 'title="ZIP con una cartella per ogni azienda (ragione sociale), sottocartelle per categoria catalogo">'
+                    + 'Esporta ZIP — tutte le aziende</button>'
+                    + '<p class="hint" style="margin:16px auto 0;max-width:480px;font-size:11.5px;">'
+                    + 'Struttura: <code>Ragione sociale</code> → categoria (DVR, Moduli, …) → file.'
+                    + '</p>'
                     + '</div></div>';
                 return;
             }
@@ -5234,7 +5246,7 @@
             try {
                 await loadScriptOnce('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
                 if (!window.GEN_OUTPUT_EXPORT) {
-                    await loadScriptOnce('js/generazione/output-export.js?v=20260523a');
+                    await loadScriptOnce('js/generazione/output-export.js?v=20260523f');
                 }
                 await ensureDocumentiCatalogoLoaded();
                 const n = await GEN_OUTPUT_EXPORT.exportZip(
@@ -5250,6 +5262,37 @@
                 showToast('Errore export: ' + err.message, 'error');
             } finally {
                 if (btn) { btn.disabled = false; btn.textContent = 'Esporta ZIP'; }
+            }
+        }
+
+        async function exportOutputZipAll() {
+            if (!hasRequiredRole('viewer')) { showToast('Permesso negato', 'error'); return; }
+            const btn = document.getElementById('btnExportOutputZipAll');
+            if (btn) { btn.disabled = true; btn.textContent = 'Esportazione…'; }
+            showToast('Preparazione ZIP globale…', 'info');
+            try {
+                await loadScriptOnce('https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js');
+                if (!window.GEN_OUTPUT_EXPORT?.exportZipAll) {
+                    await loadScriptOnce('js/generazione/output-export.js?v=20260523f');
+                }
+                await ensureDocumentiCatalogoLoaded();
+                const res = await GEN_OUTPUT_EXPORT.exportZipAll(
+                    supabaseClient,
+                    CONFIG,
+                    window._genNomiMap || {},
+                    STATE.data.documentiCatalogo || []
+                );
+                showToast(
+                    'ZIP scaricato — ' + res.files + ' file, ' + res.aziende + ' aziende',
+                    'success'
+                );
+            } catch (err) {
+                showToast('Errore export: ' + err.message, 'error');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Esporta ZIP — tutte le aziende';
+                }
             }
         }
 

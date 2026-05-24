@@ -935,6 +935,7 @@
                     PartitaIVA: row.partita_iva,
                     CodiceFiscale: row.codice_fiscale,
                     SedeOperativa: row.sede_operativa,
+                    SediOperative: Array.isArray(row.sedi_operative) ? row.sedi_operative : [],
                     SedeLegale: row.sede_legale,
                     OggettoSociale: row.oggetto_sociale,
                     IscrizioneCCIAA: row.iscrizione_cciaa,
@@ -975,6 +976,7 @@
                 partita_iva: data.PartitaIVA,
                 codice_fiscale: data.CodiceFiscale,
                 sede_operativa: data.SedeOperativa,
+                sedi_operative: data.SediOperative || [],
                 sede_legale: data.SedeLegale,
                 oggetto_sociale: data.OggettoSociale,
                 iscrizione_cciaa: data.IscrizioneCCIAA,
@@ -1006,6 +1008,106 @@
                 data_prossima_revisione: data.DataProssimaRevisione,
                 note: data.Note
             };
+        }
+
+        function getSediOperativeLista(source) {
+            const f = source?.fields || source || {};
+            const principale = String(f.SedeOperativa ?? source?.sede_operativa ?? '').trim();
+            const extra = f.SediOperative ?? source?.sedi_operative ?? [];
+            const list = [];
+            if (principale) list.push(principale);
+            (Array.isArray(extra) ? extra : []).forEach((s) => {
+                const t = String(s || '').trim();
+                if (t && !list.includes(t)) list.push(t);
+            });
+            return list;
+        }
+
+        function sediOperativeExtraFromForm(form) {
+            const principale = (form.querySelector('[name="SedeOperativa"]')?.value || '').trim();
+            const out = [];
+            form.querySelectorAll('[name="sede_operativa_extra"]').forEach((inp) => {
+                const t = (inp.value || '').trim();
+                if (t && t !== principale && !out.includes(t)) out.push(t);
+            });
+            return out;
+        }
+
+        function shortLabelSede(indirizzo) {
+            const s = String(indirizzo || '').trim();
+            if (s.length <= 72) return s;
+            return s.slice(0, 69) + '…';
+        }
+
+        function renderSediOperativeExtraInputs(extraList) {
+            const list = extraList || [];
+            return list.map((s) => ''
+                + '<div class="sede-extra-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;">'
+                + '<textarea name="sede_operativa_extra" rows="2" style="flex:1;" placeholder="Via, CAP, città (prov.)">'
+                + esc(s || '') + '</textarea>'
+                + '<button type="button" class="icon-btn danger" title="Rimuovi sede" onclick="removeSedeOperativaExtraRow(this)">🗑</button>'
+                + '</div>').join('');
+        }
+
+        function addSedeOperativaExtraRow() {
+            const list = document.getElementById('sediOperativeExtraList');
+            if (!list) return;
+            const row = document.createElement('div');
+            row.className = 'sede-extra-row';
+            row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;';
+            row.innerHTML = ''
+                + '<textarea name="sede_operativa_extra" rows="2" style="flex:1;" placeholder="Via, CAP, città (prov.)"></textarea>'
+                + '<button type="button" class="icon-btn danger" title="Rimuovi sede" onclick="removeSedeOperativaExtraRow(this)">🗑</button>';
+            list.appendChild(row);
+            row.querySelector('textarea')?.focus();
+        }
+
+        function removeSedeOperativaExtraRow(btn) {
+            btn?.closest('.sede-extra-row')?.remove();
+        }
+
+        function updateGenerazioneSedeSelect() {
+            const aziendaId = document.getElementById('generazioneAziendaSelect')?.value || '';
+            const field = document.getElementById('generazioneSedeField');
+            const select = document.getElementById('generazioneSedeSelect');
+            if (!field || !select) return;
+
+            if (!aziendaId) {
+                field.style.display = 'none';
+                select.innerHTML = '';
+                return;
+            }
+
+            const az = (STATE.data.aziende || []).find((a) => a.id === aziendaId);
+            const sedi = getSediOperativeLista(az);
+
+            if (sedi.length <= 1) {
+                field.style.display = 'none';
+                select.innerHTML = sedi.length === 1
+                    ? '<option value="' + attrEsc(sedi[0]) + '" selected>' + esc(shortLabelSede(sedi[0])) + '</option>'
+                    : '';
+                return;
+            }
+
+            const prev = select.value;
+            field.style.display = '';
+            select.innerHTML = '<option value="">— Seleziona sede —</option>'
+                + sedi.map((s, i) => {
+                    const label = shortLabelSede(s) || ('Sede ' + (i + 1));
+                    const sel = prev === s ? ' selected' : '';
+                    return '<option value="' + attrEsc(s) + '"' + sel + '>' + esc(label) + '</option>';
+                }).join('');
+        }
+
+        function resolveSedeOperativaPerGenerazione(aziendaId) {
+            const sedi = getSediOperativeLista((STATE.data.aziende || []).find((a) => a.id === aziendaId));
+            if (!sedi.length) return { ok: false, message: 'Sede operativa non configurata in anagrafica' };
+            if (sedi.length === 1) return { ok: true, sede: sedi[0] };
+            const sel = document.getElementById('generazioneSedeSelect');
+            const sede = (sel?.value || '').trim();
+            if (!sede) return { ok: false, message: 'Seleziona la sede operativa per la generazione' };
+            if (!sedi.includes(sede)) return { ok: false, message: 'Sede operativa non valida' };
+            return { ok: true, sede };
         }
 
         async function ensureDocumentiCatalogoLoaded() {
@@ -1458,8 +1560,18 @@
                                 </div>
                                 
                                 <div class="form-field full">
-                                    <label>Sede Operativa <span class="required">*</span></label>
+                                    <label>Sede operativa principale <span class="required">*</span></label>
                                     <textarea name="SedeOperativa" required>${esc(f.SedeOperativa || '')}</textarea>
+                                    <span class="hint">Usata nei documenti quando l'azienda ha una sola sede, o come default in anagrafica.</span>
+                                </div>
+
+                                <div class="form-field full">
+                                    <label>Altre sedi operative</label>
+                                    <span class="hint">Opzionale. Aggiungi indirizzi distinti (stessa P.IVA). In generazione potrai scegliere quale usare per ogni modulo.</span>
+                                    <div id="sediOperativeExtraList" style="margin-top:8px;">
+                                        ${renderSediOperativeExtraInputs(f.SediOperative || [])}
+                                    </div>
+                                    <button type="button" class="btn" style="margin-top:8px;" onclick="addSedeOperativaExtraRow()">+ Aggiungi sede</button>
                                 </div>
                                 
                                 <div class="form-field full">
@@ -1681,7 +1793,8 @@
                 }
             }
             const payload = aziendaPayloadFromForm(data);
-            
+            payload.sedi_operative = sediOperativeExtraFromForm(form);
+
             try {
                 const submitBtn = document.querySelector('#aziendaModal .btn-primary');
                 submitBtn.disabled = true;
@@ -1710,7 +1823,8 @@
                 
                 closeModal('aziendaModal');
                 await renderAziende();
-                
+                updateGenerazioneSedeSelect();
+
             } catch (error) {
                 console.error('Save error:', error);
                 showToast('Errore salvataggio: ' + error.message, 'error');
@@ -1833,20 +1947,16 @@
             };
         }
 
-        async function ensureAziendeLoaded() {
-            if ((STATE.data.aziende || []).length > 0) return;
+        async function ensureAziendeLoaded(force = false) {
+            const cached = STATE.data.aziende || [];
+            const sediOk = cached.length > 0 && cached.every((a) => Array.isArray(a.fields?.SediOperative));
+            if (!force && sediOk) return;
             const { data, error } = await supabaseClient
                 .from(CONFIG.tables.aziende)
-                .select('id, ragione_sociale, partita_iva')
+                .select('id, ragione_sociale, partita_iva, sede_operativa, sedi_operative')
                 .order('ragione_sociale', { ascending: true });
             if (error) throw error;
-            STATE.data.aziende = (data || []).map(row => ({
-                id: row.id,
-                fields: {
-                    RagioneSociale: row.ragione_sociale,
-                    PartitaIVA: row.partita_iva
-                }
-            }));
+            STATE.data.aziende = (data || []).map(normalizeRow);
         }
 
         async function loadProfiliAndAssociazioni() {
@@ -4300,7 +4410,7 @@
         async function renderGenerazione() {
             const main = document.getElementById('mainContent');
             const canGenerate = canMutateData();
-            await ensureAziendeLoaded();
+            await ensureAziendeLoaded(true);
             await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260523b');
             await loadScriptOnce('js/generazione/output-export.js?v=20260523f');
             await loadScriptOnce('js/generazione/output-wipe.js?v=20260523e');
@@ -4323,13 +4433,22 @@
                 + '</div>'
                 // ── shared azienda selector ──
                 + '<div class="card"><div class="card-body">'
-                + '<div class="form-grid cols-2"><div class="form-field">'
+                + '<div class="form-grid cols-2">'
+                + '<div class="form-field">'
                 + '<label>Azienda</label>'
                 + '<select id="generazioneAziendaSelect">'
                 + '<option value="">— Seleziona azienda —</option>'
                 + aziendaOptions
                 + '</select>'
-                + '</div></div>'
+                + '</div>'
+                + '<div class="form-field" id="generazioneSedeField" style="display:none;">'
+                + '<label>Sede operativa</label>'
+                + '<select id="generazioneSedeSelect">'
+                + '<option value="">— Seleziona sede —</option>'
+                + '</select>'
+                + '<span class="hint">Obbligatoria se l\'azienda ha più sedi in anagrafica.</span>'
+                + '</div>'
+                + '</div>'
                 + '</div></div>'
                 // ── storage chart — visibile solo in tab «Documenti generati» ──
                 + '<div id="genStorageChart" style="display:none;background:var(--sp-bg-secondary,#1e1e1e);border:1px solid var(--sp-border,#333);border-radius:6px;padding:16px;margin-bottom:18px;"></div>'
@@ -4362,6 +4481,7 @@
 
             document.getElementById('generazioneAziendaSelect')
                 ?.addEventListener('change', () => {
+                    updateGenerazioneSedeSelect();
                     const tab = document.getElementById('genPane-output').style.display === 'none' ? 'genera' : 'output';
                     if (tab === 'genera') loadGenerazioneDocumenti();
                     else {
@@ -4370,6 +4490,14 @@
                         _refreshStorageChart();
                     }
                 });
+
+            document.getElementById('generazioneSedeSelect')
+                ?.addEventListener('change', () => {
+                    const tab = document.getElementById('genPane-output').style.display === 'none' ? 'genera' : 'output';
+                    if (tab === 'genera') loadGenerazioneDocumenti();
+                });
+
+            updateGenerazioneSedeSelect();
         }
 
         function _refreshStorageChart() {
@@ -4577,6 +4705,12 @@
         }
 
         async function openGeneraDocPreview(codice, aziendaId) {
+            const sedeResolved = resolveSedeOperativaPerGenerazione(aziendaId);
+            if (!sedeResolved.ok) {
+                showToast(sedeResolved.message, 'warning');
+                return;
+            }
+
             // Carica adapter se non ancora presente
             await loadAdapter(codice);
 
@@ -4591,11 +4725,12 @@
             if (existingPanel) { existingPanel.remove(); return; }
 
             // Fetch dati azienda freschi (include logo_azienda_url)
-            const { data: az } = await supabaseClient
+            const { data: azRow } = await supabaseClient
                 .from(CONFIG.tables.aziende)
                 .select('*, logo_azienda_url')
                 .eq('id', aziendaId)
                 .single();
+            const az = azRow ? { ...azRow, sede_operativa: sedeResolved.sede } : null;
 
             // Logo: download binario per DOCX + URL per anteprima HTML
             let logoUrl = null;
@@ -4664,6 +4799,7 @@
                 + '<div class="card" style="overflow:hidden;">'
                 + '<div class="card-header" style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--sp-bg-secondary,#1e1e1e);border-bottom:1px solid var(--sp-border,#333);">'
                 + '<strong style="flex:1;font-size:14px;">📄 Anteprima generazione: ' + esc(codice) + '</strong>'
+                + '<span class="hint" style="font-size:12px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + attrEsc(sedeResolved.sede) + '">Sede: ' + esc(shortLabelSede(sedeResolved.sede)) + '</span>'
                 + '<span id="gen-status-' + attrEsc(codice) + '" class="badge warning">In compilazione…</span>'
                 + '<button class="btn btn-primary" id="gen-btn-' + attrEsc(codice) + '" disabled>Genera DOCX</button>'
                 + '<button class="btn" onclick="document.getElementById(\'gen-preview-' + attrEsc(codice) + '\')?.remove()">✕ Chiudi</button>'

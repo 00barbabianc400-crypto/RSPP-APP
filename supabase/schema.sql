@@ -86,6 +86,7 @@ create table if not exists public.aziende (
   partita_iva text not null unique check (char_length(partita_iva) = 11),
   codice_fiscale text,
   sede_operativa text not null,
+  sedi_operative text[] not null default '{}',
   sede_legale text,
   oggetto_sociale text,
   iscrizione_cciaa text,

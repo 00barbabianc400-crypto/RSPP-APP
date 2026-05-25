@@ -698,26 +698,32 @@
         }
 
         /* Rilevamenti — sessione Gas Radon (tabella locali) */
-        #rileRadonPanelsWrap {
+        #rileRadonPanelsWrap,
+        #rileRumorePanelsWrap {
             color: #323130 !important;
         }
         #rileRadonPanelsWrap .hint,
-        #rileRadonPanelsWrap label {
+        #rileRadonPanelsWrap label,
+        #rileRumorePanelsWrap .hint,
+        #rileRumorePanelsWrap label {
             color: #323130 !important;
         }
-        #rileRadonPanelsWrap .radon-loc-scroll {
+        #rileRadonPanelsWrap .radon-loc-scroll,
+        #rileRumorePanelsWrap .radon-loc-scroll {
             overflow-x: auto;
             margin-top: 10px;
             max-width: 100%;
         }
-        #rileRadonPanelsWrap .radon-bulk-table {
+        #rileRadonPanelsWrap .radon-bulk-table,
+        #rileRumorePanelsWrap .radon-bulk-table {
             width: 100%;
             min-width: 720px;
             border-collapse: collapse;
             font-size: 12px;
             background: #ffffff !important;
         }
-        #rileRadonPanelsWrap .radon-bulk-table th {
+        #rileRadonPanelsWrap .radon-bulk-table th,
+        #rileRumorePanelsWrap .radon-bulk-table th {
             background: #0078d4 !important;
             color: #ffffff !important;
             padding: 8px 6px;
@@ -726,14 +732,16 @@
             font-weight: 600;
             border: 1px solid #005a9e !important;
         }
-        #rileRadonPanelsWrap .radon-bulk-table td {
+        #rileRadonPanelsWrap .radon-bulk-table td,
+        #rileRumorePanelsWrap .radon-bulk-table td {
             background: #ffffff !important;
             color: #323130 !important;
             border: 1px solid #edebe9 !important;
             padding: 4px;
             vertical-align: middle;
         }
-        #rileRadonPanelsWrap .radon-bulk-table input {
+        #rileRadonPanelsWrap .radon-bulk-table input,
+        #rileRumorePanelsWrap .radon-bulk-table input {
             width: 100%;
             min-width: 0;
             padding: 5px 6px;
@@ -750,19 +758,29 @@
             color: #605e5c !important;
             opacity: 1;
         }
-        #rileRadonPanelsWrap .radon-bulk-table input:focus {
+        #rileRumorePanelsWrap .radon-bulk-table input::placeholder {
+            color: transparent !important;
+            opacity: 0;
+        }
+        #rileRadonPanelsWrap .radon-bulk-table input:focus,
+        #rileRumorePanelsWrap .radon-bulk-table input:focus {
             outline: none;
             border-color: #0078d4 !important;
             box-shadow: 0 0 0 1px #0078d4;
             color: #323130 !important;
             -webkit-text-fill-color: #323130 !important;
         }
-        #rileRadonPanelsWrap .radon-bulk-table .col-locale { min-width: 160px; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-locale,
+        #rileRumorePanelsWrap .radon-bulk-table .col-locale { min-width: 160px; }
         #rileRadonPanelsWrap .radon-bulk-table .col-rilev { min-width: 140px; }
-        #rileRadonPanelsWrap .radon-bulk-table .col-num { width: 56px; max-width: 72px; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-num,
+        #rileRumorePanelsWrap .radon-bulk-table .col-num { width: 72px; max-width: 88px; }
         #rileRadonPanelsWrap .radon-bulk-table .col-media { width: 64px; }
-        #rileRadonPanelsWrap .radon-bulk-table .col-del { width: 36px; text-align: center; }
-        #rileRadonPanelsWrap .btn.btn-primary {
+        #rileRumorePanelsWrap .radon-bulk-table .col-note { min-width: 120px; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-del,
+        #rileRumorePanelsWrap .radon-bulk-table .col-del { width: 36px; text-align: center; }
+        #rileRadonPanelsWrap .btn.btn-primary,
+        #rileRumorePanelsWrap .btn.btn-primary {
             color: #ffffff !important;
         }
         
@@ -3346,11 +3364,23 @@
             const detMicro = Array.isArray(rq) && rq.length > 0;
             const locRadon = r.dettaglio_radon?.locali;
             const detRadon = Array.isArray(locRadon) && locRadon.length > 0;
+            const postRumore = r.dettaglio_rumore?.postazioni;
+            const detRumore = Array.isArray(postRumore) && postRumore.length > 0;
             const sumMicro = detMicro ? formatMicroDettaglioSummary(r) : '';
             const sumRadon = detRadon ? formatRadonDettaglioSummary(r) : '';
+            const sumRumore = detRumore ? formatRumoreDettaglioSummary(r) : '';
             const unita = esc(r.unita_misura || '');
             let valoreCell;
-            if (detRadon) {
+            if (detRumore) {
+                const n = postRumore.length;
+                const vm = r.valore_misurato != null && r.valore_misurato !== '' ? String(r.valore_misurato) : '—';
+                const hint = `Rumore · ${n} postaz.`;
+                valoreCell = `
+                    <div class="rile-val-cell">
+                        <span class="rile-val-main">${esc(vm)} ${unita}</span>
+                        <span class="badge info micro-detail-tag" title="${esc(sumRumore)}">${esc(hint)} · dettaglio al passaggio mouse</span>
+                    </div>`;
+            } else if (detRadon) {
                 const n = locRadon.length;
                 const vm = r.valore_misurato != null && r.valore_misurato !== '' ? String(r.valore_misurato) : '—';
                 const piano = r.zona || r.dettaglio_radon?.piano || '';
@@ -3415,6 +3445,16 @@
             return n === 'gas radon' || n.includes('radon');
         }
 
+        function isRumoreTipoNome(name) {
+            const n = String(name || '').trim().toLowerCase();
+            return n.includes('rumor');
+        }
+
+        function isRumorePiccoTipoNome(name) {
+            const n = String(name || '').trim().toLowerCase();
+            return n.includes('picco') || n.includes('ppeak');
+        }
+
         function escAttr(str) {
             if (str === null || str === undefined) return '';
             return String(str)
@@ -3425,6 +3465,32 @@
                 .replace(/'/g, '&#39;');
         }
         window.escAttr = escAttr;
+
+        function rilevamentoRumorePanelsHtml() {
+            return `
+                            <div id="rileRumorePanelsWrap" style="display:none">
+                                <p class="hint" style="margin-bottom:10px;line-height:1.4;">
+                                    Sessione <strong>Rumore</strong>: una o più postazioni di misura
+                                    (Peak dB(C), Leq dB(A), note per riga). Il valore principale del record
+                                    è il massimo Leq (tipo LEX) o il massimo Peak (tipo picco).
+                                </p>
+                                <div class="radon-loc-scroll">
+                                    <table class="radon-bulk-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="col-locale">Postazione di misura</th>
+                                                <th class="col-num">Peak in dB(C)</th>
+                                                <th class="col-num">Leq in dB(A)</th>
+                                                <th class="col-note">Note ed eventuali</th>
+                                                <th class="col-del"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rumorePostazioniRowsHost"></tbody>
+                                    </table>
+                                </div>
+                                <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendRumorePostazioneRow()">+ Aggiungi postazione</button>
+                            </div>`;
+        }
 
         function rilevamentoRadonPanelsHtml() {
             return `
@@ -3465,6 +3531,20 @@
             if (!nums.length) return null;
             const sum = nums.reduce((a, b) => a + b, 0);
             return Math.round(sum / nums.length);
+        }
+
+        function formatRumoreDettaglioSummary(r) {
+            const det = r?.dettaglio_rumore;
+            const list = det?.postazioni;
+            if (!Array.isArray(list) || !list.length) return '';
+            return list.map((p, i) => {
+                const bits = [];
+                if (p.postazione) bits.push(p.postazione);
+                if (p.peak_db_c != null && p.peak_db_c !== '') bits.push('Peak ' + p.peak_db_c + ' dB(C)');
+                if (p.leq_db_a != null && p.leq_db_a !== '') bits.push('Leq ' + p.leq_db_a + ' dB(A)');
+                if (p.note) bits.push(p.note);
+                return (list.length > 1 ? `#${i + 1} ` : '') + bits.join(' · ');
+            }).join(' — ');
         }
 
         function formatRadonDettaglioSummary(r) {
@@ -3542,7 +3622,7 @@
         function stripHiddenRilevamentoRequired() {
             const modal = document.getElementById('rilevamentoModal');
             if (!modal) return;
-            ['#rileClassicMeasureFields', '#rileMicroPanelsWrap', '#rileRadonPanelsWrap', '#rileStrumentoLaboratorioWrap'].forEach((sel) => {
+            ['#rileClassicMeasureFields', '#rileMicroPanelsWrap', '#rileRadonPanelsWrap', '#rileRumorePanelsWrap', '#rileStrumentoLaboratorioWrap'].forEach((sel) => {
                 const panel = modal.querySelector(sel);
                 if (!panel) return;
                 const hidden = window.getComputedStyle(panel).display === 'none';
@@ -3565,19 +3645,23 @@
             const nome = tipo?.nome_tipo || '';
             const micro = isMicroTabellareNome(nome);
             const radon = isRadonTipoNome(nome);
-            const tabellare = micro || radon;
+            const rumore = isRumoreTipoNome(nome);
+            const tabellare = micro || radon || rumore;
             const classic = modal.querySelector('#rileClassicMeasureFields');
             const microW = modal.querySelector('#rileMicroPanelsWrap');
             const radonW = modal.querySelector('#rileRadonPanelsWrap');
+            const rumoreW = modal.querySelector('#rileRumorePanelsWrap');
             const strLabWrap = modal.querySelector('#rileStrumentoLaboratorioWrap');
             if (classic) classic.style.display = tabellare ? 'none' : '';
             if (microW) microW.style.display = micro ? 'block' : 'none';
             if (radonW) radonW.style.display = radon ? 'block' : 'none';
-            if (strLabWrap) strLabWrap.style.display = radon ? 'none' : '';
+            if (rumoreW) rumoreW.style.display = rumore ? 'block' : 'none';
+            if (strLabWrap) strLabWrap.style.display = (radon || rumore) ? 'none' : '';
             setRilevamentoPanelFieldsActive(classic, !tabellare);
             setRilevamentoPanelFieldsActive(microW, micro);
             setRilevamentoPanelFieldsActive(radonW, radon);
-            setRilevamentoPanelFieldsActive(strLabWrap, !radon);
+            setRilevamentoPanelFieldsActive(rumoreW, rumore);
+            setRilevamentoPanelFieldsActive(strLabWrap, !radon && !rumore);
             const valInp = modal.querySelector('input[name="valore_misurato"]');
             const dtInp = modal.querySelector('input[name="data_rilevamento"]');
             const zonaInp = modal.querySelector('#rileClassicMeasureFields input[name="zona"]');
@@ -3594,11 +3678,18 @@
                 const radonHost = radonW.querySelector('#radonLocaleRowsHost');
                 if (radonHost) radonHost.innerHTML = '';
             }
+            if (!rumore && rumoreW) {
+                const rumHost = rumoreW.querySelector('#rumorePostazioniRowsHost');
+                if (rumHost) rumHost.innerHTML = '';
+            }
             if (micro && microW && !microW.querySelector('.micro-bulk-row')) {
                 resetMicroBulkRowsInit();
             }
             if (radon && radonW && !radonW.querySelector('#radonLocaleRowsHost tr[data-radon-locale]')) {
                 resetRadonLocaleRowsInit();
+            }
+            if (rumore && rumoreW && !rumoreW.querySelector('#rumorePostazioniRowsHost tr[data-rumore-post]')) {
+                resetRumorePostazioniRowsInit();
             }
             stripHiddenRilevamentoRequired();
         };
@@ -3659,6 +3750,53 @@
             if (!host) return;
             host.innerHTML = '';
             appendRadonLocaleRow({});
+        }
+
+        window.appendRumorePostazioneRow = function (preset) {
+            const host = document.getElementById('rumorePostazioniRowsHost');
+            if (!host) return;
+            const pr = preset || {};
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-rumore-post', '1');
+            const mk = (key, val, cls) => {
+                const v = val != null && val !== '' ? String(val) : '';
+                return `<td class="${cls || ''}"><input type="text" data-rk="${key}" value="${escAttr(v)}" autocomplete="off"></td>`;
+            };
+            tr.innerHTML = mk('postazione', pr.postazione, 'col-locale')
+                + mk('peak_db_c', pr.peak_db_c, 'col-num')
+                + mk('leq_db_a', pr.leq_db_a, 'col-num')
+                + mk('note', pr.note, 'col-note')
+                + '<td class="col-del"><button type="button" class="icon-btn danger" onclick="removeRumorePostazioneRow(this)">✕</button></td>';
+            host.appendChild(tr);
+        };
+
+        window.removeRumorePostazioneRow = function (btn) {
+            const host = document.getElementById('rumorePostazioniRowsHost');
+            if (!host || host.querySelectorAll('tr[data-rumore-post]').length <= 1) {
+                showToast('È necessaria almeno una postazione.', 'warning');
+                return;
+            }
+            btn.closest('tr')?.remove();
+        };
+
+        function resetRumorePostazioniRowsInit() {
+            const host = document.getElementById('rumorePostazioniRowsHost');
+            if (!host) return;
+            host.innerHTML = '';
+            appendRumorePostazioneRow({});
+        }
+
+        function collectRumorePostazioniFromDom() {
+            const postazioni = [];
+            document.querySelectorAll('#rumorePostazioniRowsHost tr[data-rumore-post]').forEach((tr) => {
+                postazioni.push({
+                    postazione: tr.querySelector('[data-rk="postazione"]')?.value?.trim() || '',
+                    peak_db_c: parseNumITOptional(tr.querySelector('[data-rk="peak_db_c"]')?.value),
+                    leq_db_a: parseNumITOptional(tr.querySelector('[data-rk="leq_db_a"]')?.value),
+                    note: tr.querySelector('[data-rk="note"]')?.value?.trim() || '',
+                });
+            });
+            return postazioni;
         }
 
         function collectRadonLocaliFromDom() {
@@ -3753,6 +3891,7 @@
                 note,
                 dettaglio_microclima: null,
                 dettaglio_radon: { piano, locali },
+                dettaglio_rumore: null,
             };
             if (!editId) {
                 payload.data_rilevamento = new Date().toISOString();
@@ -3771,6 +3910,102 @@
             }
             closeModal('rilevamentoModal');
             showToast('Rilevamento radon salvato', 'success');
+            await renderRilevamenti();
+        }
+
+        async function saveRumoreTabellareRecord(formEl, editId) {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const fd = new FormData(formEl);
+            const descrizione = String(fd.get('descrizione_rilevamento') || '').trim();
+            const aziendaId = fd.get('azienda_id');
+            const tipoId = fd.get('tipo_rilevamento_id');
+            if (!descrizione) {
+                showToast('Inserisci la descrizione del rilevamento.', 'warning');
+                return;
+            }
+            if (!aziendaId) {
+                showToast('Seleziona l\'azienda.', 'warning');
+                return;
+            }
+            const tipoRow = (STATE.data.tipiRilevamento || []).find(x => x.id === tipoId);
+            const tipoNome = tipoRow?.nome_tipo || '';
+            const picco = isRumorePiccoTipoNome(tipoNome);
+            const unita = tipoRow?.unita_misura || (picco ? 'Pa' : 'dB(A)');
+            const limDef = tipoRow?.limite_legge_default;
+            const limite = limDef != null && limDef !== '' ? Number(limDef) : (picco ? 112 : 80);
+
+            const postazioni = collectRumorePostazioniFromDom();
+            if (!postazioni.length) {
+                showToast('Aggiungi almeno una postazione di misura.', 'warning');
+                return;
+            }
+
+            let worstEsito = 'Conforme';
+            let maxPrimario = null;
+            for (const row of postazioni) {
+                if (!row.postazione) {
+                    showToast('Indica la postazione di misura per ogni riga.', 'warning');
+                    return;
+                }
+                const primVal = picco ? row.peak_db_c : row.leq_db_a;
+                const primLabel = picco ? 'Peak in dB(C)' : 'Leq in dB(A)';
+                if (primVal == null || !Number.isFinite(primVal)) {
+                    showToast('Per «' + row.postazione + '» indica ' + primLabel + '.', 'warning');
+                    return;
+                }
+                if (maxPrimario == null || primVal > maxPrimario) maxPrimario = primVal;
+
+                let esito = 'Da verificare';
+                if (limite != null && Number.isFinite(limite)) {
+                    const { data: esitoData, error: esitoError } = await supabaseClient.rpc('fn_valuta_rilevamento', {
+                        p_valore_misurato: primVal,
+                        p_limite_legge: limite,
+                    });
+                    if (esitoError) {
+                        showToast('Errore calcolo esito: ' + esitoError.message, 'error');
+                        return;
+                    }
+                    esito = esitoData;
+                }
+                worstEsito = bumpEsitoMicro(worstEsito, esito);
+            }
+
+            const payload = {
+                descrizione_rilevamento: descrizione,
+                azienda_id: aziendaId,
+                tipo_rilevamento_id: tipoId,
+                valore_misurato: maxPrimario,
+                unita_misura: unita,
+                limite_legge_applicato: limite,
+                esito: worstEsito,
+                zona: null,
+                strumento: null,
+                laboratorio_esterno: null,
+                note: null,
+                dettaglio_microclima: null,
+                dettaglio_radon: null,
+                dettaglio_rumore: { postazioni },
+            };
+            if (!editId) {
+                payload.data_rilevamento = new Date().toISOString();
+            }
+
+            let error;
+            if (editId) {
+                ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).update(payload).eq('id', editId));
+            } else {
+                payload.created_by = STATE.account?.id || null;
+                ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).insert(payload));
+            }
+            if (error) {
+                showToast('Errore salvataggio: ' + error.message, 'error');
+                return;
+            }
+            closeModal('rilevamentoModal');
+            showToast('Rilevamento rumore salvato', 'success');
             await renderRilevamenti();
         }
 
@@ -3919,6 +4154,7 @@
                 note,
                 dettaglio_microclima: { riquadri },
                 dettaglio_radon: null,
+                dettaglio_rumore: null,
             };
 
             let error;
@@ -3957,6 +4193,9 @@
                 const editRadon = (item?.dettaglio_radon?.locali?.length > 0
                     || isRadonTipoNome(item?.tipo_rilevamento?.nome_tipo))
                     && !editMicro;
+                const editRumore = (item?.dettaglio_rumore?.postazioni?.length > 0
+                    || isRumoreTipoNome(item?.tipo_rilevamento?.nome_tipo))
+                    && !editMicro && !editRadon;
 
                 if (editMicro) {
                     modal.innerHTML = `
@@ -4018,6 +4257,7 @@
                                 <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendMicroBulkRow()">+ Aggiungi altro rilevamento (riquadro)</button>
                             </div>
                             ${rilevamentoRadonPanelsHtml()}
+                            ${rilevamentoRumorePanelsHtml()}
                             <div id="rileStrumentoLaboratorioWrap" class="form-grid">
                                 <div class="form-field">
                                     <label>Strumento</label>
@@ -4086,12 +4326,7 @@
                             <div id="rileClassicMeasureFields" class="form-grid" style="display:none"></div>
                             <div id="rileMicroPanelsWrap" style="display:none"></div>
                             ${rilevamentoRadonPanelsHtml()}
-                            <div id="rileStrumentoLaboratorioWrap" class="form-grid">
-                                <div class="form-field full">
-                                    <label>Note</label>
-                                    <textarea name="note">${esc(item?.note || '')}</textarea>
-                                </div>
-                            </div>
+                            ${rilevamentoRumorePanelsHtml()}
                         </form>
                     </div>
                     <div class="modal-footer">
@@ -4111,6 +4346,63 @@
                             host.innerHTML = '';
                             const locs = det.locali?.length ? det.locali : [{}];
                             locs.forEach((loc) => appendRadonLocaleRow(loc));
+                        }
+                        applyRilevamentoModalTipoVisibility();
+                    }, 10);
+                    modal.onclick = () => closeModal('rilevamentoModal');
+                    return;
+                }
+
+                if (editRumore) {
+                    modal.innerHTML = `
+                <div class="modal modal--rile-wide" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <div class="modal-title">Modifica Rilevamento — Rumore</div>
+                        <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="rilevamentoForm" novalidate onsubmit="saveRilevamento(event, '${item.id}')">
+                            <div class="form-grid">
+                                <div class="form-field full">
+                                    <label>Descrizione Rilevamento</label>
+                                    <input type="text" name="descrizione_rilevamento" value="${esc(item?.descrizione_rilevamento || '')}" required>
+                                </div>
+                                <div class="form-field">
+                                    <label>Azienda</label>
+                                    <select name="azienda_id" required>
+                                        <option value="">— Seleziona —</option>
+                                        ${aziende.map(a => `<option value="${a.id}" ${item?.azienda_id === a.id ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Tipo Rilevamento</label>
+                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
+                                        <option value="">— Seleziona —</option>
+                                        ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}" ${item?.tipo_rilevamento_id === t.id ? 'selected' : ''}>${esc(t.nome_tipo || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="rileClassicMeasureFields" class="form-grid" style="display:none"></div>
+                            <div id="rileMicroPanelsWrap" style="display:none"></div>
+                            ${rilevamentoRadonPanelsHtml()}
+                            ${rilevamentoRumorePanelsHtml()}
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
+                        <button type="button" class="btn btn-primary" onclick="submitRilevamentoForm()">Salva</button>
+                    </div>
+                </div>
+            `;
+                    document.body.appendChild(modal);
+                    setTimeout(() => {
+                        modal.classList.add('show');
+                        const det = item.dettaglio_rumore || {};
+                        const host = document.getElementById('rumorePostazioniRowsHost');
+                        if (host) {
+                            host.innerHTML = '';
+                            const posts = det.postazioni?.length ? det.postazioni : [{}];
+                            posts.forEach((p) => appendRumorePostazioneRow(p));
                         }
                         applyRilevamentoModalTipoVisibility();
                     }, 10);
@@ -4251,6 +4543,7 @@
                                 <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendMicroBulkRow()">+ Aggiungi altro rilevamento (riquadro)</button>
                             </div>
                             ${rilevamentoRadonPanelsHtml()}
+                            ${rilevamentoRumorePanelsHtml()}
                             <div id="rileStrumentoLaboratorioWrap" class="form-grid">
                                 <div class="form-field">
                                     <label>Strumento</label>
@@ -4315,6 +4608,10 @@
                 await saveRadonTabellareRecord(event.target, itemId || null);
                 return;
             }
+            if (isRumoreTipoNome(tipoNome)) {
+                await saveRumoreTabellareRecord(event.target, itemId || null);
+                return;
+            }
 
             const valore = formData.get('valore_misurato') ? Number(formData.get('valore_misurato')) : null;
             const limite = formData.get('limite_legge_applicato') ? Number(formData.get('limite_legge_applicato')) : null;
@@ -4342,6 +4639,7 @@
                 note: formData.get('note') || null,
                 dettaglio_microclima: null,
                 dettaglio_radon: null,
+                dettaglio_rumore: null,
             };
 
             let error;
@@ -5149,6 +5447,7 @@
                 MOD_EMERGENZE: '20260523d',
                 MOD_VIBRAZIONI: '20260523b',
                 MOD_GAS_RADON: '20260524e',
+                MOD_RUMORE: '20260525d',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5338,7 +5637,7 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
@@ -5360,6 +5659,7 @@
                 : codice === 'MOD_EMERGENZE' ? '20260523d'
                 : codice === 'MOD_VIBRAZIONI' ? '20260523b'
                 : codice === 'MOD_GAS_RADON' ? '20260524e'
+                : codice === 'MOD_RUMORE' ? '20260525d'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

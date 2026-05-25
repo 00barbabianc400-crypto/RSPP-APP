@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Rumore</title>
+<script src="adapter.js?v=20260525d"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 20px; }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  h3.doc-sub { font-size: 11pt; font-weight: 600; margin: 12px 0 6px; color: #333; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .info-box { font-size: 10pt; background: #f8f9fa; border: 1px solid #ddd; padding: 10px; margin-top: 8px; line-height: 1.45; }
+  .static-box { font-size: 10pt; background: #fafafa; border: 1px dashed #ccc; padding: 10px; margin-top: 8px; color: #444; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; }
+  .tag-pill { display: inline-block; font-family: monospace; font-size: 9pt; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; margin: 2px 4px 2px 0; }
+  .anag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 10pt; margin-top: 8px; }
+  .anag-grid dt { font-weight: 600; color: #555; }
+  .anag-grid dd { margin: 0 0 6px; }
+  .ciclo-textarea { width: 100%; min-height: 72px; font-size: 10pt; padding: 6px; margin-top: 6px; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  ul.profili-list { margin: 8px 0 0 18px; font-size: 10pt; }
+  .gruppi-actions { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .gruppi-actions button {
+    font-size: 10pt; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276;
+  }
+  .gruppi-checklist { margin-top: 8px; }
+  .gruppi-checklist label {
+    display: block; padding: 6px 8px; margin: 2px 0; cursor: pointer;
+    border-radius: 4px; font-size: 10.5pt;
+  }
+  .gruppi-checklist label:hover { background: #f0f7fc; }
+  .gruppi-checklist input { margin-right: 8px; vertical-align: middle; }
+  .cella-blu-preview {
+    margin-top: 12px; min-height: 80px; padding: 14px 12px;
+    background: #4472c4; color: #fff; text-align: center;
+    font-size: 11pt; line-height: 1.55; white-space: pre-line;
+    border: 1px solid #2f5597;
+  }
+  .cella-blu-preview.empty { font-style: italic; opacity: 0.85; }
+  #tblMisureRumorePreview { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+  #tblMisureRumorePreview th { background: #2c3e50; color: #fff; padding: 6px; text-align: center; }
+  #tblMisureRumorePreview td { border: 1px solid #bbb; padding: 6px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">MOD_RUMORE — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Valutazione del rischio rumore</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Modello: <code>Modulo XXXXXXXX- rischio rumore.docx</code> → caricare come <code>MOD_RUMORE.docx</code> nel bucket <code>moduli</code>.
+        §7 gruppi omogenei attivo; sezioni <strong>8+</strong> in seguito.
+      </p>
+
+      <h2 class="doc-section">Copertina / dati documento</h2>
+      <p>
+        <span class="tag-pill">{%LOGO}</span>
+        <span class="tag-pill">{{MODULO_NUMERO}}</span>
+        <span class="tag-pill">{{RAGIONE_SOCIALE}}</span>
+        <span class="tag-pill">{{SEDE_OPERATIVA}}</span>
+        <span class="tag-pill">{{DATA_EMISSIONE}}</span>
+      </p>
+      <p><strong>Modulo</strong>: <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+        style="width:80px;" placeholder="12" oninput="setModuloNumero(this.value)">
+        · <strong>Data emissione</strong> <span id="pData" class="field-auto">—</span>
+        · <strong>Luogo</strong> <span id="pLuogo" class="field-auto">—</span></p>
+      <p><strong>Committente</strong> <span id="pRagSoc" class="field-auto">—</span> — <strong>Sede</strong> <span id="pSede" class="field-auto">—</span></p>
+      <p style="margin-top:8px;"><strong>Logo</strong> <span id="pLogo" class="field-auto">—</span></p>
+
+      <h2 class="doc-section">§1 — Premessa</h2>
+      <p class="hint-str">Nel Word: <code>{{RAGIONE_SOCIALE}}</code> e <code>{{SEDE_OPERATIVA}}</code> (già nel testo). Aggiungere anche:</p>
+      <p><span class="tag-pill">{{REDATTO_DA}}</span> al posto di «Team della Studio Rivelli…»</p>
+      <p><strong>Redatto da</strong>:</p>
+      <input type="text" id="inpRedattoDa" class="inline-select" style="width:100%;max-width:520px;"
+        oninput="onRedattoDaInput()">
+
+      <h2 class="doc-section">§2 — Dati anagrafici della Società</h2>
+      <p class="hint-str">
+        Nel modello attuale la §2 compare solo in indice; i tag sotto sono pronti per quando inserisci la sezione nel Word.
+        Valori da <strong>Anagrafica aziende</strong> (sola lettura).
+      </p>
+      <dl class="anag-grid" id="anagGrid"></dl>
+
+      <h2 class="doc-section">§3 — Definizione e campo di applicazione</h2>
+      <div class="static-box">
+        Testo normativo fisso nel modello (D.Lgs. 81/08, ISO 1999, UNI 9432). Nessun campo wizard in questa fase.
+      </div>
+
+      <h2 class="doc-section">§4 — Analisi preliminare</h2>
+      <p class="hint-str">
+        Sostituire nel Word il paragrafo conclusivo con <code>{{TESTO_ANALISI_PRELIMINARE}}</code>
+        (dopo lo schema obblighi datore di lavoro).
+      </p>
+      <textarea id="taAnalisiPreliminare" class="ciclo-textarea" style="min-height:100px;"
+        oninput="onAnalisiPreliminareInput()"></textarea>
+
+      <h2 class="doc-section">§5 — Metodo adottato</h2>
+      <div class="static-box">Testo e riferimento tabella statici nel modello Word.</div>
+
+      <h2 class="doc-section">§6 — Modalità di misura</h2>
+      <div class="static-box">
+        Sottosezioni 6.1–6.5 (Taratura, Misurazioni, Tempo, Criteri, Errori) — testo fisso nel .docx.
+      </div>
+
+      <h2 class="doc-section">§7 — Descrizione dell’attività della Società</h2>
+      <p class="hint-str">
+        Nel Word: <code>{{RAGIONE_SOCIALE}}</code> nel paragrafo «Per la descrizione dettagliata…» (già nel modello).
+      </p>
+      <p style="font-size:10pt;color:#444;">
+        Per la descrizione dettagliata delle attività svolte dalla
+        <span id="pRagSocS7" class="field-auto">—</span>
+        si rimanda al documento di valutazione del rischio di cui il presente documento rappresenta parte integrante.
+      </p>
+
+      <h3 class="doc-sub">§7.1 — Gruppi omogenei individuati</h3>
+      <p class="hint-str">
+        Nel Word, nella <strong>cella blu</strong>, sostituire <code>*Lista gruppi omogenei*</code> con
+        <code>{{LISTA_GRUPPI_OMOGENEI}}</code> (una riga per gruppo, centrato — Docxtemplater
+        <code>linebreaks: true</code>).
+      </p>
+      <p class="hint-str" id="hintGruppiCatalogo">—</p>
+      <div class="gruppi-actions">
+        <button type="button" onclick="setTuttiGruppi(true)">Seleziona tutti</button>
+        <button type="button" onclick="setTuttiGruppi(false)">Deseleziona tutti</button>
+      </div>
+      <div class="gruppi-checklist" id="wrapGruppiChecklist"></div>
+      <p class="hint-str" style="margin-top:10px;">Anteprima cella Word (lista centrata):</p>
+      <div class="cella-blu-preview" id="cellaBluPreview">—</div>
+
+      <h2 class="doc-section">§10 — Tabella rilevazioni (anteprima dati)</h2>
+      <p class="hint-str">
+        Loop Word nella prima riga dati:
+        <code>{{#MISURE_RUMORE}}{{POSTAZIONE}}{{PEAK_DB_C}}{{LEQ_DB_A}}{{NOTE_POSTAZIONE}}{{/MISURE_RUMORE}}</code>
+      </p>
+      <div class="info-box" id="pRilevamentiInfo">—</div>
+      <table class="radon-bulk-table" id="tblMisureRumorePreview" style="margin-top:8px;display:none;">
+        <thead>
+          <tr>
+            <th>Postazione</th>
+            <th>Peak dB(C)</th>
+            <th>Leq dB(A)</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyMisureRumore"></tbody>
+      </table>
+
+      <h2 class="doc-section" style="opacity:.55;">§8–9, §11+ (prossimo step)</h2>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"><p style="text-align:center;padding:40px;color:#888;">Apri «Anteprima Word» dopo la compilazione.</p></div>
+</div>
+
+<script>
+(function () {
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_RUMORE'];
+  let DATA = null;
+  let activeView = 'compile';
+  const WIZARD = {
+    modulo_numero: '',
+    redatto_da: '',
+    testo_analisi_preliminare: '',
+    note_wizard: '',
+    gruppi_omogenei: [],
+  };
+
+  const ANAG_FIELDS = [
+    ['PARTITA_IVA', 'Partita IVA'],
+    ['CODICE_FISCALE', 'Codice fiscale'],
+    ['SEDE_LEGALE', 'Sede legale'],
+    ['OGGETTO_SOCIALE', 'Oggetto sociale'],
+    ['ISCRIZIONE_CCIAA', 'Iscrizione CCIAA'],
+    ['CODICE_ATECO', 'Codice ATECO'],
+    ['MACROSETTORE_RISCHIO', 'Macrosettore rischio'],
+    ['DATORE_LAVORO', 'Datore di lavoro'],
+    ['RSPP', 'RSPP'],
+    ['MEDICO_COMPETENTE', 'Medico competente'],
+    ['RLS', 'RLS'],
+    ['NUM_DIPENDENTI', 'N. dipendenti'],
+    ['DESCRIZIONE_SITO', 'Descrizione sito'],
+  ];
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const n = parseInt(String(padded || '').trim(), 10);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el || !DATA) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML = '<img src="' + esc(url).replace(/"/g, '&quot;') + '" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.textContent = 'Logo caricato (nel Word generato)';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = '—';
+    el.className = 'field-missing';
+  }
+
+  function renderAnagraficaGrid() {
+    const host = document.getElementById('anagGrid');
+    if (!host || !DATA) return;
+    let html = '';
+    for (const [key, label] of ANAG_FIELDS) {
+      const val = DATA[key];
+      html += '<dt>' + esc(label) + ' <code>{{' + key + '}}</code></dt><dd>' + (val ? esc(val) : '—') + '</dd>';
+    }
+    host.innerHTML = html;
+  }
+
+  function renderGruppiOmogenei() {
+    const wrap = document.getElementById('wrapGruppiChecklist');
+    const hint = document.getElementById('hintGruppiCatalogo');
+    const cella = document.getElementById('cellaBluPreview');
+    if (!wrap || !ADAPTER || !DATA) return;
+
+    const rows = WIZARD.gruppi_omogenei || [];
+    if (hint) {
+      hint.textContent = rows.length
+        ? rows.length + ' gruppo/i omogeneo/i dall’anagrafica azienda — spunta quali includere nel modulo.'
+        : 'Nessun profilo associato: in Anagrafica → Profili collega i gruppi omogenei all’azienda.';
+    }
+
+    if (!rows.length) {
+      wrap.innerHTML = '<p class="hint-str">Nessun gruppo disponibile.</p>';
+      if (cella) {
+        cella.textContent = '(nessun gruppo selezionato)';
+        cella.classList.add('empty');
+      }
+      return;
+    }
+
+    let html = '';
+    rows.forEach((row, idx) => {
+      const checked = row.incluso !== false ? ' checked' : '';
+      html +=
+        '<label><input type="checkbox"' + checked +
+        ' onchange="toggleGruppoOmogeneo(' + idx + ', this.checked)">' +
+        esc(row.nome) + '</label>';
+    });
+    wrap.innerHTML = html;
+
+    const lista = ADAPTER.listaGruppiOmogeneiForTemplate(
+      { gruppi_omogenei: WIZARD.gruppi_omogenei },
+      DATA._profili_azienda
+    );
+    if (cella) {
+      if (lista) {
+        cella.textContent = lista;
+        cella.classList.remove('empty');
+      } else {
+        cella.textContent = '(seleziona almeno un gruppo)';
+        cella.classList.add('empty');
+      }
+    }
+  }
+
+  function renderRilevamentiInfo() {
+    const info = document.getElementById('pRilevamentiInfo');
+    const tbl = document.getElementById('tblMisureRumorePreview');
+    const tbody = document.getElementById('tbodyMisureRumore');
+    if (!info || !DATA) return;
+    const misure = DATA._misure_rumore || DATA.MISURE_RUMORE || [];
+    const sessions = (DATA._rilevamenti_rumore || []).length;
+    if (!misure.length) {
+      info.textContent = sessions
+        ? sessions + ' sessione/i rumore senza postazioni in dettaglio — apri il rilevamento e compila la tabella.'
+        : 'Nessun rilevamento Rumore — inserisci una sessione tabellare in tab Rilevamenti (tipo Rumore — LEX,8h).';
+      if (tbl) tbl.style.display = 'none';
+      return;
+    }
+    info.textContent = misure.length + ' postazione/i da ' + sessions + ' sessione/i → nel Word loop §10.';
+    if (tbl) tbl.style.display = '';
+    if (tbody) {
+      tbody.innerHTML = misure.map((m) =>
+        '<tr><td>' + esc(m.POSTAZIONE) + '</td><td>' + esc(m.PEAK_DB_C) + '</td><td>' + esc(m.LEQ_DB_A) + '</td><td>' + esc(m.NOTE_POSTAZIONE) + '</td></tr>'
+      ).join('');
+    }
+  }
+
+  function buildMerged() {
+    if (!ADAPTER || !DATA) return {};
+    return ADAPTER.applyWizard(DATA, {
+      modulo_numero: WIZARD.modulo_numero,
+      redatto_da: WIZARD.redatto_da,
+      testo_analisi_preliminare: WIZARD.testo_analisi_preliminare,
+      note_wizard: WIZARD.note_wizard,
+      gruppi_omogenei: WIZARD.gruppi_omogenei,
+      profili_azienda: DATA._profili_azienda,
+    });
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const stop = document.getElementById('stopBadge');
+    const ok = document.getElementById('okBadge');
+    const btn = document.getElementById('btnGenera');
+    if (errors.length) {
+      stop.classList.add('visible');
+      stop.textContent = errors[0];
+      stop.title = errors.join(' · ');
+      ok.classList.remove('visible');
+      btn.disabled = true;
+    } else {
+      stop.classList.remove('visible');
+      ok.classList.add('visible');
+      ok.textContent = 'Pronto';
+      btn.disabled = false;
+    }
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+  }
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+  window.onRedattoDaInput = function () {
+    WIZARD.redatto_da = document.getElementById('inpRedattoDa')?.value || '';
+    sendUpdate();
+  };
+  window.onAnalisiPreliminareInput = function () {
+    WIZARD.testo_analisi_preliminare = document.getElementById('taAnalisiPreliminare')?.value || '';
+    sendUpdate();
+  };
+
+  window.toggleGruppoOmogeneo = function (idx, checked) {
+    if (!WIZARD.gruppi_omogenei[idx]) return;
+    WIZARD.gruppi_omogenei[idx].incluso = !!checked;
+    renderGruppiOmogenei();
+    sendUpdate();
+  };
+
+  window.setTuttiGruppi = function (incluso) {
+    (WIZARD.gruppi_omogenei || []).forEach((r) => { r.incluso = !!incluso; });
+    renderGruppiOmogenei();
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').style.display = view === 'compile' ? '' : 'none';
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_RUMORE — Compila' : 'MOD_RUMORE — Anteprima Word';
+  };
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    if (!host || !window.docx) return;
+    host.innerHTML = '';
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    const pS7 = document.getElementById('pRagSocS7');
+    if (pS7) pS7.textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    renderLogoPreview();
+
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+
+    const prev = DATA._rumore_wizard || {};
+    WIZARD.redatto_da = prev.redatto_da != null ? String(prev.redatto_da) : (DATA.REDATTO_DA || ADAPTER.REDATTO_DA_DEFAULT || '');
+    WIZARD.testo_analisi_preliminare = prev.testo_analisi_preliminare != null
+      ? String(prev.testo_analisi_preliminare)
+      : (DATA.TESTO_ANALISI_PRELIMINARE || ADAPTER.TESTO_ANALISI_PRELIMINARE_DEFAULT || '');
+    WIZARD.note_wizard = prev.note_wizard != null ? String(prev.note_wizard) : (DATA.NOTE_WIZARD || '');
+
+    WIZARD.gruppi_omogenei = ADAPTER.mergeGruppiOmogeneiWizard(
+      { gruppi_omogenei: prev.gruppi_omogenei || DATA._gruppi_omogenei },
+      DATA._profili_azienda || []
+    );
+
+    document.getElementById('inpRedattoDa').value = WIZARD.redatto_da;
+    document.getElementById('taAnalisiPreliminare').value = WIZARD.testo_analisi_preliminare;
+
+    renderAnagraficaGrid();
+    renderGruppiOmogenei();
+    renderRilevamentiInfo();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

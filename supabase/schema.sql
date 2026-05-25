@@ -207,6 +207,7 @@ create table if not exists public.rilevamenti_ambientali (
   note text,
   dettaglio_microclima jsonb,
   dettaglio_radon jsonb,
+  dettaglio_rumore jsonb,
   allegato_url text,
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default timezone('utc', now()),

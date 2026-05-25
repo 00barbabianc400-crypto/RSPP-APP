@@ -708,16 +708,21 @@
             min-width: 720px;
             border-collapse: collapse;
             font-size: 12px;
+            background: var(--sp-bg-card);
         }
         .radon-bulk-table th {
-            background: var(--sp-bg-secondary, #2a2a2a);
-            color: var(--sp-text, #eee);
+            background: var(--sp-primary);
+            color: #fff;
             padding: 8px 6px;
             text-align: center;
             white-space: nowrap;
+            font-weight: 600;
+            border: 1px solid var(--sp-primary-pressed);
         }
         .radon-bulk-table td {
-            border: 1px solid var(--sp-border, #444);
+            background: var(--sp-bg-card);
+            color: var(--sp-text);
+            border: 1px solid var(--sp-border);
             padding: 4px;
             vertical-align: middle;
         }
@@ -727,6 +732,18 @@
             padding: 5px 6px;
             font-size: 12px;
             box-sizing: border-box;
+            background: #fff;
+            color: var(--sp-text);
+            border: 1px solid var(--sp-border-strong);
+            border-radius: 2px;
+        }
+        .radon-bulk-table input::placeholder {
+            color: var(--sp-text-secondary);
+        }
+        .radon-bulk-table input:focus {
+            outline: none;
+            border-color: var(--sp-primary);
+            box-shadow: 0 0 0 1px var(--sp-primary);
         }
         .radon-bulk-table .col-locale { min-width: 160px; }
         .radon-bulk-table .col-rilev { min-width: 140px; }
@@ -3387,17 +3404,14 @@
             return `
                             <div id="rileRadonPanelsWrap" style="display:none">
                                 <p class="hint" style="margin-bottom:10px;line-height:1.4;">
-                                    Sessione <strong>Gas Radon</strong>: indica il <strong>piano</strong>, la data della sessione e una o più righe
+                                    Sessione <strong>Gas Radon</strong>: indica il <strong>piano</strong> e una o più righe
                                     (locale, rilevatore, tre periodi). La <strong>media annuale</strong> si calcola automaticamente dai tre periodi (arrotondamento).
+                                    Il periodo di rilievo per il modulo si imposta in generazione documento.
                                 </p>
                                 <div class="form-grid">
-                                    <div class="form-field">
+                                    <div class="form-field full">
                                         <label>Piano</label>
                                         <input type="text" id="radonPianoSessione" data-radon-session="piano" placeholder="es. Piano terra / interrato">
-                                    </div>
-                                    <div class="form-field">
-                                        <label>Data rilevamento (sessione)</label>
-                                        <input type="datetime-local" id="radonDataSessione" data-radon-session="data_rilevamento" required>
                                     </div>
                                 </div>
                                 <div class="radon-loc-scroll">
@@ -3604,17 +3618,12 @@
             const tipoId = fd.get('tipo_rilevamento_id');
             const note = String(fd.get('note') || '').trim() || null;
             const piano = document.getElementById('radonPianoSessione')?.value?.trim() || '';
-            const dataSessione = document.getElementById('radonDataSessione')?.value;
             if (!descrizione) {
                 showToast('Inserisci la descrizione del rilevamento.', 'warning');
                 return;
             }
             if (!aziendaId) {
                 showToast('Seleziona l\'azienda.', 'warning');
-                return;
-            }
-            if (!dataSessione) {
-                showToast('Indica la data della sessione di rilevamento.', 'warning');
                 return;
             }
             const tipoRow = (STATE.data.tipiRilevamento || []).find(x => x.id === tipoId);
@@ -3663,13 +3672,15 @@
                 limite_legge_applicato: limite,
                 esito: worstEsito,
                 zona: piano || null,
-                data_rilevamento: dataSessione,
                 strumento: null,
                 laboratorio_esterno: null,
                 note,
                 dettaglio_microclima: null,
                 dettaglio_radon: { piano, locali },
             };
+            if (!editId) {
+                payload.data_rilevamento = new Date().toISOString();
+            }
 
             let error;
             if (editId) {
@@ -4018,9 +4029,7 @@
                         modal.classList.add('show');
                         const det = item.dettaglio_radon || {};
                         const pianoInp = document.getElementById('radonPianoSessione');
-                        const dataInp = document.getElementById('radonDataSessione');
                         if (pianoInp) pianoInp.value = det.piano || item.zona || '';
-                        if (dataInp) dataInp.value = formatDateTimeForInput(item.data_rilevamento);
                         const host = document.getElementById('radonLocaleRowsHost');
                         if (host) {
                             host.innerHTML = '';
@@ -6502,6 +6511,10 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             return String(str).replace(/[<>"']/g, c => ({
                 '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[c]));
+        }
+
+        function escAttr(str) {
+            return esc(str).replace(/"/g, '&quot;');
         }
         
         function formatDateForInput(dateStr) {

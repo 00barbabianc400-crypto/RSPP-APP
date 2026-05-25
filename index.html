@@ -16,8 +16,8 @@
     <!-- Runtime ENV (generated from .env) -->
     <script src="./env.js"></script>
     
-    <!-- Fluent UI Web Components -->
-    <script type="module" src="https://res.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css"></script>
+    <!-- Fluent UI (solo foglio di stile, non modulo JS) -->
+    <link rel="stylesheet" href="https://res.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css">
     
     <style>
         /* ════════════════════════════════════════════════════════════════
@@ -3532,10 +3532,27 @@
 
         function setRilevamentoPanelFieldsActive(panelEl, active) {
             if (!panelEl) return;
-            panelEl.querySelectorAll('input, select, textarea, button').forEach((el) => {
-                if (el.type === 'button' || el.type === 'submit') return;
+            panelEl.querySelectorAll('input, select, textarea').forEach((el) => {
                 el.disabled = !active;
-                if (!active) el.required = false;
+                el.required = false;
+                el.removeAttribute('required');
+            });
+        }
+
+        function stripHiddenRilevamentoRequired() {
+            const modal = document.getElementById('rilevamentoModal');
+            if (!modal) return;
+            ['#rileClassicMeasureFields', '#rileMicroPanelsWrap', '#rileRadonPanelsWrap', '#rileStrumentoLaboratorioWrap'].forEach((sel) => {
+                const panel = modal.querySelector(sel);
+                if (!panel) return;
+                const hidden = window.getComputedStyle(panel).display === 'none';
+                panel.querySelectorAll('input, select, textarea').forEach((el) => {
+                    if (hidden) {
+                        el.required = false;
+                        el.removeAttribute('required');
+                        el.disabled = true;
+                    }
+                });
             });
         }
 
@@ -3583,8 +3600,18 @@
             if (radon && radonW && !radonW.querySelector('#radonLocaleRowsHost tr[data-radon-locale]')) {
                 resetRadonLocaleRowsInit();
             }
+            stripHiddenRilevamentoRequired();
         };
         window.applyMicroModalTipoVisibility = window.applyRilevamentoModalTipoVisibility;
+
+        window.submitRilevamentoForm = function () {
+            applyRilevamentoModalTipoVisibility();
+            stripHiddenRilevamentoRequired();
+            const form = document.getElementById('rilevamentoForm');
+            if (!form) return;
+            if (typeof form.requestSubmit === 'function') form.requestSubmit();
+            else form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        };
 
         window.recalcRadonMediaRow = function (tr) {
             if (!tr) return;
@@ -3603,14 +3630,16 @@
             const pr = preset || {};
             const tr = document.createElement('tr');
             tr.setAttribute('data-radon-locale', '1');
-            const mk = (key, val, ph, cls) =>
-                `<td class="${cls || ''}"><input type="text" data-rk="${key}" value="${escAttr(val != null && val !== '' ? String(val) : '')}" placeholder="${escAttr(ph || '')}" oninput="recalcRadonMediaRow(this.closest('tr'))"></td>`;
-            tr.innerHTML = mk('locale', pr.locale, '', 'col-locale')
-                + mk('rilevatore', pr.rilevatore, '', 'col-rilev')
-                + mk('periodo_1', pr.periodo_1, '', 'col-num')
-                + mk('periodo_2', pr.periodo_2, '', 'col-num')
-                + mk('periodo_3', pr.periodo_3, '', 'col-num')
-                + mk('media_annuale', pr.media_annuale, '', 'col-media')
+            const mk = (key, val, cls) => {
+                const v = val != null && val !== '' ? String(val) : '';
+                return `<td class="${cls || ''}"><input type="text" data-rk="${key}" value="${escAttr(v)}" autocomplete="off" oninput="recalcRadonMediaRow(this.closest('tr'))"></td>`;
+            };
+            tr.innerHTML = mk('locale', pr.locale, 'col-locale')
+                + mk('rilevatore', pr.rilevatore, 'col-rilev')
+                + mk('periodo_1', pr.periodo_1, 'col-num')
+                + mk('periodo_2', pr.periodo_2, 'col-num')
+                + mk('periodo_3', pr.periodo_3, 'col-num')
+                + mk('media_annuale', pr.media_annuale, 'col-media')
                 + '<td class="col-del"><button type="button" class="icon-btn danger" onclick="removeRadonLocaleRow(this)">✕</button></td>';
             host.appendChild(tr);
             recalcRadonMediaRow(tr);
@@ -3783,11 +3812,11 @@
                     <div class="form-grid">
                         <div class="form-field">
                             <label>Zona / postazione</label>
-                            <input type="text" data-mk="zona" required value="${esc(pr.zona || '')}" placeholder="es. Ufficio tecnico">
+                            <input type="text" data-mk="zona" value="${esc(pr.zona || '')}" placeholder="es. Ufficio tecnico">
                         </div>
                         <div class="form-field">
                             <label>Data e ora rilevamento</label>
-                            <input type="datetime-local" data-mk="data_rilevamento" required value="${esc(dtVal)}">
+                            <input type="datetime-local" data-mk="data_rilevamento" value="${esc(dtVal)}">
                         </div>
                     </div>
                     <div class="form-grid micro-bulk-measures">${fieldsHtml}</div>
@@ -3937,7 +3966,7 @@
                         <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <form id="rilevamentoForm" onsubmit="saveRilevamento(event, '${item.id}')">
+                        <form id="rilevamentoForm" novalidate onsubmit="saveRilevamento(event, '${item.id}')">
                             <div class="form-grid">
                                 <div class="form-field full">
                                     <label>Descrizione Rilevamento</label>
@@ -4007,7 +4036,7 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
-                        <button type="button" class="btn btn-primary" onclick="document.getElementById('rilevamentoForm').requestSubmit()">Salva</button>
+                        <button type="button" class="btn btn-primary" onclick="submitRilevamentoForm()">Salva</button>
                     </div>
                 </div>
             `;
@@ -4033,7 +4062,7 @@
                         <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <form id="rilevamentoForm" onsubmit="saveRilevamento(event, '${item.id}')">
+                        <form id="rilevamentoForm" novalidate onsubmit="saveRilevamento(event, '${item.id}')">
                             <div class="form-grid">
                                 <div class="form-field full">
                                     <label>Descrizione Rilevamento</label>
@@ -4067,7 +4096,7 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
-                        <button type="button" class="btn btn-primary" onclick="document.getElementById('rilevamentoForm').requestSubmit()">Salva</button>
+                        <button type="button" class="btn btn-primary" onclick="submitRilevamentoForm()">Salva</button>
                     </div>
                 </div>
             `;
@@ -4096,7 +4125,7 @@
                         <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <form id="rilevamentoForm" onsubmit="saveRilevamento(event, '${item.id}')">
+                        <form id="rilevamentoForm" novalidate onsubmit="saveRilevamento(event, '${item.id}')">
                             <div class="form-grid">
                                 <div class="form-field full">
                                     <label>Descrizione Rilevamento</label>
@@ -4153,7 +4182,7 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
-                        <button type="button" class="btn btn-primary" onclick="document.getElementById('rilevamentoForm').requestSubmit()">Salva</button>
+                        <button type="button" class="btn btn-primary" onclick="submitRilevamentoForm()">Salva</button>
                     </div>
                 </div>
             `;
@@ -4170,7 +4199,7 @@
                         <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <form id="rilevamentoForm" onsubmit="saveRilevamento(event, null)">
+                        <form id="rilevamentoForm" novalidate onsubmit="saveRilevamento(event, null)">
                             <div class="form-grid">
                                 <div class="form-field full">
                                     <label>Descrizione Rilevamento</label>
@@ -4240,7 +4269,7 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
-                        <button type="button" class="btn btn-primary" onclick="document.getElementById('rilevamentoForm').requestSubmit()">Salva</button>
+                        <button type="button" class="btn btn-primary" onclick="submitRilevamentoForm()">Salva</button>
                     </div>
                 </div>
             `;
@@ -4271,6 +4300,8 @@
                 return;
             }
             event.preventDefault();
+            applyRilevamentoModalTipoVisibility();
+            stripHiddenRilevamentoRequired();
             const formData = new FormData(event.target);
             const tipoId = formData.get('tipo_rilevamento_id');
             const tipoRow = (STATE.data.tipiRilevamento || []).find(t => t.id === tipoId);

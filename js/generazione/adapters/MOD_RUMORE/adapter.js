@@ -141,19 +141,42 @@
     };
   }
 
-  /** Righe tabella §10 da tutte le sessioni rumore (dettaglio_rumore.postazioni). */
-  function rilevamentiRumoreToMisure(rilevamenti) {
+  function emptyMisuraRumoreRow() {
+    return { postazione: '', peak_db_c: null, leq_db_a: null, note: '' };
+  }
+
+  /** Righe grezze da DB (dettaglio_rumore.postazioni). */
+  function postazioniRumoreFromRilevamenti(rilevamenti) {
     const out = [];
     for (const r of filterRilevamentiRumore(rilevamenti)) {
       const posts = r.dettaglio_rumore?.postazioni;
       if (!Array.isArray(posts) || !posts.length) continue;
       posts.forEach((p) => {
         const norm = normalizePostazioneRumore(p);
-        if (!norm.postazione) return;
-        out.push(postazioneRumoreForTemplate(norm));
+        if (norm.postazione) out.push(norm);
       });
     }
     return out;
+  }
+
+  function mergeMisureRumoreWizard(wizard, rilevamenti) {
+    const incoming = Array.isArray(wizard?.misure_rumore) ? wizard.misure_rumore : [];
+    if (incoming.length) {
+      return incoming.map((row) => normalizePostazioneRumore(row));
+    }
+    const fromDb = postazioniRumoreFromRilevamenti(rilevamenti);
+    return fromDb.length ? fromDb : [emptyMisuraRumoreRow()];
+  }
+
+  function misureRumoreForTemplate(wizard, rilevamenti) {
+    return mergeMisureRumoreWizard(wizard, rilevamenti)
+      .filter((r) => r.postazione)
+      .map((row) => postazioneRumoreForTemplate(row));
+  }
+
+  /** @deprecated usa misureRumoreForTemplate */
+  function rilevamentiRumoreToMisure(rilevamenti) {
+    return misureRumoreForTemplate({}, rilevamenti);
   }
 
   function normalizeProfiliAzienda(list) {
@@ -323,7 +346,8 @@
         : TESTO_ANALISI_PRELIMINARE_DEFAULT;
 
     const gruppiWizard = mergeGruppiOmogeneiWizard(w, profili);
-    const misureRumore = rilevamentiRumoreToMisure(rilevamenti);
+    const misureRumoreEdit = mergeMisureRumoreWizard(w, rilevamenti);
+    const misureRumore = misureRumoreForTemplate(w, rilevamenti);
     const valutazioneLex = valutazioneLexGruppiForTemplate(w, profili);
     const profiliRumore102 = valutazioneRumoreProfiliForTemplate(w, profili);
     const paragrafoTempi = resolveParagrafoTempiMedi(w);
@@ -352,6 +376,7 @@
       _logo_path: w.logo_path || '',
       _rilevamenti_rumore: filterRilevamentiRumore(rilevamenti),
       _misure_rumore: misureRumore,
+      _misure_rumore_edit: misureRumoreEdit,
       _profili_azienda: profili,
       _gruppi_omogenei: gruppiWizard,
       _valutazione_lex_gruppi: valutazioneLex,
@@ -361,6 +386,7 @@
         ...w,
         gruppi_omogenei: gruppiWizard,
         misure_prevenzione: misurePrevWizard,
+        misure_rumore: misureRumoreEdit,
       },
     };
   }
@@ -402,7 +428,8 @@
       GRUPPI_OMOGENEI: gruppiOmogeneiForTemplate(wizMerged, profili),
       VALUTAZIONE_LEX_GRUPPI: valutazioneLexGruppiForTemplate(wizMerged, profili),
       VALUTAZIONE_RUMORE_PROFILI: valutazioneRumoreProfiliForTemplate(wizMerged, profili),
-      MISURE_RUMORE: base._misure_rumore || base.MISURE_RUMORE || [],
+      MISURE_RUMORE: misureRumoreForTemplate(wizMerged, []),
+      _misure_rumore_edit: mergeMisureRumoreWizard(wizMerged, []),
       NOTE_WIZARD: w.note_wizard != null ? String(w.note_wizard) : base.NOTE_WIZARD || '',
       _logo_buffer: base._logo_buffer || w.logo_buffer || null,
       _logo_path: base._logo_path || w.logo_path || '',
@@ -518,6 +545,9 @@
     resolveParagrafoTempiMedi,
     filterRilevamentiRumore,
     rilevamentiRumoreToMisure,
+    mergeMisureRumoreWizard,
+    misureRumoreForTemplate,
+    emptyMisuraRumoreRow,
     isTipoRumoreCatalogo,
     normalizeProfiliAzienda,
     mergeGruppiOmogeneiWizard,

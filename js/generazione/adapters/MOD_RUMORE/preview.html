@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Rumore</title>
-<script src="adapter.js?v=20260525h"></script>
+<script src="adapter.js?v=20260525i"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -42,9 +42,6 @@
   p { margin-bottom: 8px; line-height: 1.45; }
   .inline-select { font-size: 10.5pt; padding: 4px 8px; }
   .tag-pill { display: inline-block; font-family: monospace; font-size: 9pt; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; margin: 2px 4px 2px 0; }
-  .anag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 10pt; margin-top: 8px; }
-  .anag-grid dt { font-weight: 600; color: #555; }
-  .anag-grid dd { margin: 0 0 6px; }
   .ciclo-textarea { width: 100%; min-height: 72px; font-size: 10pt; padding: 6px; margin-top: 6px; }
   #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
   #viewDocx.active { display: block; }
@@ -54,20 +51,25 @@
     font-size: 10pt; padding: 4px 10px; border-radius: 4px; cursor: pointer;
     border: 1px solid #3498db; background: #eaf4fb; color: #1a5276;
   }
-  .gruppi-checklist { margin-top: 8px; }
-  .gruppi-checklist label {
-    display: block; padding: 6px 8px; margin: 2px 0; cursor: pointer;
-    border-radius: 4px; font-size: 10.5pt;
+  .gruppi-checklist { margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .gruppi-checklist label.gruppo-tile-wrap {
+    display: block; width: 100%; max-width: 420px; margin: 0; padding: 0; cursor: pointer; position: relative;
   }
-  .gruppi-checklist label:hover { background: #f0f7fc; }
-  .gruppi-checklist input { margin-right: 8px; vertical-align: middle; }
-  .cella-blu-preview {
-    margin-top: 12px; min-height: 80px; padding: 14px 12px;
-    background: #4472c4; color: #fff; text-align: center;
-    font-size: 11pt; line-height: 1.55; white-space: pre-line;
-    border: 1px solid #2f5597;
+  .gruppo-tile {
+    display: block; text-align: center; padding: 12px 16px;
+    background: linear-gradient(180deg, #34495e 0%, #1e2a36 100%);
+    color: #f0f3f6; font-weight: 600; font-size: 11pt; letter-spacing: 0.02em;
+    border-radius: 6px; border: 1px solid #152028;
+    box-shadow: 0 1px 3px rgba(0,0,0,.15);
+    transition: opacity .15s, box-shadow .15s;
   }
-  .cella-blu-preview.empty { font-style: italic; opacity: 0.85; }
+  .gruppo-tile-wrap:not(.selected) .gruppo-tile { opacity: 0.38; }
+  .gruppo-tile-wrap.selected .gruppo-tile {
+    box-shadow: 0 0 0 2px #3498db, 0 2px 6px rgba(0,0,0,.2);
+  }
+  .gruppo-tile-wrap input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .gruppi-lista-preview { margin-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 420px; }
+  .gruppi-lista-preview .gruppo-tile { pointer-events: none; }
   #tblMisureRumorePreview { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
   #tblMisureRumorePreview th { background: #2c3e50; color: #fff; padding: 6px; text-align: center; }
   #tblMisureRumorePreview td { border: 1px solid #bbb; padding: 6px; }
@@ -79,7 +81,7 @@
   .lex-gruppi-table input.note-gruppo { width: 100%; font-size: 10pt; padding: 4px 6px; border: 1px solid #ccc; }
   .profili-102-stack { margin-top: 10px; max-width: 480px; }
   .profili-102-blocco { margin-bottom: 4px; }
-  .profili-102-blocco .cella-blu-preview { min-height: 36px; padding: 10px; margin: 0; }
+  .profili-102-blocco .gruppo-tile { margin: 0 auto; max-width: 420px; }
   .profili-102-spacer { height: 14px; background: #fff; border: 1px dashed #ddd; margin-bottom: 10px; }
   .profili-102-par { font-size: 10pt; line-height: 1.45; margin: 6px 0; color: #333; }
   .misure-prev-list { margin-top: 8px; }
@@ -89,7 +91,19 @@
   .misure-prev-list label:hover { background: #f0f7fc; }
   .misure-prev-list input { margin-right: 8px; vertical-align: top; margin-top: 3px; }
   .misure-prev-preview { margin-top: 10px; padding: 10px; background: #fafafa; border: 1px solid #ddd; font-size: 10pt; }
-  .misure-prev-preview li { margin: 4px 0 4px 18px; }
+  .misure-prev-preview { list-style: none; padding: 0; margin: 0; }
+  .misure-prev-preview li {
+    margin: 6px 0; padding: 6px 8px 6px 12px; border-left: 3px solid #3498db;
+    background: #fff; line-height: 1.4;
+  }
+  .misure-edit-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8px; }
+  .misure-edit-table th { background: #2c3e50; color: #fff; padding: 6px; text-align: center; }
+  .misure-edit-table td { border: 1px solid #bbb; padding: 2px; }
+  .misure-edit-table input { width: 100%; border: none; padding: 5px 6px; font-size: 9.5pt; background: #fff; }
+  .misure-edit-table input:focus { outline: 1px solid #3498db; background: #f8fbff; }
+  .misure-edit-table .col-del { width: 32px; text-align: center; }
+  .btn-inline { font-size: 10pt; padding: 4px 12px; margin-top: 8px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276; border-radius: 4px; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -109,7 +123,7 @@
       <h1 class="doc-title">Valutazione del rischio rumore</h1>
       <p class="hint-str" style="margin-bottom:14px;">
         Modello: <code>Modulo XXXXXXXX- rischio rumore.docx</code> → caricare come <code>MOD_RUMORE.docx</code> nel bucket <code>moduli</code>.
-        §7 gruppi omogenei attivo; sezioni <strong>8+</strong> in seguito.
+        Compila le sezioni attive; anteprima Word dopo «Pronto».
       </p>
 
       <h2 class="doc-section">Copertina / dati documento</h2>
@@ -133,13 +147,6 @@
       <p><strong>Redatto da</strong>:</p>
       <input type="text" id="inpRedattoDa" class="inline-select" style="width:100%;max-width:520px;"
         oninput="onRedattoDaInput()">
-
-      <h2 class="doc-section">§2 — Dati anagrafici della Società</h2>
-      <p class="hint-str">
-        Nel modello attuale la §2 compare solo in indice; i tag sotto sono pronti per quando inserisci la sezione nel Word.
-        Valori da <strong>Anagrafica aziende</strong> (sola lettura).
-      </p>
-      <dl class="anag-grid" id="anagGrid"></dl>
 
       <h2 class="doc-section">§3 — Definizione e campo di applicazione</h2>
       <div class="static-box">
@@ -184,8 +191,8 @@
         <button type="button" onclick="setTuttiGruppi(false)">Deseleziona tutti</button>
       </div>
       <div class="gruppi-checklist" id="wrapGruppiChecklist"></div>
-      <p class="hint-str" style="margin-top:10px;">Anteprima cella Word (lista centrata):</p>
-      <div class="cella-blu-preview" id="cellaBluPreview">—</div>
+      <p class="hint-str" style="margin-top:10px;">Anteprima nel Word (<code>{{LISTA_GRUPPI_OMOGENEI}}</code>, una riga per gruppo):</p>
+      <div class="gruppi-lista-preview" id="gruppiListaPreview"></div>
 
       <h2 class="doc-section">§10 — Esposizione al rumore per gruppo omogeneo</h2>
       <h3 class="doc-sub">§10.1 — Valutazione giornaliera LEX,8h</h3>
@@ -213,23 +220,27 @@
       <p class="hint-str" style="margin-top:8px;">Anteprima blocco per gruppo:</p>
       <div class="profili-102-stack" id="wrapProfiliRumore102"></div>
 
-      <h3 class="doc-sub">Tabella postazioni di misura (rilevamenti)</h3>
+      <h3 class="doc-sub">Tabella postazioni di misura</h3>
       <p class="hint-str">
-        Loop Word (sezione misure strumentali):
-        <code>{{#MISURE_RUMORE}}{{POSTAZIONE}}{{PEAK_DB_C}}{{LEQ_DB_A}}{{NOTE_POSTAZIONE}}{{/MISURE_RUMORE}}</code>
+        Precompilata da <strong>Rilevamenti → Rumore</strong>; puoi aggiungere, modificare o rimuovere righe.
+        Loop Word: <code>{{#MISURE_RUMORE}}{{POSTAZIONE}}{{PEAK_DB_C}}{{LEQ_DB_A}}{{NOTE_POSTAZIONE}}{{/MISURE_RUMORE}}</code>
       </p>
-      <div class="info-box" id="pRilevamentiInfo">—</div>
-      <table class="radon-bulk-table" id="tblMisureRumorePreview" style="margin-top:8px;display:none;">
-        <thead>
-          <tr>
-            <th>Postazione</th>
-            <th>Peak dB(C)</th>
-            <th>Leq dB(A)</th>
-            <th>Note</th>
-          </tr>
-        </thead>
-        <tbody id="tbodyMisureRumore"></tbody>
-      </table>
+      <p class="hint-str" id="hintMisureRumore">—</p>
+      <div style="overflow-x:auto;">
+        <table class="misure-edit-table">
+          <thead>
+            <tr>
+              <th>Postazione di misura</th>
+              <th>Peak dB(C)</th>
+              <th>Leq dB(A)</th>
+              <th>Note</th>
+              <th class="col-del"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyMisureRumoreEdit"></tbody>
+        </table>
+      </div>
+      <button type="button" class="btn-inline" onclick="appendMisuraRumoreRow()">+ Aggiungi postazione</button>
 
       <h2 class="doc-section">§13 — Osservazioni e raccomandazioni</h2>
       <p class="hint-str">
@@ -244,12 +255,13 @@
         onclick="ripristinaGruppiSorveglianza()">Ripristina da gruppi §7.1</button>
 
       <p class="hint-str" style="margin-top:14px;">
-        Elenco «o …» — nel Word, <strong>un paragrafo per punto</strong> nel loop (il «o» resta nel modello prima del tag):
+        Elenco puntato — nel Word usa lo <strong>stile elenco «o»</strong> sul paragrafo modello; nel loop metti solo il testo:
       </p>
       <p class="hint-str">
-        <code>{{#MISURE_PREVENZIONE_RUMORE}}o	{{TESTO_MISURA}}{{/MISURE_PREVENZIONE_RUMORE}}</code>
+        <code>{{#MISURE_PREVENZIONE_RUMORE}}{{TESTO_MISURA}}{{/MISURE_PREVENZIONE_RUMORE}}</code>
+        (senza digitare «o» prima del tag: è già lo stile paragrafo Word)
       </p>
-      <p class="hint-str">Deseleziona i punti non pertinenti; in Word restano solo quelli spuntati, in ordine.</p>
+      <p class="hint-str">Deseleziona i punti non pertinenti; in Word restano solo quelli spuntati.</p>
       <div class="misure-prev-list" id="wrapMisurePrevenzione"></div>
       <div class="misure-prev-preview" id="previewMisurePrevenzione"></div>
 
@@ -276,23 +288,10 @@
     testo_paragrafo_temipi_medi: '',
     gruppi_sorveglianza_sanitaria: '',
     misure_prevenzione: [],
+    misure_rumore: [],
   };
 
-  const ANAG_FIELDS = [
-    ['PARTITA_IVA', 'Partita IVA'],
-    ['CODICE_FISCALE', 'Codice fiscale'],
-    ['SEDE_LEGALE', 'Sede legale'],
-    ['OGGETTO_SOCIALE', 'Oggetto sociale'],
-    ['ISCRIZIONE_CCIAA', 'Iscrizione CCIAA'],
-    ['CODICE_ATECO', 'Codice ATECO'],
-    ['MACROSETTORE_RISCHIO', 'Macrosettore rischio'],
-    ['DATORE_LAVORO', 'Datore di lavoro'],
-    ['RSPP', 'RSPP'],
-    ['MEDICO_COMPETENTE', 'Medico competente'],
-    ['RLS', 'RLS'],
-    ['NUM_DIPENDENTI', 'N. dipendenti'],
-    ['DESCRIZIONE_SITO', 'Descrizione sito'],
-  ];
+  let previewTimer = null;
 
   function esc(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -321,61 +320,42 @@
     el.className = 'field-missing';
   }
 
-  function renderAnagraficaGrid() {
-    const host = document.getElementById('anagGrid');
-    if (!host || !DATA) return;
-    let html = '';
-    for (const [key, label] of ANAG_FIELDS) {
-      const val = DATA[key];
-      html += '<dt>' + esc(label) + ' <code>{{' + key + '}}</code></dt><dd>' + (val ? esc(val) : '—') + '</dd>';
-    }
-    host.innerHTML = html;
-  }
-
   function renderGruppiOmogenei() {
     const wrap = document.getElementById('wrapGruppiChecklist');
     const hint = document.getElementById('hintGruppiCatalogo');
-    const cella = document.getElementById('cellaBluPreview');
+    const listaPrev = document.getElementById('gruppiListaPreview');
     if (!wrap || !ADAPTER || !DATA) return;
 
     const rows = WIZARD.gruppi_omogenei || [];
     if (hint) {
       hint.textContent = rows.length
-        ? rows.length + ' gruppo/i omogeneo/i dall’anagrafica azienda — spunta quali includere nel modulo.'
+        ? rows.length + ' gruppo/i omogeneo/i — clicca il riquadro per includere/escludere.'
         : 'Nessun profilo associato: in Anagrafica → Profili collega i gruppi omogenei all’azienda.';
     }
 
     if (!rows.length) {
       wrap.innerHTML = '<p class="hint-str">Nessun gruppo disponibile.</p>';
-      if (cella) {
-        cella.textContent = '(nessun gruppo selezionato)';
-        cella.classList.add('empty');
-      }
+      if (listaPrev) listaPrev.innerHTML = '';
       return;
     }
 
     let html = '';
+    const inclusi = [];
     rows.forEach((row, idx) => {
-      const checked = row.incluso !== false ? ' checked' : '';
+      const sel = row.incluso !== false;
+      if (sel) inclusi.push(row.nome);
       html +=
-        '<label><input type="checkbox"' + checked +
+        '<label class="gruppo-tile-wrap' + (sel ? ' selected' : '') + '">' +
+        '<input type="checkbox"' + (sel ? ' checked' : '') +
         ' onchange="toggleGruppoOmogeneo(' + idx + ', this.checked)">' +
-        esc(row.nome) + '</label>';
+        '<span class="gruppo-tile">' + esc(row.nome) + '</span></label>';
     });
     wrap.innerHTML = html;
 
-    const lista = ADAPTER.listaGruppiOmogeneiForTemplate(
-      { gruppi_omogenei: WIZARD.gruppi_omogenei },
-      DATA._profili_azienda
-    );
-    if (cella) {
-      if (lista) {
-        cella.textContent = lista;
-        cella.classList.remove('empty');
-      } else {
-        cella.textContent = '(seleziona almeno un gruppo)';
-        cella.classList.add('empty');
-      }
+    if (listaPrev) {
+      listaPrev.innerHTML = inclusi.length
+        ? inclusi.map((n) => '<span class="gruppo-tile">' + esc(n) + '</span>').join('')
+        : '<span class="hint-str">Nessun gruppo selezionato</span>';
     }
     renderValutazioneLexGruppi();
     renderProfiliRumore102();
@@ -404,7 +384,7 @@
     const sel = (WIZARD.misure_prevenzione || []).filter((m) => m.selezionato);
     if (prev) {
       prev.innerHTML = sel.length
-        ? '<ul>' + sel.map((m) => '<li>o ' + esc(m.testo) + '</li>').join('') + '</ul>'
+        ? '<ul class="misure-prev-preview">' + sel.map((m) => '<li>' + esc(m.testo) + '</li>').join('') + '</ul>'
         : '<span class="hint-str">Nessuna misura selezionata.</span>';
     }
   }
@@ -447,7 +427,7 @@
       .map(
         (r) =>
           '<div class="profili-102-blocco">' +
-          '<div class="cella-blu-preview">' + esc(r.GRUPPO_OMOGENO_CELLA) + '</div>' +
+          '<span class="gruppo-tile">' + esc(r.GRUPPO_OMOGENO_CELLA) + '</span>' +
           '<p class="profili-102-par">' + par + '</p>' +
           '<div class="profili-102-spacer" title="Spazio una riga nel Word"></div>' +
           '</div>'
@@ -494,28 +474,73 @@
     sendUpdate();
   };
 
-  function renderRilevamentiInfo() {
-    const info = document.getElementById('pRilevamentiInfo');
-    const tbl = document.getElementById('tblMisureRumorePreview');
-    const tbody = document.getElementById('tbodyMisureRumore');
-    if (!info || !DATA) return;
-    const misure = DATA._misure_rumore || DATA.MISURE_RUMORE || [];
-    const sessions = (DATA._rilevamenti_rumore || []).length;
-    if (!misure.length) {
-      info.textContent = sessions
-        ? sessions + ' sessione/i rumore senza postazioni in dettaglio — apri il rilevamento e compila la tabella.'
-        : 'Nessun rilevamento Rumore — inserisci una sessione tabellare in tab Rilevamenti (tipo Rumore — LEX,8h).';
-      if (tbl) tbl.style.display = 'none';
+  function fmtNumIn(v) {
+    if (v == null || v === '') return '';
+    return String(v).replace('.', ',');
+  }
+
+  function parseNumIn(s) {
+    const t = String(s || '').trim();
+    if (!t) return null;
+    const n = parseFloat(t.replace(',', '.'));
+    return Number.isFinite(n) ? n : null;
+  }
+
+  function renderMisureRumoreEdit() {
+    const hint = document.getElementById('hintMisureRumore');
+    const tbody = document.getElementById('tbodyMisureRumoreEdit');
+    if (!tbody || !ADAPTER) return;
+
+    WIZARD.misure_rumore = ADAPTER.mergeMisureRumoreWizard({ misure_rumore: WIZARD.misure_rumore }, []);
+    const rows = WIZARD.misure_rumore || [];
+    const fromDb = (DATA?._misure_rumore_edit || []).length;
+    if (hint) {
+      hint.textContent = rows.length
+        ? rows.length + ' riga/e' + (fromDb ? ' (caricate da Rilevamenti)' : '') + ' — modifiche incluse nel DOCX.'
+        : 'Nessuna riga: aggiungi postazioni o inserisci rilevamenti Rumore in anagrafica.';
+    }
+
+    let html = '';
+    rows.forEach((row, idx) => {
+      html +=
+        '<tr data-misura-idx="' + idx + '">' +
+        '<td><input value="' + esc(row.postazione || '') + '" oninput="setMisuraRumoreField(' + idx + ',\'postazione\',this.value)"></td>' +
+        '<td><input value="' + esc(fmtNumIn(row.peak_db_c)) + '" oninput="setMisuraRumoreField(' + idx + ',\'peak_db_c\',this.value)"></td>' +
+        '<td><input value="' + esc(fmtNumIn(row.leq_db_a)) + '" oninput="setMisuraRumoreField(' + idx + ',\'leq_db_a\',this.value)"></td>' +
+        '<td><input value="' + esc(row.note || '') + '" oninput="setMisuraRumoreField(' + idx + ',\'note\',this.value)"></td>' +
+        '<td class="col-del"><button type="button" class="icon-btn danger" style="font-size:11px;" onclick="removeMisuraRumoreRow(' + idx + ')">✕</button></td>' +
+        '</tr>';
+    });
+    tbody.innerHTML = html;
+  }
+
+  window.appendMisuraRumoreRow = function () {
+    if (!ADAPTER) return;
+    if (!WIZARD.misure_rumore) WIZARD.misure_rumore = [];
+    WIZARD.misure_rumore.push(ADAPTER.emptyMisuraRumoreRow());
+    renderMisureRumoreEdit();
+    sendUpdate();
+  };
+
+  window.removeMisuraRumoreRow = function (idx) {
+    if (!WIZARD.misure_rumore || WIZARD.misure_rumore.length <= 1) {
+      alert('È necessaria almeno una riga.');
       return;
     }
-    info.textContent = misure.length + ' postazione/i da ' + sessions + ' sessione/i → nel Word loop §10.';
-    if (tbl) tbl.style.display = '';
-    if (tbody) {
-      tbody.innerHTML = misure.map((m) =>
-        '<tr><td>' + esc(m.POSTAZIONE) + '</td><td>' + esc(m.PEAK_DB_C) + '</td><td>' + esc(m.LEQ_DB_A) + '</td><td>' + esc(m.NOTE_POSTAZIONE) + '</td></tr>'
-      ).join('');
+    WIZARD.misure_rumore.splice(idx, 1);
+    renderMisureRumoreEdit();
+    sendUpdate();
+  };
+
+  window.setMisuraRumoreField = function (idx, field, val) {
+    if (!WIZARD.misure_rumore[idx]) return;
+    if (field === 'peak_db_c' || field === 'leq_db_a') {
+      WIZARD.misure_rumore[idx][field] = parseNumIn(val);
+    } else {
+      WIZARD.misure_rumore[idx][field] = val;
     }
-  }
+    sendUpdate();
+  };
 
   function buildMerged() {
     if (!ADAPTER || !DATA) return {};
@@ -528,6 +553,7 @@
       gruppi_omogenei: WIZARD.gruppi_omogenei,
       gruppi_sorveglianza_sanitaria: WIZARD.gruppi_sorveglianza_sanitaria,
       misure_prevenzione: WIZARD.misure_prevenzione,
+      misure_rumore: WIZARD.misure_rumore,
       profili_azienda: DATA._profili_azienda,
     });
   }
@@ -551,6 +577,23 @@
       btn.disabled = false;
     }
     window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+    if (activeView === 'docx' && !errors.length) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 500);
+    }
+  }
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (!host) return;
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
   }
 
   window.setModuloNumero = function (v) {
@@ -587,6 +630,7 @@
     document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
     document.getElementById('toolbarTitle').textContent =
       view === 'compile' ? 'MOD_RUMORE — Compila' : 'MOD_RUMORE — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
   };
 
   async function renderDocxBlob(buffer) {
@@ -637,18 +681,21 @@
     WIZARD.misure_prevenzione = ADAPTER.mergeMisurePrevenzioneWizard({
       misure_prevenzione: prev.misure_prevenzione || DATA._misure_prevenzione,
     });
+    WIZARD.misure_rumore = ADAPTER.mergeMisureRumoreWizard(
+      { misure_rumore: prev.misure_rumore || DATA._misure_rumore_edit },
+      []
+    );
 
     document.getElementById('inpRedattoDa').value = WIZARD.redatto_da;
     document.getElementById('inpGruppiSorveglianza').value = WIZARD.gruppi_sorveglianza_sanitaria;
     document.getElementById('taAnalisiPreliminare').value = WIZARD.testo_analisi_preliminare;
     document.getElementById('taParagrafoTempiMedi').value = WIZARD.testo_paragrafo_temipi_medi;
 
-    renderAnagraficaGrid();
     renderGruppiOmogenei();
     renderValutazioneLexGruppi();
     renderProfiliRumore102();
     renderMisurePrevenzione();
-    renderRilevamentiInfo();
+    renderMisureRumoreEdit();
     sendUpdate();
   }
 

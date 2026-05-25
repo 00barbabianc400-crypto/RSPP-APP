@@ -204,8 +204,10 @@ Il resto del paragrafo («Il Medico Competente…») resta **fisso** nel modello
 Sostituire **tutti** i punti dell’elenco con **un solo paragrafo modello** nel loop (il «o» + tab restano nel Word prima del tag):
 
 ```
-{{#MISURE_PREVENZIONE_RUMORE}}o	{{TESTO_MISURA}}{{/MISURE_PREVENZIONE_RUMORE}}
+{{#MISURE_PREVENZIONE_RUMORE}}{{TESTO_MISURA}}{{/MISURE_PREVENZIONE_RUMORE}}
 ```
+
+(Paragrafo modello con stile elenco «o» — non anteporre «o» al tag.)
 
 | Tag | Contenuto |
 |-----|-----------|

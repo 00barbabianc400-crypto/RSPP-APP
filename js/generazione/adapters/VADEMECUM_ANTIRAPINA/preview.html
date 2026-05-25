@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Vademecum antirapina</title>
+<script src="adapter.js?v=20260525x"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 20px; }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .inline-select, .ciclo-textarea { width: 100%; font-size: 10pt; padding: 6px; margin-top: 6px; }
+  .ciclo-textarea { min-height: 72px; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .vad-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .vad-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .vad-actions button.secondary { border-color: #999; background: #f4f4f4; color: #333; font-weight: 500; }
+  .vad-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 10px; }
+  .vad-table th { background: #2c3e50; color: #fff; padding: 6px 4px; text-align: center; font-size: 8.5pt; }
+  .vad-table td { border: 1px solid #bbb; padding: 2px; vertical-align: middle; }
+  .vad-table td input[type="text"] { width: 100%; border: none; background: transparent; font-size: 8.5pt; padding: 4px 3px; }
+  .vad-table .col-del { width: 36px; text-align: center; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">VADEMECUM_ANTIRAPINA — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Vademecum antirapina</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Carica <code>VADEMECUM_ANTIRAPINA.docx</code> nel bucket <code>modelli</code>.
+      </p>
+
+      <h2 class="doc-section">Intestazione / footer</h2>
+      <p><strong>Sede operativa</strong> <code>{{SEDE_OPERATIVA}}</code>: <span id="pSede" class="field-auto">—</span></p>
+      <p><strong>Logo</strong> <code>{%LOGO}</code> <span id="pLogo" class="field-auto" style="display:inline-block;margin-left:8px;">—</span></p>
+      <p>
+        <strong>Data revisione</strong> <code>{{DATA_REVISIONE}}</code>:<br>
+        <input type="text" id="inpDataRevisione" class="inline-select" style="max-width:200px;"
+          placeholder="gg/mm/aaaa" oninput="sendUpdate()">
+      </p>
+
+      <h2 class="doc-section">Titolo</h2>
+      <p class="hint-str"><code>{{TITOLO}}</code></p>
+      <textarea id="taTitolo" class="ciclo-textarea" oninput="sendUpdate()"></textarea>
+
+      <h2 class="doc-section">Introduzione</h2>
+      <p class="hint-str"><code>{{TESTO_INTRO}}</code> — poi nel Word il paragrafo fisso «A tale scopo…»</p>
+      <textarea id="taIntro" class="ciclo-textarea" oninput="sendUpdate()"></textarea>
+      <div class="vad-actions">
+        <button type="button" class="secondary" onclick="ripristinaIntro()">Ripristina intro</button>
+      </div>
+
+      <h2 class="doc-section">Durante la rapina</h2>
+      <p class="hint-str">
+        Loop sul primo bullet: <code>{{#VOCI_DURANTE_RAPINA}}{{TESTO}}{{/VOCI_DURANTE_RAPINA}}</code>
+        (7 voci default, incluso furto prima dell’apertura)
+      </p>
+      <div class="vad-actions">
+        <button type="button" onclick="addVoce('durante_rapina')">+ Voce</button>
+        <button type="button" class="secondary" onclick="ripristinaDurante()">Ripristina 7 voci</button>
+      </div>
+      <div id="wrapDurante"></div>
+
+      <h2 class="doc-section">Cosa fare dopo la rapina</h2>
+      <p class="hint-str">
+        Nel Word lascia fisso <strong>«Cosa fare dopo la rapina»</strong>, poi sul primo bullet:
+        <code>{{#VOCI_DOPO_RAPINA}}{{TESTO}}{{/VOCI_DOPO_RAPINA}}</code>
+      </p>
+      <div class="vad-actions">
+        <button type="button" onclick="addVoce('dopo_rapina')">+ Voce</button>
+        <button type="button" class="secondary" onclick="ripristinaDopo()">Ripristina 4 voci</button>
+      </div>
+      <div id="wrapDopo"></div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let DATA = {};
+  let WIZARD = {
+    titolo: '',
+    testo_intro: '',
+    data_revisione: '',
+    durante_rapina: [],
+    dopo_rapina: [],
+  };
+  let activeView = 'compile';
+  const ADAPTER = window.GEN_ADAPTERS?.VADEMECUM_ANTIRAPINA;
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    const url = DATA.LOGO_PREVIEW_URL;
+    if (!url) { el.textContent = '—'; return; }
+    el.innerHTML = '<img src="' + esc(url) + '" alt="logo" style="max-height:40px;vertical-align:middle;">';
+  }
+
+  function renderVociTable(wrapId, key, defaults) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap || !ADAPTER) return;
+    WIZARD[key] = ADAPTER.mergeVociWizard({ [key]: WIZARD[key] }, key, defaults);
+    let html =
+      '<table class="vad-table"><thead><tr><th>In doc</th><th>Testo</th><th></th></tr></thead><tbody>';
+    WIZARD[key].forEach((m, idx) => {
+      const chk = m.selezionato !== false ? ' checked' : '';
+      html +=
+        '<tr><td style="text-align:center"><input type="checkbox"' + chk +
+        ' onchange="toggleVoce(\'' + key + '\',' + idx + ',this.checked)"></td>' +
+        '<td><input type="text" value="' + esc(m.testo) + '" oninput="editVoce(\'' + key + '\',' + idx + ',this.value)"></td>' +
+        '<td class="col-del"><button type="button" onclick="removeVoce(\'' + key + '\',' + idx + ')">✕</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function syncFromDom() {
+    WIZARD.titolo = document.getElementById('taTitolo')?.value || '';
+    WIZARD.testo_intro = document.getElementById('taIntro')?.value || '';
+    WIZARD.data_revisione = document.getElementById('inpDataRevisione')?.value || '';
+  }
+
+  function buildMerged() {
+    syncFromDom();
+    return ADAPTER ? ADAPTER.applyWizard(DATA, WIZARD) : DATA;
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', !errors.length);
+    document.getElementById('btnGenera').disabled = !!errors.length;
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+  }
+
+  window.toggleVoce = function (key, idx, checked) {
+    syncFromDom();
+    if (WIZARD[key][idx]) WIZARD[key][idx].selezionato = !!checked;
+    renderVociTable(
+      key === 'durante_rapina' ? 'wrapDurante' : 'wrapDopo',
+      key,
+      key === 'durante_rapina' ? ADAPTER.DEFAULT_DURANTE_RAPINA : ADAPTER.DEFAULT_DOPO_RAPINA
+    );
+    sendUpdate();
+  };
+
+  window.editVoce = function (key, idx, val) {
+    syncFromDom();
+    if (WIZARD[key][idx]) WIZARD[key][idx].testo = val;
+    sendUpdate();
+  };
+
+  window.removeVoce = function (key, idx) {
+    syncFromDom();
+    WIZARD[key].splice(idx, 1);
+    renderVociTable(
+      key === 'durante_rapina' ? 'wrapDurante' : 'wrapDopo',
+      key,
+      key === 'durante_rapina' ? ADAPTER.DEFAULT_DURANTE_RAPINA : ADAPTER.DEFAULT_DOPO_RAPINA
+    );
+    sendUpdate();
+  };
+
+  window.addVoce = function (key) {
+    syncFromDom();
+    WIZARD[key].push({ id: 'custom_' + Date.now(), testo: '', selezionato: true });
+    renderVociTable(
+      key === 'durante_rapina' ? 'wrapDurante' : 'wrapDopo',
+      key,
+      key === 'durante_rapina' ? ADAPTER.DEFAULT_DURANTE_RAPINA : ADAPTER.DEFAULT_DOPO_RAPINA
+    );
+    sendUpdate();
+  };
+
+  window.ripristinaIntro = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_intro = ADAPTER.TESTO_INTRO_DEFAULT;
+    document.getElementById('taIntro').value = WIZARD.testo_intro;
+    sendUpdate();
+  };
+
+  window.ripristinaDurante = function () {
+    if (!ADAPTER) return;
+    WIZARD.durante_rapina = ADAPTER.DEFAULT_DURANTE_RAPINA.map((r) => ({ ...r }));
+    renderVociTable('wrapDurante', 'durante_rapina', ADAPTER.DEFAULT_DURANTE_RAPINA);
+    sendUpdate();
+  };
+
+  window.ripristinaDopo = function () {
+    if (!ADAPTER) return;
+    WIZARD.dopo_rapina = ADAPTER.DEFAULT_DOPO_RAPINA.map((r) => ({ ...r }));
+    renderVociTable('wrapDopo', 'dopo_rapina', ADAPTER.DEFAULT_DOPO_RAPINA);
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'VADEMECUM_ANTIRAPINA — Compila' : 'VADEMECUM_ANTIRAPINA — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    renderLogoPreview();
+
+    const prev = DATA._vademecum_wizard || {};
+    WIZARD.titolo = prev.titolo != null ? String(prev.titolo) : (DATA.TITOLO || ADAPTER.TITOLO_DEFAULT);
+    WIZARD.testo_intro = prev.testo_intro != null ? String(prev.testo_intro) : (DATA.TESTO_INTRO || ADAPTER.TESTO_INTRO_DEFAULT);
+    WIZARD.data_revisione = prev.data_revisione != null ? String(prev.data_revisione) : (DATA.DATA_REVISIONE || '');
+    WIZARD.durante_rapina = ADAPTER.mergeVociWizard(
+      { durante_rapina: prev.durante_rapina },
+      'durante_rapina',
+      ADAPTER.DEFAULT_DURANTE_RAPINA
+    );
+    WIZARD.dopo_rapina = ADAPTER.mergeVociWizard(
+      { dopo_rapina: prev.dopo_rapina },
+      'dopo_rapina',
+      ADAPTER.DEFAULT_DOPO_RAPINA
+    );
+
+    document.getElementById('taTitolo').value = WIZARD.titolo;
+    document.getElementById('taIntro').value = WIZARD.testo_intro;
+    document.getElementById('inpDataRevisione').value = WIZARD.data_revisione;
+
+    renderVociTable('wrapDurante', 'durante_rapina', ADAPTER.DEFAULT_DURANTE_RAPINA);
+    renderVociTable('wrapDopo', 'dopo_rapina', ADAPTER.DEFAULT_DOPO_RAPINA);
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

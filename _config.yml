@@ -10,3 +10,5 @@ exclude:
   - js/generazione/adapters/MOD_GAS_RADON/fields-map.md
   - js/generazione/adapters/MOD_RUMORE/fields-map.md
   - js/generazione/adapters/MOD_INCENDIO/fields-map.md
+  - js/generazione/adapters/VADEMECUM_AGGRESSIONI/fields-map.md
+  - js/generazione/adapters/VADEMECUM_ANTIRAPINA/fields-map.md

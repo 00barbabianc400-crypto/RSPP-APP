@@ -5449,6 +5449,8 @@
                 MOD_GAS_RADON: '20260524e',
                 MOD_RUMORE: '20260525i',
                 MOD_INCENDIO: '20260525v',
+                VADEMECUM_AGGRESSIONI: '20260525w',
+                VADEMECUM_ANTIRAPINA: '20260525x',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5638,7 +5640,7 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
@@ -5662,6 +5664,8 @@
                 : codice === 'MOD_GAS_RADON' ? '20260524e'
                 : codice === 'MOD_RUMORE' ? '20260525i'
                 : codice === 'MOD_INCENDIO' ? '20260525v'
+                : codice === 'VADEMECUM_AGGRESSIONI' ? '20260525w'
+                : codice === 'VADEMECUM_ANTIRAPINA' ? '20260525x'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

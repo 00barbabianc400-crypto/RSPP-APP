@@ -5449,8 +5449,8 @@
                 MOD_GAS_RADON: '20260524e',
                 MOD_RUMORE: '20260525i',
                 MOD_INCENDIO: '20260525v',
-                VADEMECUM_AGGRESSIONI: '20260525w',
-                VADEMECUM_ANTIRAPINA: '20260525x',
+                VADEMECUM_AGGRESSIONI: '20260526a',
+                VADEMECUM_ANTIRAPINA: '20260526a',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5641,13 +5641,21 @@
             }
 
             const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA'];
+            if (codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA') {
+                await loadScriptOnce('js/generazione/adapters/vademecum-docx-repair.js?v=20260526a');
+            }
+
             if (withLogoDocx.includes(codice)) {
                 try {
-                    await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
+                    const logoVer =
+                        codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA'
+                            ? '20260526a'
+                            : '20260520d';
+                    await loadScriptOnce(base + 'logo-docx.js?v=' + logoVer);
                 } catch (_) { /* helper logo opzionale */ }
             }
 
-            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260525v');
+            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260526a');
 
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520c');
@@ -5664,8 +5672,8 @@
                 : codice === 'MOD_GAS_RADON' ? '20260524e'
                 : codice === 'MOD_RUMORE' ? '20260525i'
                 : codice === 'MOD_INCENDIO' ? '20260525v'
-                : codice === 'VADEMECUM_AGGRESSIONI' ? '20260525w'
-                : codice === 'VADEMECUM_ANTIRAPINA' ? '20260525x'
+                : codice === 'VADEMECUM_AGGRESSIONI' ? '20260526a'
+                : codice === 'VADEMECUM_ANTIRAPINA' ? '20260526a'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

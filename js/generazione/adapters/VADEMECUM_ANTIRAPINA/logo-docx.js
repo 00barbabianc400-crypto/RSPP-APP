@@ -1,5 +1,5 @@
 /**
- * Logo nel DOCX via PizZip (browser) — senza ImageModule (incompatibile DOM/xmldom).
+ * Logo nel DOCX via PizZip — supporta {%LOGO} in document, header e footer.
  */
 (function () {
   'use strict';
@@ -56,6 +56,40 @@
     zip.file(path, xml);
   }
 
+  function relsPathForPart(partPath) {
+    const base = partPath.replace(/^word\//, '');
+    return 'word/_rels/' + base + '.rels';
+  }
+
+  function mediaTargetForRels(relsPath, mediaFile) {
+    if (/header|footer/i.test(relsPath)) return '../media/' + mediaFile;
+    return 'media/' + mediaFile;
+  }
+
+  function ensureRelsXml(zip, relsPath) {
+    if (zip.file(relsPath)) return zip.file(relsPath).asText();
+    const empty =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+    zip.file(relsPath, empty);
+    return empty;
+  }
+
+  function addImageRelationship(zip, relsPath, mediaFile) {
+    let relsXml = ensureRelsXml(zip, relsPath);
+    const rId = nextRelationshipId(relsXml);
+    const target = mediaTargetForRels(relsPath, mediaFile);
+    const rel =
+      '<Relationship Id="' +
+      rId +
+      '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' +
+      target +
+      '"/>';
+    relsXml = relsXml.replace('</Relationships>', rel + '</Relationships>');
+    zip.file(relsPath, relsXml);
+    return rId;
+  }
+
   function measureLogoSize(arrayBuffer) {
     return new Promise((resolve) => {
       try {
@@ -82,6 +116,35 @@
     });
   }
 
+  const runWithLogoRe =
+    /<w:r(?:\s[^>]*)?>(?:(?!<\/w:r>)[\s\S])*?<w:t(?:\s[^>]*)?>\{%LOGO\}<\/w:t>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/;
+
+  function replaceLogoInPartXml(docXml, rId, sizeEmus, partPath) {
+    if (docXml.indexOf('{%LOGO}') === -1) return { xml: docXml, replaced: false };
+    const drawingRun =
+      '<w:r><w:rPr/><w:drawing>' + getImageDrawingXml(rId, sizeEmus) + '</w:drawing></w:r>';
+    const m = docXml.match(runWithLogoRe);
+    if (m && m[0].length <= 800) {
+      return {
+        xml: docXml.replace(runWithLogoRe, drawingRun).replace(/\{%LOGO\}/g, ''),
+        replaced: true,
+      };
+    }
+    const paraRe = /<w:p[\s\S]*?<\/w:p>/g;
+    let pm;
+    while ((pm = paraRe.exec(docXml)) !== null) {
+      if (!/\{%LOGO\}/.test(pm[0])) continue;
+      console.warn('[GEN_LOGO_DOCX] {%LOGO} spezzato — fallback nel paragrafo', partPath || '');
+      const merged = pm[0].replace(runWithLogoRe, drawingRun).replace(/\{%LOGO\}/g, '');
+      if (merged !== pm[0]) {
+        return { xml: docXml.replace(pm[0], merged), replaced: true };
+      }
+      const withDrawing = pm[0].replace(/\{%LOGO\}/g, '').replace(/<\/w:p>/, drawingRun + '</w:p>');
+      return { xml: docXml.replace(pm[0], withDrawing), replaced: true };
+    }
+    return { xml: docXml, replaced: false };
+  }
+
   async function injectLogoIntoDocxZip(zip, logoArrayBuffer, pathHint) {
     if (!zip || !logoArrayBuffer) return zip;
 
@@ -91,16 +154,6 @@
     const sizePx = await measureLogoSize(logoArrayBuffer);
     const sizeEmus = [pixelsToEmus(sizePx[0]), pixelsToEmus(sizePx[1])];
 
-    const relsPath = 'word/_rels/document.xml.rels';
-    if (!zip.file(relsPath)) return zip;
-
-    let relsXml = zip.file(relsPath).asText();
-    const rId = nextRelationshipId(relsXml);
-    const rel =
-      '<Relationship Id="' + rId + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/' + mediaFile + '"/>';
-    relsXml = relsXml.replace('</Relationships>', rel + '</Relationships>');
-    zip.file(relsPath, relsXml);
-
     zip.file(mediaPath, logoArrayBuffer);
     ensureContentTypeDefault(
       zip,
@@ -108,37 +161,29 @@
       'image/' + (ext === 'jpeg' ? 'jpeg' : ext)
     );
 
-    const docPaths = Object.keys(zip.files || {}).filter(
+    const partPaths = Object.keys(zip.files || {}).filter(
       (p) => /^word\/(document|footer\d*|header\d*)\.xml$/i.test(p) && zip.file(p)
     );
 
-    const runWithLogo =
-      /<w:r(?:\s[^>]*)?>(?:(?!<\/w:r>)[\s\S])*?<w:t(?:\s[^>]*)?>\{%LOGO\}<\/w:t>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/;
-    const drawingRun =
-      '<w:r><w:rPr/><w:drawing>' + getImageDrawingXml(rId, sizeEmus) + '</w:drawing></w:r>';
+    let anyReplaced = false;
+    partPaths.forEach((partPath) => {
+      let partXml = zip.file(partPath).asText();
+      if (partXml.indexOf('{%LOGO}') === -1) return;
 
-    let replaced = false;
-    docPaths.forEach((docPath) => {
-      let docXml = zip.file(docPath).asText();
-      if (docXml.indexOf('{%LOGO}') === -1) return;
-      const m = docXml.match(runWithLogo);
-      if (!m) {
-        console.warn('[GEN_LOGO_DOCX] {%LOGO} presente ma run non sostituibile in', docPath);
-        return;
+      const relsPath = relsPathForPart(partPath);
+      const rId = addImageRelationship(zip, relsPath, mediaFile);
+      const result = replaceLogoInPartXml(partXml, rId, sizeEmus, partPath);
+      if (result.replaced) {
+        zip.file(partPath, result.xml);
+        anyReplaced = true;
+        console.info('[GEN_LOGO_DOCX] Logo inserito in', partPath, 'via', relsPath, rId);
+      } else {
+        console.warn('[GEN_LOGO_DOCX] {%LOGO} non sostituito in', partPath);
       }
-      if (m[0].length > 800) {
-        docXml = docXml.replace(/\{%LOGO\}/g, '');
-        zip.file(docPath, docXml);
-        return;
-      }
-      docXml = docXml.replace(runWithLogo, drawingRun);
-      docXml = docXml.replace(/\{%LOGO\}/g, '');
-      zip.file(docPath, docXml);
-      replaced = true;
     });
 
-    if (!replaced) {
-      console.warn('[GEN_LOGO_DOCX] Tag {%LOGO} non trovato nel template');
+    if (!anyReplaced) {
+      console.warn('[GEN_LOGO_DOCX] Tag {%LOGO} non trovato o non sostituibile');
     }
     return zip;
   }

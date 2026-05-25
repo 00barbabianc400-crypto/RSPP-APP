@@ -61,8 +61,8 @@
     return 'word/_rels/' + base + '.rels';
   }
 
-  function mediaTargetForRels(relsPath, mediaFile) {
-    if (/header|footer/i.test(relsPath)) return '../media/' + mediaFile;
+  /** Target relativo alla cartella word/ (header, footer, body). */
+  function mediaTargetForRels(_relsPath, mediaFile) {
     return 'media/' + mediaFile;
   }
 

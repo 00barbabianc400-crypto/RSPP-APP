@@ -290,6 +290,9 @@
     }
 
     const outZip = doc.getZip();
+    if (repair?.expandSemicolonJoinedListParagraphsInZip) {
+      repair.expandSemicolonJoinedListParagraphsInZip(outZip, { minSemicolons: 1, minChars: 30 });
+    }
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);
     }

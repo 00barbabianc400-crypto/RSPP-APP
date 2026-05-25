@@ -696,6 +696,43 @@
             white-space: normal;
             text-align: left;
         }
+
+        /* Rilevamenti — sessione Gas Radon (tabella locali) */
+        #rileRadonPanelsWrap .radon-loc-scroll {
+            overflow-x: auto;
+            margin-top: 10px;
+            max-width: 100%;
+        }
+        .radon-bulk-table {
+            width: 100%;
+            min-width: 720px;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+        .radon-bulk-table th {
+            background: var(--sp-bg-secondary, #2a2a2a);
+            color: var(--sp-text, #eee);
+            padding: 8px 6px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .radon-bulk-table td {
+            border: 1px solid var(--sp-border, #444);
+            padding: 4px;
+            vertical-align: middle;
+        }
+        .radon-bulk-table input {
+            width: 100%;
+            min-width: 0;
+            padding: 5px 6px;
+            font-size: 12px;
+            box-sizing: border-box;
+        }
+        .radon-bulk-table .col-locale { min-width: 160px; }
+        .radon-bulk-table .col-rilev { min-width: 140px; }
+        .radon-bulk-table .col-num { width: 56px; max-width: 72px; }
+        .radon-bulk-table .col-media { width: 64px; }
+        .radon-bulk-table .col-del { width: 36px; text-align: center; }
         
         /* ───── TOOLBAR ───── */
         .toolbar {
@@ -3274,11 +3311,24 @@
 
         function renderRilevamentoRow(r) {
             const rq = r.dettaglio_microclima?.riquadri;
-            const det = Array.isArray(rq) && rq.length > 0;
-            const sum = det ? formatMicroDettaglioSummary(r) : '';
+            const detMicro = Array.isArray(rq) && rq.length > 0;
+            const locRadon = r.dettaglio_radon?.locali;
+            const detRadon = Array.isArray(locRadon) && locRadon.length > 0;
+            const sumMicro = detMicro ? formatMicroDettaglioSummary(r) : '';
+            const sumRadon = detRadon ? formatRadonDettaglioSummary(r) : '';
             const unita = esc(r.unita_misura || '');
             let valoreCell;
-            if (det) {
+            if (detRadon) {
+                const n = locRadon.length;
+                const vm = r.valore_misurato != null && r.valore_misurato !== '' ? String(r.valore_misurato) : '—';
+                const piano = r.zona || r.dettaglio_radon?.piano || '';
+                const hint = `Radon · ${n} locali${piano ? ' · ' + piano : ''}`;
+                valoreCell = `
+                    <div class="rile-val-cell">
+                        <span class="rile-val-main">${esc(vm)} ${unita}</span>
+                        <span class="badge info micro-detail-tag" title="${esc(sumRadon)}">${esc(hint)} · dettaglio al passaggio mouse</span>
+                    </div>`;
+            } else if (detMicro) {
                 const n = rq.length;
                 const vm = r.valore_misurato != null && r.valore_misurato !== '' ? String(r.valore_misurato) : '—';
                 const hint = n === 1
@@ -3287,7 +3337,7 @@
                 valoreCell = `
                     <div class="rile-val-cell">
                         <span class="rile-val-main">${esc(vm)} ${unita}</span>
-                        <span class="badge info micro-detail-tag" title="${esc(sum)}">${esc(hint)} · passa il mouse per il dettaglio</span>
+                        <span class="badge info micro-detail-tag" title="${esc(sumMicro)}">${esc(hint)} · passa il mouse per il dettaglio</span>
                     </div>`;
             } else {
                 valoreCell = `${r.valore_misurato ?? '—'} ${unita}`;
@@ -3326,6 +3376,69 @@
 
         function isMicroTabellareNome(name) {
             return MICRO_QUATTRO_NOMI_ESATTI.includes(String(name || '').trim());
+        }
+
+        function isRadonTipoNome(name) {
+            const n = String(name || '').trim().toLowerCase();
+            return n === 'gas radon' || n.includes('radon');
+        }
+
+        function rilevamentoRadonPanelsHtml() {
+            return `
+                            <div id="rileRadonPanelsWrap" style="display:none">
+                                <p class="hint" style="margin-bottom:10px;line-height:1.4;">
+                                    Sessione <strong>Gas Radon</strong>: indica il <strong>piano</strong>, la data della sessione e una o più righe
+                                    (locale, rilevatore, tre periodi). La <strong>media annuale</strong> si calcola automaticamente dai tre periodi (arrotondamento).
+                                </p>
+                                <div class="form-grid">
+                                    <div class="form-field">
+                                        <label>Piano</label>
+                                        <input type="text" id="radonPianoSessione" data-radon-session="piano" placeholder="es. Piano terra / interrato">
+                                    </div>
+                                    <div class="form-field">
+                                        <label>Data rilevamento (sessione)</label>
+                                        <input type="datetime-local" id="radonDataSessione" data-radon-session="data_rilevamento" required>
+                                    </div>
+                                </div>
+                                <div class="radon-loc-scroll">
+                                    <table class="radon-bulk-table">
+                                        <thead>
+                                            <tr>
+                                                <th class="col-locale">Locale di misura</th>
+                                                <th class="col-rilev">Rilevatore</th>
+                                                <th class="col-num">1° periodo</th>
+                                                <th class="col-num">2° periodo</th>
+                                                <th class="col-num">3° periodo</th>
+                                                <th class="col-media">Media ann.</th>
+                                                <th class="col-del"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="radonLocaleRowsHost"></tbody>
+                                    </table>
+                                </div>
+                                <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendRadonLocaleRow()">+ Aggiungi locale</button>
+                            </div>`;
+        }
+
+        function calcMediaAnnuaRadon(p1, p2, p3) {
+            const nums = [p1, p2, p3].map(parseNumITOptional).filter((n) => n !== null);
+            if (!nums.length) return null;
+            const sum = nums.reduce((a, b) => a + b, 0);
+            return Math.round(sum / nums.length);
+        }
+
+        function formatRadonDettaglioSummary(r) {
+            const det = r?.dettaglio_radon;
+            const list = det?.locali;
+            if (!Array.isArray(list) || !list.length) return '';
+            const head = det.piano ? `Piano: ${det.piano} · ` : '';
+            return head + list.map((loc, i) => {
+                const bits = [];
+                if (loc.locale) bits.push(loc.locale);
+                if (loc.rilevatore) bits.push('Ril. ' + loc.rilevatore);
+                if (loc.media_annuale != null && loc.media_annuale !== '') bits.push('Media ' + loc.media_annuale + ' Bq/m³');
+                return (list.length > 1 ? `#${i + 1} ` : '') + bits.join(' · ');
+            }).join(' — ');
         }
 
         /** Campi supplementari tabella modulo (nessun confronto limite per colonna). */
@@ -3377,7 +3490,7 @@
             return Number.isFinite(n) ? n : null;
         }
 
-        window.applyMicroModalTipoVisibility = function () {
+        window.applyRilevamentoModalTipoVisibility = function () {
             const modal = document.getElementById('rilevamentoModal');
             if (!modal) return;
             const sel = modal.querySelector('select[name="tipo_rilevamento_id"]');
@@ -3385,22 +3498,194 @@
             const tipo = (STATE.data.tipiRilevamento || []).find(x => x.id === sel.value);
             const nome = tipo?.nome_tipo || '';
             const micro = isMicroTabellareNome(nome);
+            const radon = isRadonTipoNome(nome);
+            const tabellare = micro || radon;
             const classic = modal.querySelector('#rileClassicMeasureFields');
             const microW = modal.querySelector('#rileMicroPanelsWrap');
-            if (classic) classic.style.display = micro ? 'none' : '';
+            const radonW = modal.querySelector('#rileRadonPanelsWrap');
+            const strLabWrap = modal.querySelector('#rileStrumentoLaboratorioWrap');
+            if (classic) classic.style.display = tabellare ? 'none' : '';
             if (microW) microW.style.display = micro ? 'block' : 'none';
+            if (radonW) radonW.style.display = radon ? 'block' : 'none';
+            if (strLabWrap) strLabWrap.style.display = radon ? 'none' : '';
             const valInp = modal.querySelector('input[name="valore_misurato"]');
             const dtInp = modal.querySelector('input[name="data_rilevamento"]');
             const zonaInp = modal.querySelector('#rileClassicMeasureFields input[name="zona"]');
             const umInp = modal.querySelector('input[name="unita_misura"]');
-            if (valInp) valInp.required = !micro;
-            if (dtInp) dtInp.required = !micro;
+            if (valInp) valInp.required = !tabellare;
+            if (dtInp) dtInp.required = !tabellare;
             if (zonaInp) zonaInp.required = false;
-            if (umInp) umInp.required = !micro;
+            if (umInp) umInp.required = !tabellare;
             if (micro && microW && !microW.querySelector('.micro-bulk-row')) {
                 resetMicroBulkRowsInit();
             }
+            if (radon && radonW && !radonW.querySelector('#radonLocaleRowsHost tr[data-radon-locale]')) {
+                resetRadonLocaleRowsInit();
+            }
         };
+        window.applyMicroModalTipoVisibility = window.applyRilevamentoModalTipoVisibility;
+
+        window.recalcRadonMediaRow = function (tr) {
+            if (!tr) return;
+            const p1 = tr.querySelector('[data-rk="periodo_1"]')?.value;
+            const p2 = tr.querySelector('[data-rk="periodo_2"]')?.value;
+            const p3 = tr.querySelector('[data-rk="periodo_3"]')?.value;
+            const mediaInp = tr.querySelector('[data-rk="media_annuale"]');
+            if (!mediaInp) return;
+            const m = calcMediaAnnuaRadon(p1, p2, p3);
+            if (m !== null) mediaInp.value = String(m);
+        };
+
+        window.appendRadonLocaleRow = function (preset) {
+            const host = document.getElementById('radonLocaleRowsHost');
+            if (!host) return;
+            const pr = preset || {};
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-radon-locale', '1');
+            const mk = (key, val, ph, cls) =>
+                `<td class="${cls || ''}"><input type="text" data-rk="${key}" value="${escAttr(val != null && val !== '' ? String(val) : '')}" placeholder="${escAttr(ph || '')}" oninput="recalcRadonMediaRow(this.closest('tr'))"></td>`;
+            tr.innerHTML = mk('locale', pr.locale, 'Locale Direttore (ID=10)', 'col-locale')
+                + mk('rilevatore', pr.rilevatore, '38903/16308/42262', 'col-rilev')
+                + mk('periodo_1', pr.periodo_1, '43', 'col-num')
+                + mk('periodo_2', pr.periodo_2, '34', 'col-num')
+                + mk('periodo_3', pr.periodo_3, '35', 'col-num')
+                + mk('media_annuale', pr.media_annuale, 'auto', 'col-media')
+                + '<td class="col-del"><button type="button" class="icon-btn danger" onclick="removeRadonLocaleRow(this)">✕</button></td>';
+            host.appendChild(tr);
+            recalcRadonMediaRow(tr);
+        };
+
+        window.removeRadonLocaleRow = function (btn) {
+            const host = document.getElementById('radonLocaleRowsHost');
+            if (!host || host.querySelectorAll('tr[data-radon-locale]').length <= 1) {
+                showToast('È necessario almeno un locale.', 'warning');
+                return;
+            }
+            btn.closest('tr')?.remove();
+        };
+
+        function resetRadonLocaleRowsInit() {
+            const host = document.getElementById('radonLocaleRowsHost');
+            if (!host) return;
+            host.innerHTML = '';
+            appendRadonLocaleRow({});
+        }
+
+        function collectRadonLocaliFromDom() {
+            const locali = [];
+            document.querySelectorAll('#radonLocaleRowsHost tr[data-radon-locale]').forEach((tr) => {
+                const locale = tr.querySelector('[data-rk="locale"]')?.value?.trim();
+                const rilevatore = tr.querySelector('[data-rk="rilevatore"]')?.value?.trim();
+                const p1 = tr.querySelector('[data-rk="periodo_1"]')?.value;
+                const p2 = tr.querySelector('[data-rk="periodo_2"]')?.value;
+                const p3 = tr.querySelector('[data-rk="periodo_3"]')?.value;
+                let media = parseNumITOptional(tr.querySelector('[data-rk="media_annuale"]')?.value);
+                if (media === null) media = calcMediaAnnuaRadon(p1, p2, p3);
+                locali.push({
+                    locale: locale || '',
+                    rilevatore: rilevatore || '',
+                    periodo_1: parseNumITOptional(p1),
+                    periodo_2: parseNumITOptional(p2),
+                    periodo_3: parseNumITOptional(p3),
+                    media_annuale: media,
+                });
+            });
+            return locali;
+        }
+
+        async function saveRadonTabellareRecord(formEl, editId) {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const fd = new FormData(formEl);
+            const descrizione = String(fd.get('descrizione_rilevamento') || '').trim();
+            const aziendaId = fd.get('azienda_id');
+            const tipoId = fd.get('tipo_rilevamento_id');
+            const note = String(fd.get('note') || '').trim() || null;
+            const piano = document.getElementById('radonPianoSessione')?.value?.trim() || '';
+            const dataSessione = document.getElementById('radonDataSessione')?.value;
+            if (!descrizione) {
+                showToast('Inserisci la descrizione del rilevamento.', 'warning');
+                return;
+            }
+            if (!aziendaId) {
+                showToast('Seleziona l\'azienda.', 'warning');
+                return;
+            }
+            if (!dataSessione) {
+                showToast('Indica la data della sessione di rilevamento.', 'warning');
+                return;
+            }
+            const tipoRow = (STATE.data.tipiRilevamento || []).find(x => x.id === tipoId);
+            const unita = tipoRow?.unita_misura || 'Bq/m³';
+            const limDef = tipoRow?.limite_legge_default;
+            const limite = limDef != null && limDef !== '' ? Number(limDef) : 300;
+
+            const locali = collectRadonLocaliFromDom();
+            if (!locali.length) {
+                showToast('Aggiungi almeno un locale di misura.', 'warning');
+                return;
+            }
+            let worstEsito = 'Conforme';
+            let maxMedia = null;
+            for (const loc of locali) {
+                if (!loc.locale) {
+                    showToast('Indica il nome del locale per ogni riga.', 'warning');
+                    return;
+                }
+                if (loc.media_annuale == null || !Number.isFinite(loc.media_annuale)) {
+                    showToast('Per «' + loc.locale + '» indica i tre periodi o la media annuale.', 'warning');
+                    return;
+                }
+                if (maxMedia == null || loc.media_annuale > maxMedia) maxMedia = loc.media_annuale;
+                let esito = 'Da verificare';
+                if (limite != null && Number.isFinite(limite)) {
+                    const { data: esitoData, error: esitoError } = await supabaseClient.rpc('fn_valuta_rilevamento', {
+                        p_valore_misurato: loc.media_annuale,
+                        p_limite_legge: limite,
+                    });
+                    if (esitoError) {
+                        showToast('Errore calcolo esito: ' + esitoError.message, 'error');
+                        return;
+                    }
+                    esito = esitoData;
+                }
+                worstEsito = bumpEsitoMicro(worstEsito, esito);
+            }
+
+            const payload = {
+                descrizione_rilevamento: descrizione,
+                azienda_id: aziendaId,
+                tipo_rilevamento_id: tipoId,
+                valore_misurato: maxMedia,
+                unita_misura: unita,
+                limite_legge_applicato: limite,
+                esito: worstEsito,
+                zona: piano || null,
+                data_rilevamento: dataSessione,
+                strumento: null,
+                laboratorio_esterno: null,
+                note,
+                dettaglio_microclima: null,
+                dettaglio_radon: { piano, locali },
+            };
+
+            let error;
+            if (editId) {
+                ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).update(payload).eq('id', editId));
+            } else {
+                payload.created_by = STATE.account?.id || null;
+                ({ error } = await supabaseClient.from(CONFIG.tables.rilevamentiAmbientali).insert(payload));
+            }
+            if (error) {
+                showToast('Errore salvataggio: ' + error.message, 'error');
+                return;
+            }
+            closeModal('rilevamentoModal');
+            showToast('Rilevamento radon salvato', 'success');
+            await renderRilevamenti();
+        }
 
         window.syncMicroBulkRowTitles = function () {
             document.querySelectorAll('#microBulkRowsHost .micro-bulk-row').forEach((el, i) => {
@@ -3546,6 +3831,7 @@
                 laboratorio_esterno: laboratorio,
                 note,
                 dettaglio_microclima: { riquadri },
+                dettaglio_radon: null,
             };
 
             let error;
@@ -3581,6 +3867,9 @@
             if (isEdit) {
                 const editMicro = item?.dettaglio_microclima?.riquadri?.length > 0
                     && isMicroTabellareNome(item?.tipo_rilevamento?.nome_tipo);
+                const editRadon = (item?.dettaglio_radon?.locali?.length > 0
+                    || isRadonTipoNome(item?.tipo_rilevamento?.nome_tipo))
+                    && !editMicro;
 
                 if (editMicro) {
                     modal.innerHTML = `
@@ -3641,7 +3930,8 @@
                                 <div id="microBulkRowsHost"></div>
                                 <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendMicroBulkRow()">+ Aggiungi altro rilevamento (riquadro)</button>
                             </div>
-                            <div class="form-grid">
+                            ${rilevamentoRadonPanelsHtml()}
+                            <div id="rileStrumentoLaboratorioWrap" class="form-grid">
                                 <div class="form-field">
                                     <label>Strumento</label>
                                     <input type="text" name="strumento" value="${esc(item?.strumento || '')}">
@@ -3671,7 +3961,73 @@
                             host.innerHTML = '';
                             (item.dettaglio_microclima.riquadri || []).forEach((rq) => appendMicroBulkRow(rq));
                         }
-                        applyMicroModalTipoVisibility();
+                        applyRilevamentoModalTipoVisibility();
+                    }, 10);
+                    modal.onclick = () => closeModal('rilevamentoModal');
+                    return;
+                }
+
+                if (editRadon) {
+                    modal.innerHTML = `
+                <div class="modal modal--rile-wide" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <div class="modal-title">Modifica Rilevamento — Gas Radon</div>
+                        <button class="icon-btn" onclick="closeModal('rilevamentoModal')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="rilevamentoForm" onsubmit="saveRilevamento(event, '${item.id}')">
+                            <div class="form-grid">
+                                <div class="form-field full">
+                                    <label>Descrizione Rilevamento</label>
+                                    <input type="text" name="descrizione_rilevamento" value="${esc(item?.descrizione_rilevamento || '')}" required>
+                                </div>
+                                <div class="form-field">
+                                    <label>Azienda</label>
+                                    <select name="azienda_id" required>
+                                        <option value="">— Seleziona —</option>
+                                        ${aziende.map(a => `<option value="${a.id}" ${item?.azienda_id === a.id ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Tipo Rilevamento</label>
+                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
+                                        <option value="">— Seleziona —</option>
+                                        ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}" ${item?.tipo_rilevamento_id === t.id ? 'selected' : ''}>${esc(t.nome_tipo || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="rileClassicMeasureFields" class="form-grid" style="display:none"></div>
+                            <div id="rileMicroPanelsWrap" style="display:none"></div>
+                            ${rilevamentoRadonPanelsHtml()}
+                            <div id="rileStrumentoLaboratorioWrap" class="form-grid">
+                                <div class="form-field full">
+                                    <label>Note</label>
+                                    <textarea name="note">${esc(item?.note || '')}</textarea>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" onclick="closeModal('rilevamentoModal')">Annulla</button>
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('rilevamentoForm').requestSubmit()">Salva</button>
+                    </div>
+                </div>
+            `;
+                    document.body.appendChild(modal);
+                    setTimeout(() => {
+                        modal.classList.add('show');
+                        const det = item.dettaglio_radon || {};
+                        const pianoInp = document.getElementById('radonPianoSessione');
+                        const dataInp = document.getElementById('radonDataSessione');
+                        if (pianoInp) pianoInp.value = det.piano || item.zona || '';
+                        if (dataInp) dataInp.value = formatDateTimeForInput(item.data_rilevamento);
+                        const host = document.getElementById('radonLocaleRowsHost');
+                        if (host) {
+                            host.innerHTML = '';
+                            const locs = det.locali?.length ? det.locali : [{}];
+                            locs.forEach((loc) => appendRadonLocaleRow(loc));
+                        }
+                        applyRilevamentoModalTipoVisibility();
                     }, 10);
                     modal.onclick = () => closeModal('rilevamentoModal');
                     return;
@@ -3699,7 +4055,7 @@
                                 </div>
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
-                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyMicroModalTipoVisibility();">
+                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
                                         <option value="">— Seleziona —</option>
                                         ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}" ${item?.tipo_rilevamento_id === t.id ? 'selected' : ''}>${esc(t.nome_tipo || '')}</option>`).join('')}
                                     </select>
@@ -3773,7 +4129,7 @@
                                 </div>
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
-                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyMicroModalTipoVisibility();">
+                                    <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
                                         <option value="">— Seleziona —</option>
                                         ${tipi.map(t => `<option value="${t.id}" data-unita="${esc(t.unita_misura || '')}" data-limite="${t.limite_legge_default ?? ''}">${esc(t.nome_tipo || '')}</option>`).join('')}
                                     </select>
@@ -3809,7 +4165,8 @@
                                 <div id="microBulkRowsHost"></div>
                                 <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="appendMicroBulkRow()">+ Aggiungi altro rilevamento (riquadro)</button>
                             </div>
-                            <div class="form-grid">
+                            ${rilevamentoRadonPanelsHtml()}
+                            <div id="rileStrumentoLaboratorioWrap" class="form-grid">
                                 <div class="form-field">
                                     <label>Strumento</label>
                                     <input type="text" name="strumento" value="">
@@ -3835,7 +4192,8 @@
             setTimeout(() => {
                 modal.classList.add('show');
                 resetMicroBulkRowsInit();
-                applyMicroModalTipoVisibility();
+                resetRadonLocaleRowsInit();
+                applyRilevamentoModalTipoVisibility();
             }, 10);
             modal.onclick = () => closeModal('rilevamentoModal');
         }
@@ -3868,6 +4226,10 @@
                 await saveMicroclimaTabellareRecord(event.target, itemId || null);
                 return;
             }
+            if (isRadonTipoNome(tipoNome)) {
+                await saveRadonTabellareRecord(event.target, itemId || null);
+                return;
+            }
 
             const valore = formData.get('valore_misurato') ? Number(formData.get('valore_misurato')) : null;
             const limite = formData.get('limite_legge_applicato') ? Number(formData.get('limite_legge_applicato')) : null;
@@ -3894,6 +4256,7 @@
                 laboratorio_esterno: formData.get('laboratorio_esterno') || null,
                 note: formData.get('note') || null,
                 dettaglio_microclima: null,
+                dettaglio_radon: null,
             };
 
             let error;
@@ -4700,6 +5063,7 @@
                 MOD_CHIMICO: '20260521f',
                 MOD_EMERGENZE: '20260523d',
                 MOD_VIBRAZIONI: '20260523b',
+                MOD_GAS_RADON: '20260524e',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -4889,7 +5253,7 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
@@ -4910,6 +5274,7 @@
                 : codice === 'MOD_CHIMICO' ? '20260521f'
                 : codice === 'MOD_EMERGENZE' ? '20260523d'
                 : codice === 'MOD_VIBRAZIONI' ? '20260523b'
+                : codice === 'MOD_GAS_RADON' ? '20260524e'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

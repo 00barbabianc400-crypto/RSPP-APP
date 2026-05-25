@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Gas radon</title>
+<script src="adapter.js?v=20260524e"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 20px; }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .rad-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .rad-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .rad-actions button.secondary { border-color: #999; background: #f4f4f4; color: #333; font-weight: 500; }
+  .rad-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 10px; }
+  .rad-table th { background: #2c3e50; color: #fff; padding: 6px 4px; text-align: center; font-size: 8.5pt; }
+  .rad-table td { border: 1px solid #bbb; padding: 2px; vertical-align: middle; }
+  .rad-table td input { width: 100%; border: none; background: transparent; font-size: 8.5pt; padding: 4px 3px; }
+  .rad-table td input:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .rad-table .col-del { width: 36px; text-align: center; }
+  .ciclo-textarea { width: 100%; min-height: 80px; font-size: 10pt; padding: 6px; margin-top: 6px; }
+  .preview-box { font-size: 10pt; background: #f8f9fa; border: 1px solid #ddd; padding: 8px; margin-top: 8px; line-height: 1.45; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">MOD_GAS_RADON — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Monitoraggio gas radon</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Carica il template <code>MOD_GAS_RADON.docx</code> nel bucket <code>modelli</code>.
+        I rilevamenti ambientali con tipo <strong>Gas Radon</strong> precompilano la tabella sotto.
+      </p>
+
+      <h2 class="doc-section">Dati documento</h2>
+      <p><strong>Ragione sociale</strong> <code>{{RAGIONE_SOCIALE}}</code>: <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong> <code>{{SEDE_OPERATIVA}}</code>: <span id="pSede" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong> <code>{{MODULO_NUMERO}}</code>:<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+          style="width:120px;margin-top:6px;" placeholder="es. 22" autocomplete="off"
+          oninput="setModuloNumero(this.value)">
+      </p>
+      <p><strong>Data emissione</strong> <code>{{DATA_EMISSIONE}}</code>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Luogo</strong> <code>{{LUOGO}}</code>: <span id="pLuogo" class="field-auto">—</span></p>
+      <p style="margin-top:10px;">
+        <strong>Logo</strong> <code>{%LOGO}</code>
+        <span id="pLogo" class="field-auto" style="display:inline-block;vertical-align:middle;margin-left:8px;">—</span>
+      </p>
+
+      <h2 class="doc-section">§1 — Premessa</h2>
+      <p class="hint-str">
+        Nel Word: «Nel periodo tra <code>{{PERIODO_RILEVAMENTO}}</code> negli ambienti di lavoro…».
+        Inserisci il periodo in cui è stato svolto il rilievo (testo libero).
+      </p>
+      <p>
+        <strong>Periodo del rilievo</strong> <code>{{PERIODO_RILEVAMENTO}}</code>:<br>
+        <input type="text" id="inpPeriodoRilevamento" class="inline-select"
+          style="width:100%;max-width:520px;margin-top:6px;" autocomplete="off"
+          placeholder="es. gennaio 2018 e dicembre 2019"
+          oninput="onPeriodoRilevamentoInput()">
+      </p>
+      <p class="hint-str" style="margin-top:6px;">Anteprima frase in premessa:</p>
+      <div id="pPeriodoPreview" class="preview-box">—</div>
+
+      <h2 class="doc-section">§7 — Risultati delle rilevazioni</h2>
+      <p class="hint-str">
+        Nel Word: «…sono state effettuate dal <code>{{LABORATORIO_DOSIMETRIA}}</code> il quale è conforme…».
+        Testo ENEA rimosso dal modello; indica solo il laboratorio (es. forma completa con «laboratorio di dosimetria della …»).
+      </p>
+      <p>
+        <strong>Laboratorio di dosimetria</strong> <code>{{LABORATORIO_DOSIMETRIA}}</code>:<br>
+        <input type="text" id="inpLaboratorioDosimetria" class="inline-select"
+          style="width:100%;max-width:640px;margin-top:6px;" autocomplete="off"
+          placeholder="es. laboratorio di dosimetria della LB SERVIZI S.r.l."
+          oninput="onLaboratorioDosimetriaInput()">
+      </p>
+      <p class="hint-str" style="margin-top:6px;">Anteprima frase §7:</p>
+      <div id="pLaboratorioPreview" class="preview-box">—</div>
+
+      <h2 class="doc-section">Tabella risultati rilevazioni (§7)</h2>
+      <p class="hint-str">
+        Dati da pagina <strong>Rilevamenti → Gas Radon</strong> (sessione tabellare). Loop Word nella prima riga dati:
+        <code>{{#RIGHE_RADON}}{{LOCALE}}</code> · <code>{{RILEVATORE}}</code> ·
+        <code>{{PERIODO_1}}</code> · <code>{{PERIODO_2}}</code> · <code>{{PERIODO_3}}</code> ·
+        <code>{{MEDIA_ANNUALE}}{{/RIGHE_RADON}}</code>
+      </p>
+      <div class="rad-actions">
+        <button type="button" onclick="addRigaRadon()">+ Aggiungi locale</button>
+        <button type="button" class="secondary" onclick="reloadRigheDaRilevamenti()">Ricarica da rilevamenti DB</button>
+      </div>
+      <div class="radon-loc-scroll" style="overflow-x:auto;margin-top:8px;">
+        <table class="rad-table" style="min-width:720px;">
+          <thead>
+            <tr>
+              <th>Locale</th><th>Rilevatore</th><th>1°</th><th>2°</th><th>3°</th><th>Media</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="wrapRigheRadon"></tbody>
+        </table>
+      </div>
+
+      <h2 class="doc-section" style="margin-top:18px;">§8 — Conclusioni</h2>
+      <p class="hint-str">
+        Intro con <code>{{PERIODO_RILEVAMENTO}}</code>, <code>{{PIANO_RILEVAMENTO}}</code>,
+        <code>{{RAGIONE_SOCIALE}}</code>, <code>{{SEDE_OPERATIVA}}</code> — oppure blocco unico <code>{{TESTO_CONCLUSIONI_INTRO}}</code>.
+        Esito automatico da media annuale (&lt; 300 Bq/m³ su tutti i punti = conforme). Firma: <code>{{LUOGO}}</code> lì <code>{{DATA_EMISSIONE}}</code> nel Word.
+      </p>
+      <p>
+        <strong>Piano</strong> <code>{{PIANO_RILEVAMENTO}}</code> (da Rilevamenti Gas Radon):<br>
+        <input type="text" id="inpPianoRilevamento" class="inline-select"
+          style="width:100%;max-width:480px;margin-top:6px;" placeholder="es. Piano interrato"
+          oninput="onPianoRilevamentoInput()">
+      </p>
+      <p style="margin-top:8px;">
+        <span id="badgeEsitoConclusioni" class="badge info">—</span>
+        <button type="button" class="secondary" style="margin-left:8px;font-size:11pt;padding:4px 10px;"
+          onclick="ricalcolaConclusioniRadon(true)">Ricalcola testi da tabella</button>
+      </p>
+      <p class="hint-str" style="margin-top:10px;">Paragrafo introduttivo <code>{{TESTO_CONCLUSIONI_INTRO}}</code>:</p>
+      <textarea id="taConclusioniIntro" class="ciclo-textarea" style="min-height:72px;"
+        oninput="onConclusioniCampiInput()"></textarea>
+      <p class="hint-str" style="margin-top:10px;">Corpo esito <code>{{TESTO_CONCLUSIONI_ESITO}}</code> (modificabile):</p>
+      <textarea id="taConclusioniEsito" class="ciclo-textarea" style="min-height:160px;"
+        oninput="onConclusioniCampiInput()"></textarea>
+      <div id="wrapInterventoSuperamento" class="hidden">
+        <p class="hint-str" style="margin-top:10px;">Solo se superamento ≥300 Bq/m³ — intervento azienda (opz.):</p>
+        <textarea id="taInterventoSuperamento" class="ciclo-textarea" style="min-height:64px;"
+          oninput="onConclusioniCampiInput()"></textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"><p style="text-align:center;padding:40px;color:#888;">Apri «Anteprima Word» dopo la compilazione.</p></div>
+</div>
+
+<script>
+(function () {
+  const ADAPTER = window.GEN_ADAPTERS && window.GEN_ADAPTERS['MOD_GAS_RADON'];
+  let DATA = null;
+  let activeView = 'compile';
+  const WIZARD = {
+    modulo_numero: '',
+    periodo_rilevamento: '',
+    laboratorio_dosimetria: '',
+    righe_radon: [],
+    piano_rilevamento: '',
+    testo_conclusioni_intro: '',
+    testo_conclusioni_esito: '',
+    testo_intervento_superamento: '',
+  };
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;');
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const n = parseInt(String(padded || '').trim(), 10);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el || !DATA) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML = '<img src="' + escAttr(url) + '" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.textContent = 'Logo caricato (nel Word generato)';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = '—';
+    el.className = 'field-missing';
+  }
+
+  function syncRigheFromDom() {
+    const rows = [];
+    document.querySelectorAll('#wrapRigheRadon tr[data-riga-radon]').forEach((tr) => {
+      rows.push({
+        locale: tr.querySelector('[data-f="locale"]')?.value || '',
+        rilevatore: tr.querySelector('[data-f="rilevatore"]')?.value || '',
+        periodo_1: tr.querySelector('[data-f="periodo_1"]')?.value || '',
+        periodo_2: tr.querySelector('[data-f="periodo_2"]')?.value || '',
+        periodo_3: tr.querySelector('[data-f="periodo_3"]')?.value || '',
+        media_annuale: tr.querySelector('[data-f="media_annuale"]')?.value || '',
+      });
+    });
+    WIZARD.righe_radon = rows;
+  }
+
+  function renderRigheTable() {
+    const wrap = document.getElementById('wrapRigheRadon');
+    if (!wrap) return;
+    const righe = WIZARD.righe_radon || [];
+    let html = '';
+    righe.forEach((r, i) => {
+      html += '<tr data-riga-radon>'
+        + '<td><input data-f="locale" value="' + escAttr(r.locale) + '" oninput="sendUpdate()"></td>'
+        + '<td><input data-f="rilevatore" value="' + escAttr(r.rilevatore) + '" oninput="sendUpdate()"></td>'
+        + '<td style="max-width:64px;"><input data-f="periodo_1" value="' + escAttr(r.periodo_1) + '" oninput="sendUpdate()"></td>'
+        + '<td style="max-width:64px;"><input data-f="periodo_2" value="' + escAttr(r.periodo_2) + '" oninput="sendUpdate()"></td>'
+        + '<td style="max-width:64px;"><input data-f="periodo_3" value="' + escAttr(r.periodo_3) + '" oninput="sendUpdate()"></td>'
+        + '<td style="max-width:72px;"><input data-f="media_annuale" value="' + escAttr(r.media_annuale) + '" oninput="sendUpdate()"></td>'
+        + '<td class="col-del"><button type="button" class="secondary" style="font-size:9pt;padding:2px 6px;" onclick="removeRigaRadon(' + i + ')">✕</button></td>'
+        + '</tr>';
+    });
+    wrap.innerHTML = html;
+  }
+
+  function buildMerged() {
+    if (!ADAPTER || !DATA) return {};
+    return ADAPTER.applyWizard(DATA, {
+      modulo_numero: WIZARD.modulo_numero,
+      periodo_rilevamento: WIZARD.periodo_rilevamento,
+      laboratorio_dosimetria: WIZARD.laboratorio_dosimetria,
+      righe_radon: WIZARD.righe_radon,
+      piano_rilevamento: WIZARD.piano_rilevamento,
+      testo_conclusioni_intro: WIZARD.testo_conclusioni_intro,
+      testo_conclusioni_esito: WIZARD.testo_conclusioni_esito,
+      testo_intervento_superamento: WIZARD.testo_intervento_superamento,
+    });
+  }
+
+  function syncConclusioniUiFromWizard(forceRecalc) {
+    if (!ADAPTER || !DATA) return;
+    const fakeAzienda = {
+      ragione_sociale: DATA.RAGIONE_SOCIALE,
+      sede_operativa: DATA.SEDE_OPERATIVA,
+    };
+    if (forceRecalc) {
+      WIZARD.testo_conclusioni_intro = '';
+      WIZARD.testo_conclusioni_esito = '';
+      WIZARD.testo_intervento_superamento = '';
+    }
+    const bundle = ADAPTER.buildConclusioniBundle(fakeAzienda, DATA._rilevamenti_radon, WIZARD);
+    if (forceRecalc || !String(WIZARD.piano_rilevamento || '').trim()) {
+      WIZARD.piano_rilevamento = bundle.PIANO_RILEVAMENTO || '';
+    }
+    if (forceRecalc || !String(WIZARD.testo_conclusioni_intro || '').trim()) {
+      WIZARD.testo_conclusioni_intro = bundle.TESTO_CONCLUSIONI_INTRO;
+    }
+    if (forceRecalc || !String(WIZARD.testo_conclusioni_esito || '').trim()) {
+      WIZARD.testo_conclusioni_esito = bundle.TESTO_CONCLUSIONI_ESITO;
+    }
+    const inpPiano = document.getElementById('inpPianoRilevamento');
+    if (inpPiano) inpPiano.value = WIZARD.piano_rilevamento;
+    const taIntro = document.getElementById('taConclusioniIntro');
+    const taEsito = document.getElementById('taConclusioniEsito');
+    if (taIntro) taIntro.value = WIZARD.testo_conclusioni_intro;
+    if (taEsito) taEsito.value = WIZARD.testo_conclusioni_esito;
+    const wrapInt = document.getElementById('wrapInterventoSuperamento');
+    const badge = document.getElementById('badgeEsitoConclusioni');
+    const superati = bundle._radon_superati || [];
+    if (bundle._radon_tutti_conformi) {
+      if (badge) {
+        badge.className = 'badge success';
+        badge.textContent = 'Tutti i punti < 300 Bq/m³ — testo conforme';
+      }
+      if (wrapInt) wrapInt.classList.add('hidden');
+    } else if (superati.length) {
+      if (badge) {
+        badge.className = 'badge warning';
+        badge.textContent = superati.length + ' punto/i ≥ 300 Bq/m³ — testo superamento';
+      }
+      if (wrapInt) wrapInt.classList.remove('hidden');
+      const taInt = document.getElementById('taInterventoSuperamento');
+      if (taInt && (forceRecalc || !taInt.value.trim())) {
+        taInt.value = ADAPTER.TESTO_INTERVENTO_SUPERAMENTO_DEFAULT.replace(
+          /\{\{RAGIONE_SOCIALE\}\}/g,
+          DATA.RAGIONE_SOCIALE || ''
+        );
+        WIZARD.testo_intervento_superamento = taInt.value;
+      }
+    } else {
+      if (badge) {
+        badge.className = 'badge';
+        badge.textContent = 'Compila le media annue in tabella';
+      }
+      if (wrapInt) wrapInt.classList.add('hidden');
+    }
+  }
+
+  window.ricalcolaConclusioniRadon = function (force) {
+    syncRigheFromDom();
+    syncConclusioniUiFromWizard(force !== false);
+    sendUpdate();
+  };
+
+  window.onPianoRilevamentoInput = function () {
+    WIZARD.piano_rilevamento = document.getElementById('inpPianoRilevamento')?.value || '';
+    sendUpdate();
+  };
+
+  window.onConclusioniCampiInput = function () {
+    WIZARD.testo_conclusioni_intro = document.getElementById('taConclusioniIntro')?.value || '';
+    WIZARD.testo_conclusioni_esito = document.getElementById('taConclusioniEsito')?.value || '';
+    WIZARD.testo_intervento_superamento = document.getElementById('taInterventoSuperamento')?.value || '';
+    sendUpdate();
+  };
+
+  function renderLaboratorioPreview() {
+    const el = document.getElementById('pLaboratorioPreview');
+    if (!el) return;
+    const lab = ADAPTER
+      ? ADAPTER.normalizeLaboratorioDosimetria(WIZARD.laboratorio_dosimetria)
+      : (WIZARD.laboratorio_dosimetria || '').trim();
+    el.textContent =
+      'Le letture dei sensori per la stima della concentrazione del gas Radon sono state effettuate dal '
+      + lab + ' il quale è conforme ai requisiti minimi dei servizi di dosimetria…';
+  }
+
+  function renderPeriodoPreview() {
+    const el = document.getElementById('pPeriodoPreview');
+    if (!el) return;
+    const periodo = ADAPTER
+      ? ADAPTER.normalizePeriodoRilevamento(WIZARD.periodo_rilevamento)
+      : (WIZARD.periodo_rilevamento || '').trim();
+    const rag = DATA?.RAGIONE_SOCIALE || '…';
+    const sede = DATA?.SEDE_OPERATIVA || '…';
+    el.textContent =
+      'Nel periodo tra ' + periodo + ' negli ambienti di lavoro della ' + rag
+      + ' con sede in ' + sede + ' è stata condotta un’indagine finalizzata alla valutazione '
+      + 'della concentrazione di gas Radon…';
+  }
+
+  function sendUpdate() {
+    syncRigheFromDom();
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const stop = document.getElementById('stopBadge');
+    const ok = document.getElementById('okBadge');
+    const btn = document.getElementById('btnGenera');
+    if (errors.length) {
+      stop.classList.add('visible');
+      stop.textContent = errors[0];
+      stop.title = errors.join(' · ');
+      ok.classList.remove('visible');
+      btn.disabled = true;
+    } else {
+      stop.classList.remove('visible');
+      ok.classList.add('visible');
+      ok.textContent = 'Pronto';
+      btn.disabled = false;
+    }
+    renderPeriodoPreview();
+    renderLaboratorioPreview();
+    syncConclusioniUiFromWizard(false);
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+  }
+
+  window.onLaboratorioDosimetriaInput = function () {
+    WIZARD.laboratorio_dosimetria = document.getElementById('inpLaboratorioDosimetria')?.value || '';
+    sendUpdate();
+  };
+
+  window.onPeriodoRilevamentoInput = function () {
+    WIZARD.periodo_rilevamento = document.getElementById('inpPeriodoRilevamento')?.value || '';
+    sendUpdate();
+  };
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
+  window.addRigaRadon = function () {
+    syncRigheFromDom();
+    WIZARD.righe_radon.push({
+      locale: '', rilevatore: '', periodo_1: '', periodo_2: '', periodo_3: '', media_annuale: '',
+    });
+    renderRigheTable();
+    sendUpdate();
+  };
+
+  window.removeRigaRadon = function (idx) {
+    syncRigheFromDom();
+    WIZARD.righe_radon.splice(idx, 1);
+    if (!WIZARD.righe_radon.length) {
+      WIZARD.righe_radon.push({
+        locale: '', rilevatore: '', periodo_1: '', periodo_2: '', periodo_3: '', media_annuale: '',
+      });
+    }
+    renderRigheTable();
+    sendUpdate();
+  };
+
+  window.reloadRigheDaRilevamenti = function () {
+    if (!ADAPTER || !DATA) return;
+    WIZARD.righe_radon = ADAPTER.mergeRigheRadonWizard({}, DATA._rilevamenti_radon || []);
+    const piano = ADAPTER.resolvePianoFromRilevamenti(DATA._rilevamenti_radon || []);
+    if (piano) WIZARD.piano_rilevamento = piano;
+    renderRigheTable();
+    ricalcolaConclusioniRadon(true);
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_GAS_RADON — Compila' : 'MOD_GAS_RADON — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    renderLogoPreview();
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+
+    const prev = DATA._radon_wizard || {};
+    const defaultPeriodo = ADAPTER.PERIODO_RILEVAMENTO_DEFAULT || 'gennaio 2018 e dicembre 2019';
+    WIZARD.periodo_rilevamento =
+      prev.periodo_rilevamento != null && String(prev.periodo_rilevamento).trim()
+        ? String(prev.periodo_rilevamento)
+        : defaultPeriodo;
+    document.getElementById('inpPeriodoRilevamento').value = WIZARD.periodo_rilevamento;
+
+    const defaultLab = ADAPTER.LABORATORIO_DOSIMETRIA_DEFAULT || 'laboratorio di dosimetria della LB SERVIZI S.r.l.';
+    WIZARD.laboratorio_dosimetria =
+      prev.laboratorio_dosimetria != null && String(prev.laboratorio_dosimetria).trim()
+        ? String(prev.laboratorio_dosimetria)
+        : defaultLab;
+    document.getElementById('inpLaboratorioDosimetria').value = WIZARD.laboratorio_dosimetria;
+
+    WIZARD.righe_radon = ADAPTER.mergeRigheRadonWizard(
+      { righe_radon: prev.righe_radon || DATA._righe_radon },
+      DATA._rilevamenti_radon
+    );
+    WIZARD.piano_rilevamento = prev.piano_rilevamento != null
+      ? String(prev.piano_rilevamento)
+      : (DATA.PIANO_RILEVAMENTO || '');
+    WIZARD.testo_conclusioni_intro = prev.testo_conclusioni_intro != null
+      ? String(prev.testo_conclusioni_intro)
+      : (DATA.TESTO_CONCLUSIONI_INTRO || '');
+    WIZARD.testo_conclusioni_esito = prev.testo_conclusioni_esito != null
+      ? String(prev.testo_conclusioni_esito)
+      : (DATA.TESTO_CONCLUSIONI_ESITO || '');
+    WIZARD.testo_intervento_superamento = prev.testo_intervento_superamento != null
+      ? String(prev.testo_intervento_superamento)
+      : '';
+
+    renderRigheTable();
+    syncConclusioniUiFromWizard(false);
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

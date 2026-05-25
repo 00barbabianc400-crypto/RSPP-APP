@@ -698,58 +698,73 @@
         }
 
         /* Rilevamenti — sessione Gas Radon (tabella locali) */
+        #rileRadonPanelsWrap {
+            color: #323130 !important;
+        }
+        #rileRadonPanelsWrap .hint,
+        #rileRadonPanelsWrap label {
+            color: #323130 !important;
+        }
         #rileRadonPanelsWrap .radon-loc-scroll {
             overflow-x: auto;
             margin-top: 10px;
             max-width: 100%;
         }
-        .radon-bulk-table {
+        #rileRadonPanelsWrap .radon-bulk-table {
             width: 100%;
             min-width: 720px;
             border-collapse: collapse;
             font-size: 12px;
-            background: var(--sp-bg-card);
+            background: #ffffff !important;
         }
-        .radon-bulk-table th {
-            background: var(--sp-primary);
-            color: #fff;
+        #rileRadonPanelsWrap .radon-bulk-table th {
+            background: #0078d4 !important;
+            color: #ffffff !important;
             padding: 8px 6px;
             text-align: center;
             white-space: nowrap;
             font-weight: 600;
-            border: 1px solid var(--sp-primary-pressed);
+            border: 1px solid #005a9e !important;
         }
-        .radon-bulk-table td {
-            background: var(--sp-bg-card);
-            color: var(--sp-text);
-            border: 1px solid var(--sp-border);
+        #rileRadonPanelsWrap .radon-bulk-table td {
+            background: #ffffff !important;
+            color: #323130 !important;
+            border: 1px solid #edebe9 !important;
             padding: 4px;
             vertical-align: middle;
         }
-        .radon-bulk-table input {
+        #rileRadonPanelsWrap .radon-bulk-table input {
             width: 100%;
             min-width: 0;
             padding: 5px 6px;
             font-size: 12px;
             box-sizing: border-box;
-            background: #fff;
-            color: var(--sp-text);
-            border: 1px solid var(--sp-border-strong);
+            background: #ffffff !important;
+            color: #323130 !important;
+            -webkit-text-fill-color: #323130 !important;
+            border: 1px solid #d2d0ce !important;
             border-radius: 2px;
+            color-scheme: light;
         }
-        .radon-bulk-table input::placeholder {
-            color: var(--sp-text-secondary);
+        #rileRadonPanelsWrap .radon-bulk-table input::placeholder {
+            color: #605e5c !important;
+            opacity: 1;
         }
-        .radon-bulk-table input:focus {
+        #rileRadonPanelsWrap .radon-bulk-table input:focus {
             outline: none;
-            border-color: var(--sp-primary);
-            box-shadow: 0 0 0 1px var(--sp-primary);
+            border-color: #0078d4 !important;
+            box-shadow: 0 0 0 1px #0078d4;
+            color: #323130 !important;
+            -webkit-text-fill-color: #323130 !important;
         }
-        .radon-bulk-table .col-locale { min-width: 160px; }
-        .radon-bulk-table .col-rilev { min-width: 140px; }
-        .radon-bulk-table .col-num { width: 56px; max-width: 72px; }
-        .radon-bulk-table .col-media { width: 64px; }
-        .radon-bulk-table .col-del { width: 36px; text-align: center; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-locale { min-width: 160px; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-rilev { min-width: 140px; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-num { width: 56px; max-width: 72px; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-media { width: 64px; }
+        #rileRadonPanelsWrap .radon-bulk-table .col-del { width: 36px; text-align: center; }
+        #rileRadonPanelsWrap .btn.btn-primary {
+            color: #ffffff !important;
+        }
         
         /* ───── TOOLBAR ───── */
         .toolbar {
@@ -3399,6 +3414,17 @@
             const n = String(name || '').trim().toLowerCase();
             return n === 'gas radon' || n.includes('radon');
         }
+
+        function escAttr(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+        window.escAttr = escAttr;
 
         function rilevamentoRadonPanelsHtml() {
             return `
@@ -6513,10 +6539,6 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             }[c]));
         }
 
-        function escAttr(str) {
-            return esc(str).replace(/"/g, '&quot;');
-        }
-        
         function formatDateForInput(dateStr) {
             if (!dateStr) return '';
             const d = new Date(dateStr);

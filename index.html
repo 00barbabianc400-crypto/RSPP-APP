@@ -3530,6 +3530,15 @@
             return Number.isFinite(n) ? n : null;
         }
 
+        function setRilevamentoPanelFieldsActive(panelEl, active) {
+            if (!panelEl) return;
+            panelEl.querySelectorAll('input, select, textarea, button').forEach((el) => {
+                if (el.type === 'button' || el.type === 'submit') return;
+                el.disabled = !active;
+                if (!active) el.required = false;
+            });
+        }
+
         window.applyRilevamentoModalTipoVisibility = function () {
             const modal = document.getElementById('rilevamentoModal');
             if (!modal) return;
@@ -3548,6 +3557,10 @@
             if (microW) microW.style.display = micro ? 'block' : 'none';
             if (radonW) radonW.style.display = radon ? 'block' : 'none';
             if (strLabWrap) strLabWrap.style.display = radon ? 'none' : '';
+            setRilevamentoPanelFieldsActive(classic, !tabellare);
+            setRilevamentoPanelFieldsActive(microW, micro);
+            setRilevamentoPanelFieldsActive(radonW, radon);
+            setRilevamentoPanelFieldsActive(strLabWrap, !radon);
             const valInp = modal.querySelector('input[name="valore_misurato"]');
             const dtInp = modal.querySelector('input[name="data_rilevamento"]');
             const zonaInp = modal.querySelector('#rileClassicMeasureFields input[name="zona"]');
@@ -3556,6 +3569,14 @@
             if (dtInp) dtInp.required = !tabellare;
             if (zonaInp) zonaInp.required = false;
             if (umInp) umInp.required = !tabellare;
+            if (!micro && microW) {
+                const microHost = microW.querySelector('#microBulkRowsHost');
+                if (microHost) microHost.innerHTML = '';
+            }
+            if (!radon && radonW) {
+                const radonHost = radonW.querySelector('#radonLocaleRowsHost');
+                if (radonHost) radonHost.innerHTML = '';
+            }
             if (micro && microW && !microW.querySelector('.micro-bulk-row')) {
                 resetMicroBulkRowsInit();
             }
@@ -3584,12 +3605,12 @@
             tr.setAttribute('data-radon-locale', '1');
             const mk = (key, val, ph, cls) =>
                 `<td class="${cls || ''}"><input type="text" data-rk="${key}" value="${escAttr(val != null && val !== '' ? String(val) : '')}" placeholder="${escAttr(ph || '')}" oninput="recalcRadonMediaRow(this.closest('tr'))"></td>`;
-            tr.innerHTML = mk('locale', pr.locale, 'Locale Direttore (ID=10)', 'col-locale')
-                + mk('rilevatore', pr.rilevatore, '38903/16308/42262', 'col-rilev')
-                + mk('periodo_1', pr.periodo_1, '43', 'col-num')
-                + mk('periodo_2', pr.periodo_2, '34', 'col-num')
-                + mk('periodo_3', pr.periodo_3, '35', 'col-num')
-                + mk('media_annuale', pr.media_annuale, 'auto', 'col-media')
+            tr.innerHTML = mk('locale', pr.locale, '', 'col-locale')
+                + mk('rilevatore', pr.rilevatore, '', 'col-rilev')
+                + mk('periodo_1', pr.periodo_1, '', 'col-num')
+                + mk('periodo_2', pr.periodo_2, '', 'col-num')
+                + mk('periodo_3', pr.periodo_3, '', 'col-num')
+                + mk('media_annuale', pr.media_annuale, '', 'col-media')
                 + '<td class="col-del"><button type="button" class="icon-btn danger" onclick="removeRadonLocaleRow(this)">✕</button></td>';
             host.appendChild(tr);
             recalcRadonMediaRow(tr);
@@ -4177,7 +4198,7 @@
                                 </div>
                                 <div class="form-field">
                                     <label>Unita Misura</label>
-                                    <input type="text" name="unita_misura" value="" required>
+                                    <input type="text" name="unita_misura" value="">
                                 </div>
                                 <div class="form-field">
                                     <label>Limite Legge Applicato</label>
@@ -4226,8 +4247,6 @@
             document.body.appendChild(modal);
             setTimeout(() => {
                 modal.classList.add('show');
-                resetMicroBulkRowsInit();
-                resetRadonLocaleRowsInit();
                 applyRilevamentoModalTipoVisibility();
             }, 10);
             modal.onclick = () => closeModal('rilevamentoModal');

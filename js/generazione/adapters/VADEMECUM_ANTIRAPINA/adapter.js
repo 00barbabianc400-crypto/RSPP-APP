@@ -268,7 +268,7 @@
       throw new Error('Template Word vuoto o non scaricato');
     }
 
-    const repair = window.GEN_VADEMECUM_REPAIR || window.GEN_DOCX_REPAIR;
+    const repair = window.GEN_DOCX_REPAIR;
     let zip = new window.PizZip(templateArrayBuffer);
     if (repair?.repairDocxTemplateZip) {
       zip = repair.repairDocxTemplateZip(zip);
@@ -309,8 +309,7 @@
     applyWizard,
     validate,
     generateDocx,
-    repairDocxTemplateZip: (zip) =>
-      (window.GEN_VADEMECUM_REPAIR || window.GEN_DOCX_REPAIR)?.repairDocxTemplateZip?.(zip) || zip,
+    repairDocxTemplateZip: (zip) => window.GEN_DOCX_REPAIR?.repairDocxTemplateZip?.(zip) || zip,
     inspectDocxTemplate: (buf) => window.GEN_DOCX_REPAIR?.inspectDocxTemplate?.(buf) || [],
   };
 })();

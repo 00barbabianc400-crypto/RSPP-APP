@@ -7,3 +7,4 @@ exclude:
   - js/generazione/adapters/MOD_CHIMICO/fields-map.md
   - js/generazione/adapters/MOD_EMERGENZE/fields-map.md
   - js/generazione/adapters/MOD_VIBRAZIONI/fields-map.md
+  - js/generazione/adapters/MOD_GAS_RADON/fields-map.md

@@ -1093,6 +1093,12 @@
     }
 
     const outZip = doc.getZip();
+    if (repair?.expandJoinedListParagraphsInZip) {
+      repair.expandJoinedListParagraphsInZip(outZip, {
+        marker: 'Manutenzione periodica dei dispositivi di lotta antincendio',
+        minSemicolons: 3,
+      });
+    }
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);
     }

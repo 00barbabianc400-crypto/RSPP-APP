@@ -196,6 +196,91 @@
     return zip;
   }
 
+  function escapeXmlText(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function paragraphPlainText(block) {
+    const texts = [];
+    const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+    let m;
+    while ((m = re.exec(block)) !== null) texts.push(m[1]);
+    return texts.join('');
+  }
+
+  function extractPPr(block) {
+    const m = block.match(/<w:pPr[\s\S]*?<\/w:pPr>/);
+    return m ? m[0] : null;
+  }
+
+  function buildListParagraph(pPr, text) {
+    const pr = pPr || '<w:pPr/>';
+    const t = escapeXmlText(text);
+    return '<w:p>' + pr + '<w:r><w:t xml:space="preserve">' + t + '</w:t></w:r></w:p>';
+  }
+
+  /**
+   * Se il loop conclusioni è in un paragrafo normale, Docxtemplater concatena con ";".
+   * Dopo il render, spezza in più paragrafi elenco copiando numPr dal punto sopra.
+   */
+  function expandJoinedListParagraphsInXml(xml, cfg) {
+    const marker = cfg?.marker || '';
+    const minSemicolons = cfg?.minSemicolons ?? 2;
+    let lastListPPr = null;
+    const pRe = /<w:p[\s\S]*?<\/w:p>/g;
+    let out = '';
+    let lastEnd = 0;
+    let expanded = 0;
+    let m;
+    while ((m = pRe.exec(xml)) !== null) {
+      const block = m[0];
+      const pPr = extractPPr(block);
+      if (pPr && /<w:numPr/.test(pPr)) lastListPPr = pPr;
+
+      const joined = paragraphPlainText(block);
+      const semiCount = (joined.match(/;/g) || []).length;
+      const shouldExpand =
+        marker &&
+        joined.includes(marker) &&
+        semiCount >= minSemicolons &&
+        /;Verifica/i.test(joined);
+
+      out += xml.slice(lastEnd, m.index);
+      if (shouldExpand) {
+        const usePPr = pPr && /<w:numPr/.test(pPr) ? pPr : lastListPPr;
+        const parts = joined.split(';').map((s) => s.trim()).filter(Boolean);
+        out += parts
+          .map((part, i) => {
+            const text = i < parts.length - 1 && !part.endsWith(';') ? part + ';' : part;
+            return buildListParagraph(usePPr, text);
+          })
+          .join('');
+        expanded += 1;
+      } else {
+        out += block;
+      }
+      lastEnd = m.index + block.length;
+    }
+    out += xml.slice(lastEnd);
+    if (expanded) {
+      console.info('[GEN_DOCX_REPAIR] Elenco unito con ";" espanso in', expanded, 'blocco/i');
+    }
+    return out;
+  }
+
+  function expandJoinedListParagraphsInZip(zip, cfg) {
+    const path = 'word/document.xml';
+    const file = zip.file(path);
+    if (!file) return zip;
+    const xml = file.asText();
+    const fixed = expandJoinedListParagraphsInXml(xml, cfg);
+    if (fixed !== xml) zip.file(path, fixed);
+    return zip;
+  }
+
   function formatDocxtemplaterErrors(err) {
     const list = err.properties?.errors || (err.properties?.id ? [err] : []);
     const parts = list.map((e) => {
@@ -216,6 +301,7 @@
     inspectDocxTemplate,
     inspectDocxZip,
     repairDocxTemplateZip,
+    expandJoinedListParagraphsInZip,
     formatDocxtemplaterErrors,
     fixSplitPlaceholdersInXml,
   };

@@ -5448,7 +5448,7 @@
                 MOD_VIBRAZIONI: '20260523b',
                 MOD_GAS_RADON: '20260524e',
                 MOD_RUMORE: '20260525i',
-                MOD_INCENDIO: '20260525u',
+                MOD_INCENDIO: '20260525v',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5645,7 +5645,7 @@
                 } catch (_) { /* helper logo opzionale */ }
             }
 
-            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260521f');
+            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260525v');
 
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520c');
@@ -5661,7 +5661,7 @@
                 : codice === 'MOD_VIBRAZIONI' ? '20260523b'
                 : codice === 'MOD_GAS_RADON' ? '20260524e'
                 : codice === 'MOD_RUMORE' ? '20260525i'
-                : codice === 'MOD_INCENDIO' ? '20260525u'
+                : codice === 'MOD_INCENDIO' ? '20260525v'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Rischio incendio</title>
-<script src="adapter.js?v=20260525u"></script>
+<script src="adapter.js?v=20260525v"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -438,8 +438,9 @@
 
       <h2 class="doc-section">§5 — Conclusioni</h2>
       <p class="hint-str">
-        Due paragrafi introduttivi <strong>fissi</strong>. Elenco misure: loop sul primo punto modello (stile elenco «o»), cancella gli altri punti fissi:
+        Due paragrafi introduttivi <strong>fissi</strong>. Sul <strong>primo punto elenco</strong> (bullet «o»), cancella il testo e incolla
         <code>{{#VOCI_CONCLUSIONI_MISURE}}{{TESTO}}{{/VOCI_CONCLUSIONI_MISURE}}</code>
+        nello <strong>stesso</strong> paragrafo puntato; elimina gli altri 7 punti fissi. Non mettere i tag in un paragrafo normale sotto l’elenco (esce tutto con <code>;</code>).
       </p>
       <p class="hint-str">Deseleziona i punti non pertinenti; modifica il testo; aggiungi voci personalizzate.</p>
       <div class="inc-actions">

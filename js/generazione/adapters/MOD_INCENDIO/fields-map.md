@@ -233,11 +233,19 @@ Intro, primo elenco (7 punti) e paragrafo «In particolare…» **fissi**. Secon
 
 ### §5 — Conclusioni
 
-Due paragrafi introduttivi **fissi**. Elenco misure (primo punto modello, stile elenco):
+Due paragrafi introduttivi **fissi**. Elenco misure: **un solo** paragrafo puntato-modello (stile elenco «o»), **cancellare** gli altri 7 punti fissi del modello.
 
 ```
 {{#VOCI_CONCLUSIONI_MISURE}}{{TESTO}}{{/VOCI_CONCLUSIONI_MISURE}}
 ```
+
+| Tag | Dove |
+|-----|------|
+| `{{#VOCI_CONCLUSIONI_MISURE}}` | Inizio del **primo** punto elenco (stesso ¶ del bullet) |
+| `{{TESTO}}` | Subito dopo, stesso paragrafo |
+| `{{/VOCI_CONCLUSIONI_MISURE}}` | Fine del **stesso** paragrafo puntato |
+
+**Errore frequente (testo tutto su una riga con `;`):** i tag sono in un paragrafo **normale sotto** l’elenco, oppure l’elenco fissato è rimasto e il loop è stato aggiunto **sotto**. Corretto: sostituire il testo del **primo bullet**, non aggiungere un paragrafo nuovo.
 
 Wizard: checkbox **In doc**, testo modificabile, voci aggiuntive.
 

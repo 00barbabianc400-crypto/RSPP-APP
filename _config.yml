@@ -9,3 +9,4 @@ exclude:
   - js/generazione/adapters/MOD_VIBRAZIONI/fields-map.md
   - js/generazione/adapters/MOD_GAS_RADON/fields-map.md
   - js/generazione/adapters/MOD_RUMORE/fields-map.md
+  - js/generazione/adapters/MOD_INCENDIO/fields-map.md

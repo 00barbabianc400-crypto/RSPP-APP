@@ -1,0 +1,1585 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Rischio incendio</title>
+<script src="adapter.js?v=20260525u"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 20px; }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; }
+  .static-box { font-size: 10pt; background: #fafafa; border: 1px dashed #ccc; padding: 10px; margin-top: 8px; color: #444; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .ciclo-textarea { width: 100%; min-height: 64px; font-size: 10pt; padding: 6px; margin-top: 6px; }
+  h3.doc-sub { font-size: 11pt; font-weight: 600; margin: 12px 0 6px; color: #333; }
+  .tag-pill { display: inline-block; font-family: monospace; font-size: 9pt; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; margin: 2px 4px 2px 0; }
+  .inc-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .inc-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .inc-actions button.secondary { border-color: #999; background: #f4f4f4; color: #333; font-weight: 500; }
+  .preview-box { font-size: 10pt; background: #f8f9fa; border: 1px solid #ddd; padding: 8px; margin-top: 8px; line-height: 1.45; white-space: pre-wrap; }
+  .req-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 10px; }
+  .req-table th { background: #2c3e50; color: #fff; padding: 6px 4px; text-align: center; }
+  .req-table td { border: 1px solid #bbb; padding: 4px 6px; vertical-align: middle; }
+  .req-table td.elem input { width: 100%; border: none; background: transparent; font-size: 9.5pt; padding: 4px; }
+  .req-table td.elem input:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .req-table td.mark { width: 52px; text-align: center; }
+  .req-table td.mark label { display: block; margin: 2px 0; cursor: pointer; font-weight: 600; }
+  .req-table td.mark input { margin-right: 4px; }
+  .metodo-carico-box { margin: 12px 0; padding: 10px; background: #f4f6f8; border: 1px solid #ccd; border-radius: 6px; }
+  .metodo-carico-box label { display: block; margin: 6px 0; cursor: pointer; font-size: 10.5pt; }
+  .metodo-carico-box input { margin-right: 8px; }
+  .caso-panel { margin-top: 10px; padding: 10px; border: 1px dashed #bbb; border-radius: 4px; background: #fafafa; }
+  .caso-panel.hidden { display: none; }
+  .static-snippet { font-size: 9.5pt; color: #555; font-style: italic; margin: 8px 0; line-height: 1.45; }
+  .voce-list-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8px; }
+  .voce-list-table th { background: #34495e; color: #fff; padding: 5px 6px; text-align: left; }
+  .voce-list-table td { border: 1px solid #bbb; padding: 4px 6px; vertical-align: middle; }
+  .voce-list-table td.chk { width: 36px; text-align: center; }
+  .voce-list-table td.act { width: 32px; text-align: center; }
+  .voce-list-table input[type="text"] { width: 100%; border: none; background: transparent; font-size: 9.5pt; padding: 3px; }
+  .voce-list-table input[type="text"]:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .voce-list-table tr.inactive td { opacity: 0.55; }
+  .voce-preview { font-size: 9.5pt; margin-top: 8px; padding: 8px; background: #f8f9fa; border: 1px solid #ddd; }
+  .voce-preview ul { margin: 4px 0 0 18px; padding: 0; }
+  .voce-preview li { margin: 3px 0; }
+  .aff-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin-top: 8px; }
+  .aff-table th { background: #2c3e50; color: #fff; padding: 5px 6px; text-align: left; }
+  .aff-table td { border: 1px solid #bbb; padding: 4px 6px; }
+  .aff-table input { width: 100%; border: none; background: transparent; font-size: 9.5pt; padding: 3px; }
+  .aff-table input:focus { outline: 1px solid #3498db; background: #eaf4fb; }
+  .aff-table td.act { width: 32px; text-align: center; }
+  .hint-bold { font-size: 9.5pt; color: #555; font-style: italic; }
+  .misure-conc-preview { font-size: 9.5pt; margin-top: 8px; padding: 8px; background: #f8f9fa; border: 1px solid #ddd; }
+  .misure-conc-preview ul { margin: 4px 0 0 18px; padding: 0; }
+  .misure-conc-preview li { margin: 3px 0; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">MOD_INCENDIO — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Valutazione del rischio incendio</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Carica il template <code>MOD_INCENDIO.docx</code> nel bucket <code>moduli</code>.
+        Prossimo step: mappare le sezioni del modello Word (tag e wizard).
+      </p>
+
+      <h2 class="doc-section">Dati documento</h2>
+      <p><strong>Ragione sociale</strong> <code>{{RAGIONE_SOCIALE}}</code>: <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong> <code>{{SEDE_OPERATIVA}}</code>: <span id="pSede" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong> <code>{{MODULO_NUMERO}}</code>:<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+          style="width:120px;margin-top:6px;" placeholder="es. 01" autocomplete="off"
+          oninput="setModuloNumero(this.value)">
+      </p>
+      <p><strong>Data emissione</strong> <code>{{DATA_EMISSIONE}}</code>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Luogo</strong> <code>{{LUOGO}}</code>: <span id="pLuogo" class="field-auto">—</span></p>
+      <p style="margin-top:10px;">
+        <strong>Logo</strong> <code>{%LOGO}</code>
+        <span id="pLogo" class="field-auto" style="display:inline-block;vertical-align:middle;margin-left:8px;">—</span>
+      </p>
+
+      <h2 class="doc-section">§1 — Redazione</h2>
+      <p class="hint-str">Tag <code>{{REDATTO_DA}}</code> — modifica se il modello lo prevede.</p>
+      <textarea id="inpRedattoDa" class="ciclo-textarea" autocomplete="off"
+        oninput="onRedattoDaInput()"></textarea>
+
+      <h2 class="doc-section">§2 — Valutazione del rischio di incendio</h2>
+      <h3 class="doc-sub">§2.1 — Descrizione dell’attività e dei luoghi di lavoro</h3>
+      <p class="hint-str">
+        Nel Word sostituisci i <strong>3 paragrafi</strong> sotto il titolo §2.1 con i tag (un tag per paragrafo, in un solo run):
+        <span class="tag-pill">{{TESTO_2_1_P1}}</span>
+        <span class="tag-pill">{{TESTO_2_1_P2}}</span>
+        <span class="tag-pill">{{TESTO_2_1_P3}}</span>.
+        Nei testi sotto puoi usare <code>{{RAGIONE_SOCIALE}}</code> come segnaposto: in generazione viene sostituito con l’anagrafica.
+      </p>
+      <p class="hint-str"><strong>Paragrafo 1</strong> — tag <code>{{TESTO_2_1_P1}}</code></p>
+      <textarea id="taTesto21P1" class="ciclo-textarea" style="min-height:88px;"
+        oninput="onTesto21Input()"></textarea>
+      <p class="hint-str" style="margin-top:10px;">Anteprima (con ragione sociale):</p>
+      <div id="prevTesto21P1" class="preview-box">—</div>
+
+      <p class="hint-str" style="margin-top:12px;"><strong>Paragrafo 2</strong> — tag <code>{{TESTO_2_1_P2}}</code></p>
+      <textarea id="taTesto21P2" class="ciclo-textarea" style="min-height:72px;"
+        oninput="onTesto21Input()"></textarea>
+      <p class="hint-str" style="margin-top:10px;">Anteprima:</p>
+      <div id="prevTesto21P2" class="preview-box">—</div>
+
+      <p class="hint-str" style="margin-top:12px;"><strong>Paragrafo 3</strong> — tag <code>{{TESTO_2_1_P3}}</code></p>
+      <textarea id="taTesto21P3" class="ciclo-textarea" style="min-height:72px;"
+        oninput="onTesto21Input()"></textarea>
+      <p class="hint-str" style="margin-top:10px;">Anteprima (con ragione sociale):</p>
+      <div id="prevTesto21P3" class="preview-box">—</div>
+
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto21()">Ripristina testi predefiniti §2.1</button>
+      </div>
+
+      <h3 class="doc-sub">§2.2 — Valutazione preliminare del rischio di incendio</h3>
+      <p class="hint-str">
+        I due paragrafi introduttivi (prima della tabella) restano <strong>fissi nel Word</strong> se non li tagghi.
+        Tabella: nella <strong>prima riga dati</strong> sotto l’intestazione, sostituisci le 6 righe con il loop
+        <code>{{#RIGHE_REQUISITI_BASSO_RISCHIO}}{{ELEMENTO}}{{MARK_SI}}{{MARK_NO}}{{/RIGHE_REQUISITI_BASSO_RISCHIO}}</code>
+        (intestazione «ELEMENTO CONSIDERATO / SI / NO» invariata).
+      </p>
+      <p class="hint-str">Sotto la tabella, sostituisci i due paragrafi con:</p>
+      <p>
+        <span class="tag-pill">{{TESTO_2_2_NOTA_DPR}}</span>
+        <span class="tag-pill">{{TESTO_2_2_CONCLUSIONE}}</span>
+      </p>
+
+      <div id="wrapTabellaRequisiti"></div>
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTabellaRequisiti()">Ripristina tabella predefinita</button>
+      </div>
+
+      <p class="hint-str" style="margin-top:14px;"><strong>Paragrafo — D.P.R. 151</strong> <code>{{TESTO_2_2_NOTA_DPR}}</code></p>
+      <textarea id="taTesto22NotaDpr" class="ciclo-textarea" style="min-height:56px;"
+        oninput="onTesto22Input()"></textarea>
+
+      <p class="hint-str" style="margin-top:12px;"><strong>Paragrafo — conclusione requisiti</strong> <code>{{TESTO_2_2_CONCLUSIONE}}</code></p>
+      <textarea id="taTesto22Conclusione" class="ciclo-textarea" style="min-height:56px;"
+        oninput="onTesto22Input()"></textarea>
+
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto22()">Ripristina testi predefiniti §2.2 (tabella + paragrafi)</button>
+      </div>
+
+      <h3 class="doc-sub">§2.3 — Individuazione dei pericoli di incendio</h3>
+      <p class="hint-str">I titoli §2.3 / §2.3.1 / §2.3.2 restano heading fissi nel Word.</p>
+
+      <h3 class="doc-sub">§2.3.1 — Sorgenti di innesco</h3>
+      <p class="hint-str">Sostituisci i <strong>2 paragrafi</strong> sotto il titolo con (un tag per paragrafo, un solo run):</p>
+      <p>
+        <span class="tag-pill">{{TESTO_2_3_1_P1}}</span>
+        <span class="tag-pill">{{TESTO_2_3_1_P2}}</span>
+      </p>
+      <p class="hint-str"><strong>Paragrafo 1</strong></p>
+      <textarea id="taTesto231P1" class="ciclo-textarea" style="min-height:88px;"
+        oninput="onTesto23Input()"></textarea>
+      <p class="hint-str" style="margin-top:12px;"><strong>Paragrafo 2</strong></p>
+      <textarea id="taTesto231P2" class="ciclo-textarea" style="min-height:88px;"
+        oninput="onTesto23Input()"></textarea>
+
+      <h3 class="doc-sub">§2.3.2 — Materiali combustibili o infiammabili</h3>
+      <p class="hint-str">Sostituisci i <strong>2 paragrafi</strong> sotto il titolo con:</p>
+      <p>
+        <span class="tag-pill">{{TESTO_2_3_2_P1}}</span>
+        <span class="tag-pill">{{TESTO_2_3_2_P2}}</span>
+      </p>
+      <p class="hint-str"><strong>Paragrafo 1</strong></p>
+      <textarea id="taTesto232P1" class="ciclo-textarea" style="min-height:64px;"
+        oninput="onTesto23Input()"></textarea>
+      <p class="hint-str" style="margin-top:12px;"><strong>Paragrafo 2</strong></p>
+      <textarea id="taTesto232P2" class="ciclo-textarea" style="min-height:72px;"
+        oninput="onTesto23Input()"></textarea>
+
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto23()">Ripristina testi predefiniti §2.3.1–2.3.2</button>
+      </div>
+
+      <h3 class="doc-sub">§2.3.3 — Determinazione del carico di incendio (CASO 1 / CASO 2)</h3>
+      <p class="hint-str">
+        Nel Word avvolgi <strong>tutto il blocco CASO 1</strong> (titolo + premessa UNI + assimilazione) con
+        <code>{{#CASO_CARICO_TABELLARE}} … {{/CASO_CARICO_TABELLARE}}</code>
+        e <strong>tutto il blocco CASO 2</strong> (titolo + frase sede + eventuali tabelle/valori CLARAF dopo) con
+        <code>{{#CASO_CARICO_CLARAF}} … {{/CASO_CARICO_CLARAF}}</code>.
+        In wizard scegli un solo metodo: l’altro blocco non compare nel documento.
+      </p>
+
+      <div class="metodo-carico-box">
+        <strong>Metodo di valutazione carico di incendio</strong>
+        <label>
+          <input type="radio" name="metodoCarico" value="tabellare" onchange="setMetodoCarico('tabellare')">
+          CASO 1 — Metodo tabellare (appendice E UNI EN 1991-1-2)
+        </label>
+        <label>
+          <input type="radio" name="metodoCarico" value="claraf" onchange="setMetodoCarico('claraf')">
+          CASO 2 — CLARAF
+        </label>
+      </div>
+
+      <div id="panelCasoTabellare" class="caso-panel">
+        <p class="hint-str"><strong>CASO 1</strong> — nel Word, dentro il loop, lascia fissa la premessa UNI e usa il tag:</p>
+        <p><span class="tag-pill">{{TESTO_CASO1_ASSIMILAZIONE}}</span></p>
+        <p class="static-snippet" id="snippetCaso1Premessa">—</p>
+        <p class="hint-str"><strong>Assimilazione destinazione d’uso</strong> (modificabile):</p>
+        <textarea id="taCaso1Assimilazione" class="ciclo-textarea" style="min-height:56px;"
+          oninput="onCaricoIncendioInput()"></textarea>
+      </div>
+
+      <div id="panelCasoClaraf" class="caso-panel hidden">
+        <p class="hint-str"><strong>CASO 2</strong> — nel Word, dentro il loop, sostituisci la frase sede con:</p>
+        <p><span class="tag-pill">{{TESTO_CASO2_INTRO}}</span></p>
+        <p class="hint-str">Template (puoi modificarlo; usa <code>{{RAGIONE_SOCIALE}}</code> e <code>{{SEDE_OPERATIVA}}</code>):</p>
+        <textarea id="taCaso2Intro" class="ciclo-textarea" style="min-height:48px;"
+          oninput="onCaricoIncendioInput()"></textarea>
+        <p class="hint-str" style="margin-top:8px;">Anteprima con anagrafica:</p>
+        <div id="prevCaso2Intro" class="preview-box">—</div>
+        <p class="hint-str" style="margin-top:8px;">Dopo questa frase nel Word restano tabelle/valori CLARAF (fissi nel modello, dentro lo stesso loop).</p>
+      </div>
+
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaCaricoIncendio()">Ripristina predefiniti carico incendio</button>
+      </div>
+
+      <h3 class="doc-sub">§2.3.4 — Interazione inneschi-combustibili</h3>
+      <p class="hint-str">
+        Titolo heading fisso nel Word. Sostituisci il paragrafo sotto con (un solo run):
+        <span class="tag-pill">{{TESTO_2_3_4}}</span>
+      </p>
+      <textarea id="taTesto234" class="ciclo-textarea" style="min-height:72px;"
+        oninput="onTesto234Input()"></textarea>
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto234()">Ripristina testo predefinito §2.3.4</button>
+      </div>
+
+      <h3 class="doc-sub">§2.4 — Descrizione del contesto e dell’ambiente</h3>
+      <p class="hint-str">
+        Titolo heading fisso. Sostituisci i <strong>2 paragrafi</strong> sotto con (un tag per paragrafo, un solo run):
+        <span class="tag-pill">{{TESTO_2_4_P1}}</span>
+        <span class="tag-pill">{{TESTO_2_4_P2}}</span>.
+        Nel primo paragrafo puoi usare <code>{{SEDE_OPERATIVA}}</code> (sostituita in generazione).
+      </p>
+      <p class="hint-str"><strong>Paragrafo 1</strong> — contesto edificio / accessibilità VV.F.</p>
+      <textarea id="taTesto24P1" class="ciclo-textarea" style="min-height:100px;"
+        oninput="onTesto24Input()"></textarea>
+      <p class="hint-str" style="margin-top:10px;">Anteprima (con sede operativa):</p>
+      <div id="prevTesto24P1" class="preview-box">—</div>
+
+      <p class="hint-str" style="margin-top:12px;"><strong>Paragrafo 2</strong> — locali, esodo, aerazione</p>
+      <textarea id="taTesto24P2" class="ciclo-textarea" style="min-height:88px;"
+        oninput="onTesto24Input()"></textarea>
+
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto24()">Ripristina testi predefiniti §2.4</button>
+      </div>
+
+      <h2 class="doc-section">§2.5 — Occupanti esposti al rischio d’incendio</h2>
+      <p class="hint-str">
+        I paragrafi «Gli occupanti esposti…» e «I lavoratori presenti…» (§2.5.1) restano <strong>fissi</strong> nel Word.
+        Sostituisci ogni <strong>primo punto</strong> di ciascun elenco con il loop (stile elenco puntato del modello; un solo run per <code>{{TESTO}}</code>):
+      </p>
+      <p class="hint-str">
+        <span class="tag-pill">{{#VOCI_OCCUPANTI_ESPOSTI}}{{TESTO}}{{/VOCI_OCCUPANTI_ESPOSTI}}</span>
+        — cancella gli altri punti fissi sotto «Gli occupanti esposti…».
+      </p>
+
+      <p class="para-label" style="margin-top:12px;font-weight:600;">Elenco §2.5 — chi è esposto</p>
+      <div class="inc-actions">
+        <button type="button" onclick="addVoceOccupanti()">+ Aggiungi punto</button>
+        <button type="button" class="secondary" onclick="ripristinaVociOccupanti()">Ripristina 3 punti standard</button>
+      </div>
+      <div id="wrapVociOccupanti"></div>
+      <div class="voce-preview" id="prevVociOccupanti">—</div>
+
+      <h3 class="doc-sub">§2.5.1 — Tipologia degli occupanti</h3>
+      <p class="hint-str">
+        <span class="tag-pill">{{#VOCI_TIPOLOGIA_OCCUPANTI}}{{TESTO}}{{/VOCI_TIPOLOGIA_OCCUPANTI}}</span>
+        — cancella gli altri punti fissi sotto «I lavoratori presenti…».
+      </p>
+      <div class="inc-actions">
+        <button type="button" onclick="addVoceTipologia()">+ Aggiungi punto</button>
+        <button type="button" class="secondary" onclick="ripristinaVociTipologia()">Ripristina 3 punti standard</button>
+      </div>
+      <div id="wrapVociTipologia"></div>
+      <div class="voce-preview" id="prevVociTipologia">—</div>
+
+      <h3 class="doc-sub">§2.9.5 — Attrezzature mobili di estinzione</h3>
+      <p class="hint-str">
+        Titolo heading fisso nel Word. Sostituisci il paragrafo sotto con (un solo run):
+        <span class="tag-pill">{{TESTO_2_9_5}}</span>
+      </p>
+      <textarea id="taTesto295" class="ciclo-textarea" style="min-height:88px;"
+        oninput="onTesto295Input()"></textarea>
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto295()">Ripristina testo predefinito §2.9.5</button>
+      </div>
+
+      <h2 class="doc-section">§3 — Strategia antincendio</h2>
+
+      <h3 class="doc-sub">§3.1 — Misure specifiche per persone con esigenze speciali</h3>
+      <p class="hint-str">
+        Titolo heading fisso. Sostituisci i <strong>2 paragrafi</strong> sotto con (un tag per paragrafo, un solo run):
+        <span class="tag-pill">{{TESTO_3_1_P1}}</span>
+        <span class="tag-pill">{{TESTO_3_1_P2}}</span>.
+      </p>
+      <p class="hint-str"><strong>Paragrafo 1</strong> — presenza occasionale / esodo orizzontale</p>
+      <textarea id="taTesto31P1" class="ciclo-textarea" style="min-height:80px;"
+        oninput="onTesto31Input()"></textarea>
+
+      <p class="hint-str" style="margin-top:12px;"><strong>Paragrafo 2</strong> — procedure esigenze speciali</p>
+      <textarea id="taTesto31P2" class="ciclo-textarea" style="min-height:56px;"
+        oninput="onTesto31Input()"></textarea>
+
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto31()">Ripristina testi predefiniti §3.1</button>
+      </div>
+
+      <h3 class="doc-sub">§3.2 — Caratteristiche del sistema di esodo</h3>
+      <p class="hint-str">Intro e primi 5 punti elenco <strong>fissi</strong>. Solo l’<strong>ultimo punto</strong> →
+        <span class="tag-pill">{{TESTO_3_2_ULTIMO_PUNTO}}</span> (stile elenco puntato).</p>
+      <textarea id="taTesto32Ultimo" class="ciclo-textarea" style="min-height:72px;"
+        oninput="onStrategia3Input()"></textarea>
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto32()">Ripristina ultimo punto §3.2</button>
+      </div>
+
+      <h3 class="doc-sub">§3.3.1 — Affollamento ambienti di lavoro</h3>
+      <p class="hint-str">Paragrafo introduttivo (densità 0,7) <strong>fisso</strong>. Tabella: prima riga dati sotto intestazione con loop
+        <code>{{#RIGHE_AFFOLLAMENTO_331}}{{EDIFICIO_AREA}}{{SUPERFICIE}}{{NUMERO_PERSONE}}{{/RIGHE_AFFOLLAMENTO_331}}</code>.
+      </p>
+      <div class="inc-actions">
+        <button type="button" onclick="addRigaAffollamento()">+ Aggiungi riga</button>
+        <button type="button" class="secondary" onclick="ripristinaTabellaAffollamento()">Ripristina riga standard</button>
+      </div>
+      <div id="wrapTabellaAffollamento"></div>
+
+      <p class="hint-str" style="margin-top:12px;">Sotto tabella — paragrafo 1: <span class="tag-pill">{{TESTO_3_3_1_P2}}</span></p>
+      <textarea id="taTesto331P2" class="ciclo-textarea" style="min-height:56px;" oninput="onStrategia3Input()"></textarea>
+
+      <p class="hint-str" style="margin-top:10px;">Sotto tabella — paragrafo 2 (nel Word: run <strong>grassetto + sottolineato</strong>):
+        <span class="tag-pill">{{TESTO_3_3_1_P3}}</span></p>
+      <p class="hint-bold">Applica grassetto e sottolineato al paragrafo che contiene il tag; il wizard invia solo il testo.</p>
+      <textarea id="taTesto331P3" class="ciclo-textarea" style="min-height:56px;" oninput="onStrategia3Input()"></textarea>
+
+      <h3 class="doc-sub">§3.4 — Progettazione del sistema di esodo</h3>
+      <p class="hint-str"><span class="tag-pill">{{TESTO_3_4_P1}}</span> · <span class="tag-pill">{{TESTO_3_4_P2}}</span> (due paragrafi; elimina eventuale segnaposto [VZ2.1] nel modello).</p>
+      <textarea id="taTesto34P1" class="ciclo-textarea" style="min-height:56px;" oninput="onStrategia3Input()"></textarea>
+      <textarea id="taTesto34P2" class="ciclo-textarea" style="min-height:72px;margin-top:8px;" oninput="onStrategia3Input()"></textarea>
+
+      <h3 class="doc-sub">§3.4.2 — Larghezza delle vie di esodo</h3>
+      <p class="hint-str">Paragrafi introduttivi <strong>fissi</strong>. Ultima frase → <span class="tag-pill">{{TESTO_3_4_2_CONCLUSIONE}}</span></p>
+      <textarea id="taTesto342" class="ciclo-textarea" style="min-height:48px;" oninput="onStrategia3Input()"></textarea>
+
+      <h3 class="doc-sub">§3.5 — Controllo dell’incendio</h3>
+      <p class="hint-str">Primo paragrafo → <span class="tag-pill">{{TESTO_3_5_P1}}</span> (resto sezione fisso).</p>
+      <textarea id="taTesto35" class="ciclo-textarea" style="min-height:56px;" oninput="onStrategia3Input()"></textarea>
+
+      <h3 class="doc-sub">§3.6 — Rivelazione ed allarme</h3>
+      <p class="hint-str"><span class="tag-pill">{{TESTO_3_6_P1}}</span></p>
+      <textarea id="taTesto36" class="ciclo-textarea" style="min-height:48px;" oninput="onStrategia3Input()"></textarea>
+
+      <h3 class="doc-sub">§3.7 — Controllo di fumi e calore</h3>
+      <p class="hint-str"><span class="tag-pill">{{TESTO_3_7_P1}}</span></p>
+      <textarea id="taTesto37" class="ciclo-textarea" style="min-height:72px;" oninput="onStrategia3Input()"></textarea>
+
+      <h3 class="doc-sub">§3.8 — Operatività antincendio</h3>
+      <p class="hint-str"><span class="tag-pill">{{TESTO_3_8_P1}}</span></p>
+      <textarea id="taTesto38" class="ciclo-textarea" style="min-height:72px;" oninput="onStrategia3Input()"></textarea>
+
+      <div class="inc-actions" style="margin-top:14px;">
+        <button type="button" class="secondary" onclick="ripristinaStrategia3()">Ripristina tutti i testi §3.2–3.8</button>
+      </div>
+
+      <h2 class="doc-section">§4 — Gestione della sicurezza antincendio</h2>
+      <p class="hint-str">
+        Intro, primo elenco (7 punti) e paragrafo «In particolare, ai sensi del D.M. 01/09/2021…» <strong>fissi</strong>.
+        Secondo elenco: primi punti fissi; sostituisci gli <strong>ultimi 3</strong> con (stile elenco, un run ciascuno):
+        <span class="tag-pill">{{TESTO_4_LISTA2_P1}}</span>
+        <span class="tag-pill">{{TESTO_4_LISTA2_P2}}</span>
+        <span class="tag-pill">{{TESTO_4_LISTA2_P3}}</span>
+      </p>
+      <p class="hint-str"><strong>Punto 1</strong> — registro controlli</p>
+      <textarea id="taTesto4L2P1" class="ciclo-textarea" style="min-height:72px;" oninput="onSezione45Input()"></textarea>
+      <p class="hint-str" style="margin-top:10px;"><strong>Punto 2</strong> — tecnici manutentori</p>
+      <textarea id="taTesto4L2P2" class="ciclo-textarea" style="min-height:44px;" oninput="onSezione45Input()"></textarea>
+      <p class="hint-str" style="margin-top:10px;"><strong>Punto 3</strong> — sorveglianza antincendio</p>
+      <textarea id="taTesto4L2P3" class="ciclo-textarea" style="min-height:72px;" oninput="onSezione45Input()"></textarea>
+      <div class="inc-actions">
+        <button type="button" class="secondary" onclick="ripristinaTesto4Lista2()">Ripristina 3 punti §4</button>
+      </div>
+
+      <h2 class="doc-section">§5 — Conclusioni</h2>
+      <p class="hint-str">
+        Due paragrafi introduttivi <strong>fissi</strong>. Elenco misure: loop sul primo punto modello (stile elenco «o»), cancella gli altri punti fissi:
+        <code>{{#VOCI_CONCLUSIONI_MISURE}}{{TESTO}}{{/VOCI_CONCLUSIONI_MISURE}}</code>
+      </p>
+      <p class="hint-str">Deseleziona i punti non pertinenti; modifica il testo; aggiungi voci personalizzate.</p>
+      <div class="inc-actions">
+        <button type="button" onclick="addMisuraConclusioni()">+ Aggiungi misura</button>
+        <button type="button" class="secondary" onclick="ripristinaMisureConclusioni()">Ripristina 8 misure standard</button>
+      </div>
+      <div id="wrapMisureConclusioni"></div>
+      <div class="misure-conc-preview" id="prevMisureConclusioni">—</div>
+
+      <div class="inc-actions" style="margin-top:14px;">
+        <button type="button" class="secondary" onclick="ripristinaSezione45()">Ripristina §4 + §5</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const CODICE = 'MOD_INCENDIO';
+  let DATA = null;
+  let ADAPTER = window.GEN_ADAPTERS?.[CODICE] || null;
+  let activeView = 'compile';
+  const WIZARD = {
+    modulo_numero: '',
+    redatto_da: '',
+    testo_2_1_p1: '',
+    testo_2_1_p2: '',
+    testo_2_1_p3: '',
+    righe_requisiti_basso_rischio: [],
+    testo_2_2_nota_dpr: '',
+    testo_2_2_conclusione: '',
+    testo_2_3_1_p1: '',
+    testo_2_3_1_p2: '',
+    testo_2_3_2_p1: '',
+    testo_2_3_2_p2: '',
+    testo_2_3_4: '',
+    testo_2_4_p1: '',
+    testo_2_4_p2: '',
+    voci_occupanti_esposti: [],
+    voci_tipologia_occupanti: [],
+    testo_2_9_5: '',
+    testo_3_1_p1: '',
+    testo_3_1_p2: '',
+    testo_3_2_ultimo_punto: '',
+    righe_affollamento_331: [],
+    testo_3_3_1_p2: '',
+    testo_3_3_1_p3: '',
+    testo_3_4_p1: '',
+    testo_3_4_p2: '',
+    testo_3_4_2_conclusione: '',
+    testo_3_5_p1: '',
+    testo_3_6_p1: '',
+    testo_3_7_p1: '',
+    testo_3_8_p1: '',
+    testo_4_lista2_p1: '',
+    testo_4_lista2_p2: '',
+    testo_4_lista2_p3: '',
+    misure_conclusioni: [],
+    metodo_carico_incendio: 'tabellare',
+    testo_caso1_assimilazione: '',
+    testo_caso2_intro: '',
+  };
+
+  const TESTO_CASO1_PREMESSA_STATIC =
+    'Nella realt\u00e0 in esame si \u00e8 fatto ricorso alle indicazioni dell\u2019appendice E della norma UNI EN 1991-1-2 ove \u00e8 presente la tabella S.2-10 che fornisce le densit\u00e0 di carico di incendio in relazione alla destinazione d\u2019uso dell\u2019ambiente di lavoro sia come valore medio che come frattile 80% espressi in MJ/m2.';
+
+  function esc(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const s = String(padded || '').trim();
+    const n = parseInt(s, 10);
+    return Number.isFinite(n) ? String(n) : s;
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    const url = DATA?.LOGO_PREVIEW_URL || '';
+    if (!url) {
+      el.textContent = 'Nessun logo';
+      return;
+    }
+    el.innerHTML = '<img src="' + esc(url) + '" alt="logo" style="max-height:48px;max-width:140px;">';
+  }
+
+  function syncTesto21FromDom() {
+    WIZARD.testo_2_1_p1 = document.getElementById('taTesto21P1')?.value || '';
+    WIZARD.testo_2_1_p2 = document.getElementById('taTesto21P2')?.value || '';
+    WIZARD.testo_2_1_p3 = document.getElementById('taTesto21P3')?.value || '';
+  }
+
+  function renderTesto21Preview() {
+    const rs = DATA?.RAGIONE_SOCIALE || '';
+    const fill = ADAPTER?.fillRagioneSocialeInTesto || ((t) => t);
+    const p1 = document.getElementById('prevTesto21P1');
+    const p2 = document.getElementById('prevTesto21P2');
+    const p3 = document.getElementById('prevTesto21P3');
+    if (p1) p1.textContent = fill(WIZARD.testo_2_1_p1, rs) || '—';
+    if (p2) p2.textContent = fill(WIZARD.testo_2_1_p2, rs) || '—';
+    if (p3) p3.textContent = fill(WIZARD.testo_2_1_p3, rs) || '—';
+  }
+
+  function syncTesto22FromDom() {
+    WIZARD.testo_2_2_nota_dpr = document.getElementById('taTesto22NotaDpr')?.value || '';
+    WIZARD.testo_2_2_conclusione = document.getElementById('taTesto22Conclusione')?.value || '';
+  }
+
+  function syncCaricoIncendioFromDom() {
+    const checked = document.querySelector('input[name="metodoCarico"]:checked');
+    WIZARD.metodo_carico_incendio = checked ? checked.value : 'tabellare';
+    WIZARD.testo_caso1_assimilazione = document.getElementById('taCaso1Assimilazione')?.value || '';
+    WIZARD.testo_caso2_intro = document.getElementById('taCaso2Intro')?.value || '';
+  }
+
+  function renderMetodoCaricoUi() {
+    const metodo = WIZARD.metodo_carico_incendio || 'tabellare';
+    document.querySelectorAll('input[name="metodoCarico"]').forEach((el) => {
+      el.checked = el.value === metodo;
+    });
+    document.getElementById('panelCasoTabellare')?.classList.toggle('hidden', metodo !== 'tabellare');
+    document.getElementById('panelCasoClaraf')?.classList.toggle('hidden', metodo !== 'claraf');
+    const snip = document.getElementById('snippetCaso1Premessa');
+    if (snip) snip.textContent = TESTO_CASO1_PREMESSA_STATIC;
+    const fill = ADAPTER?.fillAnagraficaInTesto || ((t) => t);
+    const prev = document.getElementById('prevCaso2Intro');
+    if (prev) {
+      prev.textContent = fill(
+        WIZARD.testo_caso2_intro,
+        DATA?.RAGIONE_SOCIALE || '',
+        DATA?.SEDE_OPERATIVA || ''
+      ) || '—';
+    }
+  }
+
+  function syncTesto23FromDom() {
+    WIZARD.testo_2_3_1_p1 = document.getElementById('taTesto231P1')?.value || '';
+    WIZARD.testo_2_3_1_p2 = document.getElementById('taTesto231P2')?.value || '';
+    WIZARD.testo_2_3_2_p1 = document.getElementById('taTesto232P1')?.value || '';
+    WIZARD.testo_2_3_2_p2 = document.getElementById('taTesto232P2')?.value || '';
+    WIZARD.testo_2_3_4 = document.getElementById('taTesto234')?.value || '';
+  }
+
+  function syncTesto24FromDom() {
+    WIZARD.testo_2_4_p1 = document.getElementById('taTesto24P1')?.value || '';
+    WIZARD.testo_2_4_p2 = document.getElementById('taTesto24P2')?.value || '';
+  }
+
+  function syncTesto295FromDom() {
+    WIZARD.testo_2_9_5 = document.getElementById('taTesto295')?.value || '';
+  }
+
+  function syncTesto31FromDom() {
+    WIZARD.testo_3_1_p1 = document.getElementById('taTesto31P1')?.value || '';
+    WIZARD.testo_3_1_p2 = document.getElementById('taTesto31P2')?.value || '';
+  }
+
+  function syncStrategia3FromDom() {
+    WIZARD.testo_3_2_ultimo_punto = document.getElementById('taTesto32Ultimo')?.value || '';
+    WIZARD.testo_3_3_1_p2 = document.getElementById('taTesto331P2')?.value || '';
+    WIZARD.testo_3_3_1_p3 = document.getElementById('taTesto331P3')?.value || '';
+    WIZARD.testo_3_4_p1 = document.getElementById('taTesto34P1')?.value || '';
+    WIZARD.testo_3_4_p2 = document.getElementById('taTesto34P2')?.value || '';
+    WIZARD.testo_3_4_2_conclusione = document.getElementById('taTesto342')?.value || '';
+    WIZARD.testo_3_5_p1 = document.getElementById('taTesto35')?.value || '';
+    WIZARD.testo_3_6_p1 = document.getElementById('taTesto36')?.value || '';
+    WIZARD.testo_3_7_p1 = document.getElementById('taTesto37')?.value || '';
+    WIZARD.testo_3_8_p1 = document.getElementById('taTesto38')?.value || '';
+    syncRigheAffollamentoFromDom();
+  }
+
+  function syncRigheAffollamentoFromDom() {
+    const wrap = document.getElementById('wrapTabellaAffollamento');
+    if (!wrap) return;
+    const rows = [];
+    wrap.querySelectorAll('tr[data-aff-idx]').forEach((tr) => {
+      const idx = parseInt(tr.getAttribute('data-aff-idx'), 10);
+      rows.push({
+        edificio_area: tr.querySelector('.inp-aff-area')?.value || '',
+        superficie: tr.querySelector('.inp-aff-sup')?.value || '',
+        numero_persone: tr.querySelector('.inp-aff-num')?.value || '',
+        _idx: idx,
+      });
+    });
+    WIZARD.righe_affollamento_331 = rows.map((r) => ({
+      edificio_area: r.edificio_area,
+      superficie: r.superficie,
+      numero_persone: r.numero_persone,
+    }));
+  }
+
+  function renderTabellaAffollamento() {
+    const wrap = document.getElementById('wrapTabellaAffollamento');
+    if (!wrap || !ADAPTER) return;
+    const righe = WIZARD.righe_affollamento_331.length
+      ? WIZARD.righe_affollamento_331
+      : ADAPTER.mergeRigheAffollamento331Wizard({ righe_affollamento_331: [] });
+    if (!WIZARD.righe_affollamento_331.length) {
+      WIZARD.righe_affollamento_331 = righe.map((r) => ({ ...r }));
+    }
+    let html =
+      '<table class="aff-table"><thead><tr>' +
+      '<th>Edificio / area</th><th>Superficie lorda</th><th>N. persone</th><th></th></tr></thead><tbody>';
+    righe.forEach((row, idx) => {
+      html +=
+        '<tr data-aff-idx="' + idx + '">' +
+        '<td><input type="text" class="inp-aff-area" value="' + esc(row.edificio_area) + '" oninput="onAffRowInput(' + idx + ')"></td>' +
+        '<td><input type="text" class="inp-aff-sup" value="' + esc(row.superficie) + '" oninput="onAffRowInput(' + idx + ')"></td>' +
+        '<td><input type="text" class="inp-aff-num" value="' + esc(row.numero_persone) + '" oninput="onAffRowInput(' + idx + ')"></td>' +
+        '<td class="act"><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" onclick="removeRigaAffollamento(' + idx + ')">✕</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function fillStrategia3DomFromWizard() {
+    const el = (id, v) => { const e = document.getElementById(id); if (e) e.value = v || ''; };
+    el('taTesto32Ultimo', WIZARD.testo_3_2_ultimo_punto);
+    el('taTesto331P2', WIZARD.testo_3_3_1_p2);
+    el('taTesto331P3', WIZARD.testo_3_3_1_p3);
+    el('taTesto34P1', WIZARD.testo_3_4_p1);
+    el('taTesto34P2', WIZARD.testo_3_4_p2);
+    el('taTesto342', WIZARD.testo_3_4_2_conclusione);
+    el('taTesto35', WIZARD.testo_3_5_p1);
+    el('taTesto36', WIZARD.testo_3_6_p1);
+    el('taTesto37', WIZARD.testo_3_7_p1);
+    el('taTesto38', WIZARD.testo_3_8_p1);
+    renderTabellaAffollamento();
+  }
+
+  function loadStrategia3FromRaw(raw, prev) {
+    if (!ADAPTER) return;
+    const r = raw || {};
+    WIZARD.testo_3_2_ultimo_punto =
+      prev.testo_3_2_ultimo_punto != null && String(prev.testo_3_2_ultimo_punto).trim()
+        ? String(prev.testo_3_2_ultimo_punto)
+        : (r.testo_3_2_ultimo_punto || ADAPTER.TESTO_3_2_ULTIMO_PUNTO_DEFAULT || '');
+    const righePrev = prev.righe_affollamento_331 || r.righe_affollamento_331;
+    WIZARD.righe_affollamento_331 = ADAPTER.mergeRigheAffollamento331Wizard({
+      righe_affollamento_331: Array.isArray(righePrev) && righePrev.length ? righePrev : undefined,
+    });
+    WIZARD.testo_3_3_1_p2 =
+      prev.testo_3_3_1_p2 != null && String(prev.testo_3_3_1_p2).trim()
+        ? String(prev.testo_3_3_1_p2)
+        : (r.testo_3_3_1_p2 || ADAPTER.TESTO_3_3_1_P2_DEFAULT || '');
+    WIZARD.testo_3_3_1_p3 =
+      prev.testo_3_3_1_p3 != null && String(prev.testo_3_3_1_p3).trim()
+        ? String(prev.testo_3_3_1_p3)
+        : (r.testo_3_3_1_p3 || ADAPTER.TESTO_3_3_1_P3_DEFAULT || '');
+    WIZARD.testo_3_4_p1 =
+      prev.testo_3_4_p1 != null && String(prev.testo_3_4_p1).trim()
+        ? String(prev.testo_3_4_p1)
+        : (r.testo_3_4_p1 || ADAPTER.TESTO_3_4_P1_DEFAULT || '');
+    WIZARD.testo_3_4_p2 =
+      prev.testo_3_4_p2 != null && String(prev.testo_3_4_p2).trim()
+        ? String(prev.testo_3_4_p2)
+        : (r.testo_3_4_p2 || ADAPTER.TESTO_3_4_P2_DEFAULT || '');
+    WIZARD.testo_3_4_2_conclusione =
+      prev.testo_3_4_2_conclusione != null && String(prev.testo_3_4_2_conclusione).trim()
+        ? String(prev.testo_3_4_2_conclusione)
+        : (r.testo_3_4_2_conclusione || ADAPTER.TESTO_3_4_2_CONCLUSIONE_DEFAULT || '');
+    WIZARD.testo_3_5_p1 =
+      prev.testo_3_5_p1 != null && String(prev.testo_3_5_p1).trim()
+        ? String(prev.testo_3_5_p1)
+        : (r.testo_3_5_p1 || ADAPTER.TESTO_3_5_P1_DEFAULT || '');
+    WIZARD.testo_3_6_p1 =
+      prev.testo_3_6_p1 != null && String(prev.testo_3_6_p1).trim()
+        ? String(prev.testo_3_6_p1)
+        : (r.testo_3_6_p1 || ADAPTER.TESTO_3_6_P1_DEFAULT || '');
+    WIZARD.testo_3_7_p1 =
+      prev.testo_3_7_p1 != null && String(prev.testo_3_7_p1).trim()
+        ? String(prev.testo_3_7_p1)
+        : (r.testo_3_7_p1 || ADAPTER.TESTO_3_7_P1_DEFAULT || '');
+    WIZARD.testo_3_8_p1 =
+      prev.testo_3_8_p1 != null && String(prev.testo_3_8_p1).trim()
+        ? String(prev.testo_3_8_p1)
+        : (r.testo_3_8_p1 || ADAPTER.TESTO_3_8_P1_DEFAULT || '');
+    fillStrategia3DomFromWizard();
+  }
+
+  function renderTesto24Preview() {
+    const fill = ADAPTER?.fillAnagraficaInTesto || ((t, rs, sede) => t);
+    const el = document.getElementById('prevTesto24P1');
+    if (el) {
+      el.textContent = fill(WIZARD.testo_2_4_p1, '', DATA?.SEDE_OPERATIVA || '') || '—';
+    }
+  }
+
+  function syncVociElencoFromDom(wrapId, wizardKey) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    const rows = [];
+    wrap.querySelectorAll('tr[data-voce-idx]').forEach((tr) => {
+      const idx = parseInt(tr.getAttribute('data-voce-idx'), 10);
+      const src = WIZARD[wizardKey]?.[idx] || {};
+      rows.push({
+        id: src.id || 'v' + idx,
+        testo: tr.querySelector('.inp-voce-testo')?.value || '',
+        attivo: tr.querySelector('.inp-voce-attivo')?.checked !== false,
+      });
+    });
+    WIZARD[wizardKey] = rows;
+  }
+
+  function renderVoceElencoTable(wrapId, rows, wizardKey) {
+    const wrap = document.getElementById(wrapId);
+    if (!wrap) return;
+    let html =
+      '<table class="voce-list-table"><thead><tr>' +
+      '<th class="chk">In doc</th><th>Testo punto elenco</th><th class="act"></th></tr></thead><tbody>';
+    if (!rows.length) {
+      html += '<tr><td colspan="3" class="hint-str">Nessun punto.</td></tr>';
+    } else {
+      rows.forEach((row, idx) => {
+        const attivo = row.attivo !== false;
+        const checked = attivo ? ' checked' : '';
+        const inactive = attivo ? '' : ' class="inactive"';
+        html +=
+          '<tr data-voce-idx="' + idx + '"' + inactive + '>' +
+          '<td class="chk"><input type="checkbox" class="inp-voce-attivo"' + checked +
+          ' onchange="onVoceAttivoChange(\'' + wizardKey + '\',' + idx + ', this.checked)"></td>' +
+          '<td><input type="text" class="inp-voce-testo" value="' + esc(row.testo) + '" ' +
+          'oninput="onVoceTestoInput(\'' + wizardKey + '\',' + idx + ', this.value)"></td>' +
+          '<td class="act"><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" ' +
+          'onclick="removeVoceElenco(\'' + wizardKey + '\',' + idx + ')">✕</button></td></tr>';
+      });
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function renderVoceElencoPreview(previewId, rows) {
+    const el = document.getElementById(previewId);
+    if (!el) return;
+    const attive = (rows || []).filter((r) => r.attivo !== false && String(r.testo || '').trim());
+    if (!attive.length) {
+      el.innerHTML = '<span class="hint-str">Nessun punto selezionato per il documento.</span>';
+      return;
+    }
+    el.innerHTML =
+      '<ul>' + attive.map((r) => '<li>' + esc(r.testo) + '</li>').join('') + '</ul>';
+  }
+
+  function ensureVoci25() {
+    if (!ADAPTER) return;
+    WIZARD.voci_occupanti_esposti = ADAPTER.mergeVociElencoWizard(
+      'voci_occupanti_esposti',
+      ADAPTER.DEFAULT_VOCI_OCCUPANTI_ESPOSTI || [],
+      { voci_occupanti_esposti: WIZARD.voci_occupanti_esposti }
+    );
+    WIZARD.voci_tipologia_occupanti = ADAPTER.mergeVociElencoWizard(
+      'voci_tipologia_occupanti',
+      ADAPTER.DEFAULT_VOCI_TIPOLOGIA_OCCUPANTI || [],
+      { voci_tipologia_occupanti: WIZARD.voci_tipologia_occupanti }
+    );
+  }
+
+  function renderSezione25() {
+    ensureVoci25();
+    renderVoceElencoTable('wrapVociOccupanti', WIZARD.voci_occupanti_esposti, 'voci_occupanti_esposti');
+    renderVoceElencoTable('wrapVociTipologia', WIZARD.voci_tipologia_occupanti, 'voci_tipologia_occupanti');
+    renderVoceElencoPreview('prevVociOccupanti', WIZARD.voci_occupanti_esposti);
+    renderVoceElencoPreview('prevVociTipologia', WIZARD.voci_tipologia_occupanti);
+  }
+
+  window.onVoceAttivoChange = function (wizardKey, idx, checked) {
+    syncVociElencoFromDom(
+      wizardKey === 'voci_tipologia_occupanti' ? 'wrapVociTipologia' : 'wrapVociOccupanti',
+      wizardKey
+    );
+    if (WIZARD[wizardKey]?.[idx]) WIZARD[wizardKey][idx].attivo = !!checked;
+    renderSezione25();
+    sendUpdate();
+  };
+
+  window.onVoceTestoInput = function (wizardKey, idx, val) {
+    if (WIZARD[wizardKey]?.[idx]) WIZARD[wizardKey][idx].testo = val;
+    renderVoceElencoPreview(
+      wizardKey === 'voci_tipologia_occupanti' ? 'prevVociTipologia' : 'prevVociOccupanti',
+      WIZARD[wizardKey]
+    );
+    sendUpdate();
+  };
+
+  window.removeVoceElenco = function (wizardKey, idx) {
+    const wrapId = wizardKey === 'voci_tipologia_occupanti' ? 'wrapVociTipologia' : 'wrapVociOccupanti';
+    syncVociElencoFromDom(wrapId, wizardKey);
+    WIZARD[wizardKey].splice(idx, 1);
+    renderSezione25();
+    sendUpdate();
+  };
+
+  window.addVoceOccupanti = function () {
+    syncVociElencoFromDom('wrapVociOccupanti', 'voci_occupanti_esposti');
+    WIZARD.voci_occupanti_esposti.push({ id: 'custom_' + Date.now(), testo: '', attivo: true });
+    renderSezione25();
+    sendUpdate();
+  };
+
+  window.addVoceTipologia = function () {
+    syncVociElencoFromDom('wrapVociTipologia', 'voci_tipologia_occupanti');
+    WIZARD.voci_tipologia_occupanti.push({ id: 'custom_' + Date.now(), testo: '', attivo: true });
+    renderSezione25();
+    sendUpdate();
+  };
+
+  window.ripristinaVociOccupanti = function () {
+    if (!ADAPTER?.DEFAULT_VOCI_OCCUPANTI_ESPOSTI) return;
+    WIZARD.voci_occupanti_esposti = ADAPTER.DEFAULT_VOCI_OCCUPANTI_ESPOSTI.map((r) => ({ ...r }));
+    renderSezione25();
+    sendUpdate();
+  };
+
+  window.ripristinaVociTipologia = function () {
+    if (!ADAPTER?.DEFAULT_VOCI_TIPOLOGIA_OCCUPANTI) return;
+    WIZARD.voci_tipologia_occupanti = ADAPTER.DEFAULT_VOCI_TIPOLOGIA_OCCUPANTI.map((r) => ({ ...r }));
+    renderSezione25();
+    sendUpdate();
+  };
+
+  function syncRigheRequisitiFromDom() {
+    const rows = [];
+    document.querySelectorAll('#wrapTabellaRequisiti tr[data-req-idx]').forEach((tr) => {
+      const idx = parseInt(tr.getAttribute('data-req-idx'), 10);
+      if (!Number.isFinite(idx)) return;
+      const elemento = tr.querySelector('.inp-elemento')?.value || '';
+      const scelta = tr.querySelector('input[name="req-si-' + idx + '"]:checked')?.value === 'no' ? 'no' : 'si';
+      rows.push({ elemento, scelta });
+    });
+    WIZARD.righe_requisiti_basso_rischio = rows;
+  }
+
+  function renderTabellaRequisiti() {
+    const wrap = document.getElementById('wrapTabellaRequisiti');
+    if (!wrap || !ADAPTER) return;
+    const righe = WIZARD.righe_requisiti_basso_rischio.length
+      ? WIZARD.righe_requisiti_basso_rischio
+      : (ADAPTER.DEFAULT_RIGHE_REQUISITI_BASSO_RISCHIO || []).map((r) => ({ ...r }));
+    if (!WIZARD.righe_requisiti_basso_rischio.length) {
+      WIZARD.righe_requisiti_basso_rischio = righe.map((r) => ({ ...r }));
+    }
+
+    let html =
+      '<table class="req-table"><thead><tr>'
+      + '<th style="text-align:left;">Elemento considerato</th>'
+      + '<th>SI</th><th>NO</th></tr></thead><tbody>';
+    righe.forEach((row, idx) => {
+      const el = esc(row.elemento || '');
+      const si = row.scelta !== 'no';
+      html +=
+        '<tr data-req-idx="' + idx + '">'
+        + '<td class="elem"><input type="text" class="inp-elemento" value="' + el + '" '
+        + 'oninput="onRequisitoElementoInput(' + idx + ')"></td>'
+        + '<td class="mark"><label><input type="radio" name="req-si-' + idx + '" value="si" '
+        + (si ? 'checked ' : '') + 'onchange="onRequisitoSceltaInput(' + idx + ',\'si\')">X</label></td>'
+        + '<td class="mark"><label><input type="radio" name="req-si-' + idx + '" value="no" '
+        + (!si ? 'checked ' : '') + 'onchange="onRequisitoSceltaInput(' + idx + ',\'no\')">X</label></td>'
+        + '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function buildMerged() {
+    if (!ADAPTER || !DATA) return {};
+    syncTesto21FromDom();
+    syncTesto22FromDom();
+    syncTesto23FromDom();
+    syncTesto24FromDom();
+    syncTesto295FromDom();
+    syncTesto31FromDom();
+    syncStrategia3FromDom();
+    syncSezione45FromDom();
+    syncVociElencoFromDom('wrapVociOccupanti', 'voci_occupanti_esposti');
+    syncVociElencoFromDom('wrapVociTipologia', 'voci_tipologia_occupanti');
+    syncCaricoIncendioFromDom();
+    syncRigheRequisitiFromDom();
+    const w = {
+      modulo_numero: WIZARD.modulo_numero,
+      redatto_da: WIZARD.redatto_da,
+      testo_2_1_p1: WIZARD.testo_2_1_p1,
+      testo_2_1_p2: WIZARD.testo_2_1_p2,
+      testo_2_1_p3: WIZARD.testo_2_1_p3,
+      righe_requisiti_basso_rischio: WIZARD.righe_requisiti_basso_rischio,
+      testo_2_2_nota_dpr: WIZARD.testo_2_2_nota_dpr,
+      testo_2_2_conclusione: WIZARD.testo_2_2_conclusione,
+      testo_2_3_1_p1: WIZARD.testo_2_3_1_p1,
+      testo_2_3_1_p2: WIZARD.testo_2_3_1_p2,
+      testo_2_3_2_p1: WIZARD.testo_2_3_2_p1,
+      testo_2_3_2_p2: WIZARD.testo_2_3_2_p2,
+      testo_2_3_4: WIZARD.testo_2_3_4,
+      testo_2_4_p1: WIZARD.testo_2_4_p1,
+      testo_2_4_p2: WIZARD.testo_2_4_p2,
+      voci_occupanti_esposti: WIZARD.voci_occupanti_esposti,
+      voci_tipologia_occupanti: WIZARD.voci_tipologia_occupanti,
+      testo_2_9_5: WIZARD.testo_2_9_5,
+      testo_3_1_p1: WIZARD.testo_3_1_p1,
+      testo_3_1_p2: WIZARD.testo_3_1_p2,
+      testo_3_2_ultimo_punto: WIZARD.testo_3_2_ultimo_punto,
+      righe_affollamento_331: WIZARD.righe_affollamento_331,
+      testo_3_3_1_p2: WIZARD.testo_3_3_1_p2,
+      testo_3_3_1_p3: WIZARD.testo_3_3_1_p3,
+      testo_3_4_p1: WIZARD.testo_3_4_p1,
+      testo_3_4_p2: WIZARD.testo_3_4_p2,
+      testo_3_4_2_conclusione: WIZARD.testo_3_4_2_conclusione,
+      testo_3_5_p1: WIZARD.testo_3_5_p1,
+      testo_3_6_p1: WIZARD.testo_3_6_p1,
+      testo_3_7_p1: WIZARD.testo_3_7_p1,
+      testo_3_8_p1: WIZARD.testo_3_8_p1,
+      testo_4_lista2_p1: WIZARD.testo_4_lista2_p1,
+      testo_4_lista2_p2: WIZARD.testo_4_lista2_p2,
+      testo_4_lista2_p3: WIZARD.testo_4_lista2_p3,
+      misure_conclusioni: WIZARD.misure_conclusioni,
+      metodo_carico_incendio: WIZARD.metodo_carico_incendio,
+      testo_caso1_assimilazione: WIZARD.testo_caso1_assimilazione,
+      testo_caso2_intro: WIZARD.testo_caso2_intro,
+      logo_buffer: DATA._logo_buffer,
+      logo_path: DATA._logo_path,
+      logo_url: DATA.LOGO_PREVIEW_URL,
+    };
+    return ADAPTER.applyWizard(DATA, w);
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    document.getElementById('stopBadge').classList.toggle('visible', !!errors.length);
+    document.getElementById('okBadge').classList.toggle('visible', !errors.length);
+    document.getElementById('btnGenera').disabled = !!errors.length;
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+  }
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
+  window.onRedattoDaInput = function () {
+    WIZARD.redatto_da = document.getElementById('inpRedattoDa')?.value || '';
+    sendUpdate();
+  };
+
+  window.onTesto21Input = function () {
+    syncTesto21FromDom();
+    renderTesto21Preview();
+    sendUpdate();
+  };
+
+  window.onTesto22Input = function () {
+    syncTesto22FromDom();
+    sendUpdate();
+  };
+
+  window.onRequisitoElementoInput = function (idx) {
+    syncRigheRequisitiFromDom();
+    const tr = document.querySelector('#wrapTabellaRequisiti tr[data-req-idx="' + idx + '"]');
+    if (tr && WIZARD.righe_requisiti_basso_rischio[idx]) {
+      WIZARD.righe_requisiti_basso_rischio[idx].elemento = tr.querySelector('.inp-elemento')?.value || '';
+    }
+    sendUpdate();
+  };
+
+  window.onRequisitoSceltaInput = function (idx, scelta) {
+    if (WIZARD.righe_requisiti_basso_rischio[idx]) {
+      WIZARD.righe_requisiti_basso_rischio[idx].scelta = scelta === 'no' ? 'no' : 'si';
+    }
+    sendUpdate();
+  };
+
+  window.ripristinaTabellaRequisiti = function () {
+    if (!ADAPTER?.DEFAULT_RIGHE_REQUISITI_BASSO_RISCHIO) return;
+    WIZARD.righe_requisiti_basso_rischio = ADAPTER.DEFAULT_RIGHE_REQUISITI_BASSO_RISCHIO.map((r) => ({ ...r }));
+    renderTabellaRequisiti();
+    sendUpdate();
+  };
+
+  window.setMetodoCarico = function (val) {
+    WIZARD.metodo_carico_incendio = val === 'claraf' ? 'claraf' : 'tabellare';
+    renderMetodoCaricoUi();
+    sendUpdate();
+  };
+
+  window.onCaricoIncendioInput = function () {
+    syncCaricoIncendioFromDom();
+    renderMetodoCaricoUi();
+    sendUpdate();
+  };
+
+  window.ripristinaCaricoIncendio = function () {
+    if (!ADAPTER) return;
+    WIZARD.metodo_carico_incendio = 'tabellare';
+    WIZARD.testo_caso1_assimilazione = ADAPTER.TESTO_CASO1_ASSIMILAZIONE_DEFAULT || '';
+    WIZARD.testo_caso2_intro = ADAPTER.TESTO_CASO2_INTRO_DEFAULT || '';
+    document.getElementById('taCaso1Assimilazione').value = WIZARD.testo_caso1_assimilazione;
+    document.getElementById('taCaso2Intro').value = WIZARD.testo_caso2_intro;
+    renderMetodoCaricoUi();
+    sendUpdate();
+  };
+
+  window.onTesto23Input = function () {
+    syncTesto23FromDom();
+    sendUpdate();
+  };
+
+  window.onTesto234Input = function () {
+    syncTesto23FromDom();
+    sendUpdate();
+  };
+
+  window.onTesto24Input = function () {
+    syncTesto24FromDom();
+    renderTesto24Preview();
+    sendUpdate();
+  };
+
+  window.onTesto31Input = function () {
+    syncTesto31FromDom();
+    sendUpdate();
+  };
+
+  window.onStrategia3Input = function () {
+    syncStrategia3FromDom();
+    sendUpdate();
+  };
+
+  window.onAffRowInput = function (idx) {
+    syncRigheAffollamentoFromDom();
+    const tr = document.querySelector('#wrapTabellaAffollamento tr[data-aff-idx="' + idx + '"]');
+    if (tr && WIZARD.righe_affollamento_331[idx]) {
+      WIZARD.righe_affollamento_331[idx].edificio_area = tr.querySelector('.inp-aff-area')?.value || '';
+      WIZARD.righe_affollamento_331[idx].superficie = tr.querySelector('.inp-aff-sup')?.value || '';
+      WIZARD.righe_affollamento_331[idx].numero_persone = tr.querySelector('.inp-aff-num')?.value || '';
+    }
+    sendUpdate();
+  };
+
+  window.addRigaAffollamento = function () {
+    syncRigheAffollamentoFromDom();
+    WIZARD.righe_affollamento_331.push({ edificio_area: '', superficie: '', numero_persone: '' });
+    renderTabellaAffollamento();
+    sendUpdate();
+  };
+
+  window.removeRigaAffollamento = function (idx) {
+    syncRigheAffollamentoFromDom();
+    WIZARD.righe_affollamento_331.splice(idx, 1);
+    renderTabellaAffollamento();
+    sendUpdate();
+  };
+
+  window.ripristinaTabellaAffollamento = function () {
+    if (!ADAPTER?.DEFAULT_RIGHE_AFFOLLAMENTO_331) return;
+    WIZARD.righe_affollamento_331 = ADAPTER.DEFAULT_RIGHE_AFFOLLAMENTO_331.map((r) => ({ ...r }));
+    renderTabellaAffollamento();
+    sendUpdate();
+  };
+
+  window.ripristinaTesto32 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_3_2_ultimo_punto = ADAPTER.TESTO_3_2_ULTIMO_PUNTO_DEFAULT || '';
+    document.getElementById('taTesto32Ultimo').value = WIZARD.testo_3_2_ultimo_punto;
+    sendUpdate();
+  };
+
+  function syncSezione45FromDom() {
+    WIZARD.testo_4_lista2_p1 = document.getElementById('taTesto4L2P1')?.value || '';
+    WIZARD.testo_4_lista2_p2 = document.getElementById('taTesto4L2P2')?.value || '';
+    WIZARD.testo_4_lista2_p3 = document.getElementById('taTesto4L2P3')?.value || '';
+    syncMisureConclusioniFromDom();
+  }
+
+  function syncMisureConclusioniFromDom() {
+    const wrap = document.getElementById('wrapMisureConclusioni');
+    if (!wrap) return;
+    const rows = [];
+    wrap.querySelectorAll('tr[data-mis-idx]').forEach((tr) => {
+      const idx = parseInt(tr.getAttribute('data-mis-idx'), 10);
+      const src = WIZARD.misure_conclusioni?.[idx] || {};
+      rows.push({
+        id: src.id || 'm' + idx,
+        testo: tr.querySelector('.inp-mis-testo')?.value || '',
+        selezionato: tr.querySelector('.inp-mis-sel')?.checked !== false,
+      });
+    });
+    WIZARD.misure_conclusioni = rows;
+  }
+
+  function renderMisureConclusioni() {
+    const wrap = document.getElementById('wrapMisureConclusioni');
+    const prev = document.getElementById('prevMisureConclusioni');
+    if (!wrap || !ADAPTER) return;
+    WIZARD.misure_conclusioni = ADAPTER.mergeMisureConclusioniWizard({
+      misure_conclusioni: WIZARD.misure_conclusioni,
+    });
+    let html =
+      '<table class="voce-list-table"><thead><tr>' +
+      '<th class="chk">In doc</th><th>Testo misura</th><th class="act"></th></tr></thead><tbody>';
+    if (!WIZARD.misure_conclusioni.length) {
+      html += '<tr><td colspan="3" class="hint-str">Nessuna misura.</td></tr>';
+    } else {
+      WIZARD.misure_conclusioni.forEach((m, idx) => {
+        const sel = m.selezionato !== false ? ' checked' : '';
+        const inactive = m.selezionato === false ? ' class="inactive"' : '';
+        html +=
+          '<tr data-mis-idx="' + idx + '"' + inactive + '>' +
+          '<td class="chk"><input type="checkbox" class="inp-mis-sel"' + sel +
+          ' onchange="onMisuraConcSel(' + idx + ', this.checked)"></td>' +
+          '<td><input type="text" class="inp-mis-testo" value="' + esc(m.testo) + '" ' +
+          'oninput="onMisuraConcTesto(' + idx + ', this.value)"></td>' +
+          '<td class="act"><button type="button" class="secondary" style="font-size:9pt;padding:2px 5px;" ' +
+          'onclick="removeMisuraConclusioni(' + idx + ')">✕</button></td></tr>';
+      });
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    const attive = (WIZARD.misure_conclusioni || []).filter((m) => m.selezionato !== false && String(m.testo || '').trim());
+    if (prev) {
+      prev.innerHTML = attive.length
+        ? '<ul>' + attive.map((m) => '<li>' + esc(m.testo) + '</li>').join('') + '</ul>'
+        : '<span class="hint-str">Nessuna misura selezionata per il documento.</span>';
+    }
+  }
+
+  function loadSezione45FromRaw(raw, prev) {
+    if (!ADAPTER) return;
+    const r = raw || {};
+    WIZARD.testo_4_lista2_p1 =
+      prev.testo_4_lista2_p1 != null && String(prev.testo_4_lista2_p1).trim()
+        ? String(prev.testo_4_lista2_p1)
+        : (r.testo_4_lista2_p1 || ADAPTER.TESTO_4_LISTA2_P1_DEFAULT || '');
+    WIZARD.testo_4_lista2_p2 =
+      prev.testo_4_lista2_p2 != null && String(prev.testo_4_lista2_p2).trim()
+        ? String(prev.testo_4_lista2_p2)
+        : (r.testo_4_lista2_p2 || ADAPTER.TESTO_4_LISTA2_P2_DEFAULT || '');
+    WIZARD.testo_4_lista2_p3 =
+      prev.testo_4_lista2_p3 != null && String(prev.testo_4_lista2_p3).trim()
+        ? String(prev.testo_4_lista2_p3)
+        : (r.testo_4_lista2_p3 || ADAPTER.TESTO_4_LISTA2_P3_DEFAULT || '');
+    const misurePrev = prev.misure_conclusioni || r.misure_conclusioni;
+    WIZARD.misure_conclusioni = ADAPTER.mergeMisureConclusioniWizard({
+      misure_conclusioni: Array.isArray(misurePrev) && misurePrev.length ? misurePrev : undefined,
+    });
+    document.getElementById('taTesto4L2P1').value = WIZARD.testo_4_lista2_p1;
+    document.getElementById('taTesto4L2P2').value = WIZARD.testo_4_lista2_p2;
+    document.getElementById('taTesto4L2P3').value = WIZARD.testo_4_lista2_p3;
+    renderMisureConclusioni();
+  }
+
+  window.onSezione45Input = function () {
+    syncSezione45FromDom();
+    sendUpdate();
+  };
+
+  window.onMisuraConcSel = function (idx, checked) {
+    syncMisureConclusioniFromDom();
+    if (WIZARD.misure_conclusioni[idx]) WIZARD.misure_conclusioni[idx].selezionato = !!checked;
+    renderMisureConclusioni();
+    sendUpdate();
+  };
+
+  window.onMisuraConcTesto = function (idx, val) {
+    if (WIZARD.misure_conclusioni[idx]) WIZARD.misure_conclusioni[idx].testo = val;
+    const prev = document.getElementById('prevMisureConclusioni');
+    const attive = (WIZARD.misure_conclusioni || []).filter((m) => m.selezionato !== false && String(m.testo || '').trim());
+    if (prev) {
+      prev.innerHTML = attive.length
+        ? '<ul>' + attive.map((m) => '<li>' + esc(m.testo) + '</li>').join('') + '</ul>'
+        : '<span class="hint-str">Nessuna misura selezionata per il documento.</span>';
+    }
+    sendUpdate();
+  };
+
+  window.removeMisuraConclusioni = function (idx) {
+    syncMisureConclusioniFromDom();
+    WIZARD.misure_conclusioni.splice(idx, 1);
+    renderMisureConclusioni();
+    sendUpdate();
+  };
+
+  window.addMisuraConclusioni = function () {
+    syncMisureConclusioniFromDom();
+    WIZARD.misure_conclusioni.push({ id: 'custom_' + Date.now(), testo: '', selezionato: true });
+    renderMisureConclusioni();
+    sendUpdate();
+  };
+
+  window.ripristinaTesto4Lista2 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_4_lista2_p1 = ADAPTER.TESTO_4_LISTA2_P1_DEFAULT || '';
+    WIZARD.testo_4_lista2_p2 = ADAPTER.TESTO_4_LISTA2_P2_DEFAULT || '';
+    WIZARD.testo_4_lista2_p3 = ADAPTER.TESTO_4_LISTA2_P3_DEFAULT || '';
+    document.getElementById('taTesto4L2P1').value = WIZARD.testo_4_lista2_p1;
+    document.getElementById('taTesto4L2P2').value = WIZARD.testo_4_lista2_p2;
+    document.getElementById('taTesto4L2P3').value = WIZARD.testo_4_lista2_p3;
+    sendUpdate();
+  };
+
+  window.ripristinaMisureConclusioni = function () {
+    if (!ADAPTER?.DEFAULT_MISURE_CONCLUSIONI) return;
+    WIZARD.misure_conclusioni = ADAPTER.DEFAULT_MISURE_CONCLUSIONI.map((m) => ({ ...m }));
+    renderMisureConclusioni();
+    sendUpdate();
+  };
+
+  window.ripristinaSezione45 = function () {
+    ripristinaTesto4Lista2();
+    ripristinaMisureConclusioni();
+  };
+
+  window.ripristinaStrategia3 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_3_2_ultimo_punto = ADAPTER.TESTO_3_2_ULTIMO_PUNTO_DEFAULT || '';
+    WIZARD.righe_affollamento_331 = (ADAPTER.DEFAULT_RIGHE_AFFOLLAMENTO_331 || []).map((r) => ({ ...r }));
+    WIZARD.testo_3_3_1_p2 = ADAPTER.TESTO_3_3_1_P2_DEFAULT || '';
+    WIZARD.testo_3_3_1_p3 = ADAPTER.TESTO_3_3_1_P3_DEFAULT || '';
+    WIZARD.testo_3_4_p1 = ADAPTER.TESTO_3_4_P1_DEFAULT || '';
+    WIZARD.testo_3_4_p2 = ADAPTER.TESTO_3_4_P2_DEFAULT || '';
+    WIZARD.testo_3_4_2_conclusione = ADAPTER.TESTO_3_4_2_CONCLUSIONE_DEFAULT || '';
+    WIZARD.testo_3_5_p1 = ADAPTER.TESTO_3_5_P1_DEFAULT || '';
+    WIZARD.testo_3_6_p1 = ADAPTER.TESTO_3_6_P1_DEFAULT || '';
+    WIZARD.testo_3_7_p1 = ADAPTER.TESTO_3_7_P1_DEFAULT || '';
+    WIZARD.testo_3_8_p1 = ADAPTER.TESTO_3_8_P1_DEFAULT || '';
+    fillStrategia3DomFromWizard();
+    sendUpdate();
+  };
+
+  window.ripristinaTesto31 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_3_1_p1 = ADAPTER.TESTO_3_1_P1_DEFAULT || '';
+    WIZARD.testo_3_1_p2 = ADAPTER.TESTO_3_1_P2_DEFAULT || '';
+    document.getElementById('taTesto31P1').value = WIZARD.testo_3_1_p1;
+    document.getElementById('taTesto31P2').value = WIZARD.testo_3_1_p2;
+    sendUpdate();
+  };
+
+  window.onTesto295Input = function () {
+    syncTesto295FromDom();
+    sendUpdate();
+  };
+
+  window.ripristinaTesto295 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_2_9_5 = ADAPTER.TESTO_2_9_5_DEFAULT || '';
+    document.getElementById('taTesto295').value = WIZARD.testo_2_9_5;
+    sendUpdate();
+  };
+
+  window.ripristinaTesto24 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_2_4_p1 = ADAPTER.TESTO_2_4_P1_DEFAULT || '';
+    WIZARD.testo_2_4_p2 = ADAPTER.TESTO_2_4_P2_DEFAULT || '';
+    document.getElementById('taTesto24P1').value = WIZARD.testo_2_4_p1;
+    document.getElementById('taTesto24P2').value = WIZARD.testo_2_4_p2;
+    renderTesto24Preview();
+    sendUpdate();
+  };
+
+  window.ripristinaTesto234 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_2_3_4 = ADAPTER.TESTO_2_3_4_DEFAULT || '';
+    document.getElementById('taTesto234').value = WIZARD.testo_2_3_4;
+    sendUpdate();
+  };
+
+  window.ripristinaTesto23 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_2_3_1_p1 = ADAPTER.TESTO_2_3_1_P1_DEFAULT || '';
+    WIZARD.testo_2_3_1_p2 = ADAPTER.TESTO_2_3_1_P2_DEFAULT || '';
+    WIZARD.testo_2_3_2_p1 = ADAPTER.TESTO_2_3_2_P1_DEFAULT || '';
+    WIZARD.testo_2_3_2_p2 = ADAPTER.TESTO_2_3_2_P2_DEFAULT || '';
+    document.getElementById('taTesto231P1').value = WIZARD.testo_2_3_1_p1;
+    document.getElementById('taTesto231P2').value = WIZARD.testo_2_3_1_p2;
+    document.getElementById('taTesto232P1').value = WIZARD.testo_2_3_2_p1;
+    document.getElementById('taTesto232P2').value = WIZARD.testo_2_3_2_p2;
+    sendUpdate();
+  };
+
+  window.ripristinaTesto22 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_2_2_nota_dpr = ADAPTER.TESTO_2_2_NOTA_DPR_DEFAULT || '';
+    WIZARD.testo_2_2_conclusione = ADAPTER.TESTO_2_2_CONCLUSIONE_DEFAULT || '';
+    document.getElementById('taTesto22NotaDpr').value = WIZARD.testo_2_2_nota_dpr;
+    document.getElementById('taTesto22Conclusione').value = WIZARD.testo_2_2_conclusione;
+    ripristinaTabellaRequisiti();
+  };
+
+  window.ripristinaTesto21 = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_2_1_p1 = ADAPTER.TESTO_2_1_P1_DEFAULT || '';
+    WIZARD.testo_2_1_p2 = ADAPTER.TESTO_2_1_P2_DEFAULT || '';
+    WIZARD.testo_2_1_p3 = ADAPTER.TESTO_2_1_P3_DEFAULT || '';
+    document.getElementById('taTesto21P1').value = WIZARD.testo_2_1_p1;
+    document.getElementById('taTesto21P2').value = WIZARD.testo_2_1_p2;
+    document.getElementById('taTesto21P3').value = WIZARD.testo_2_1_p3;
+    renderTesto21Preview();
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'MOD_INCENDIO — Compila' : 'MOD_INCENDIO — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    renderLogoPreview();
+
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+
+    const prev = DATA._incendio_wizard || {};
+    const defaultRedatto = ADAPTER.REDATTO_DA_DEFAULT || '';
+    WIZARD.redatto_da =
+      prev.redatto_da != null && String(prev.redatto_da).trim()
+        ? String(prev.redatto_da)
+        : (DATA.REDATTO_DA || defaultRedatto);
+    document.getElementById('inpRedattoDa').value = WIZARD.redatto_da;
+
+    const rawPrev = prev._testo_2_1_raw || DATA._testo_2_1_raw || {};
+    WIZARD.testo_2_1_p1 =
+      prev.testo_2_1_p1 != null && String(prev.testo_2_1_p1).trim()
+        ? String(prev.testo_2_1_p1)
+        : (rawPrev.testo_2_1_p1 || ADAPTER.TESTO_2_1_P1_DEFAULT || '');
+    WIZARD.testo_2_1_p2 =
+      prev.testo_2_1_p2 != null && String(prev.testo_2_1_p2).trim()
+        ? String(prev.testo_2_1_p2)
+        : (rawPrev.testo_2_1_p2 || ADAPTER.TESTO_2_1_P2_DEFAULT || '');
+    WIZARD.testo_2_1_p3 =
+      prev.testo_2_1_p3 != null && String(prev.testo_2_1_p3).trim()
+        ? String(prev.testo_2_1_p3)
+        : (rawPrev.testo_2_1_p3 || ADAPTER.TESTO_2_1_P3_DEFAULT || '');
+    document.getElementById('taTesto21P1').value = WIZARD.testo_2_1_p1;
+    document.getElementById('taTesto21P2').value = WIZARD.testo_2_1_p2;
+    document.getElementById('taTesto21P3').value = WIZARD.testo_2_1_p3;
+    renderTesto21Preview();
+
+    const raw22 = prev._testo_2_2_raw || DATA._testo_2_2_raw || {};
+    WIZARD.testo_2_2_nota_dpr =
+      prev.testo_2_2_nota_dpr != null && String(prev.testo_2_2_nota_dpr).trim()
+        ? String(prev.testo_2_2_nota_dpr)
+        : (raw22.testo_2_2_nota_dpr || ADAPTER.TESTO_2_2_NOTA_DPR_DEFAULT || '');
+    WIZARD.testo_2_2_conclusione =
+      prev.testo_2_2_conclusione != null && String(prev.testo_2_2_conclusione).trim()
+        ? String(prev.testo_2_2_conclusione)
+        : (raw22.testo_2_2_conclusione || ADAPTER.TESTO_2_2_CONCLUSIONE_DEFAULT || '');
+    document.getElementById('taTesto22NotaDpr').value = WIZARD.testo_2_2_nota_dpr;
+    document.getElementById('taTesto22Conclusione').value = WIZARD.testo_2_2_conclusione;
+
+    const righePrev = prev.righe_requisiti_basso_rischio || raw22.righe_requisiti_basso_rischio;
+    if (Array.isArray(righePrev) && righePrev.length) {
+      WIZARD.righe_requisiti_basso_rischio = ADAPTER.mergeRigheRequisitiWizard({ righe_requisiti_basso_rischio: righePrev });
+    } else {
+      WIZARD.righe_requisiti_basso_rischio = (ADAPTER.DEFAULT_RIGHE_REQUISITI_BASSO_RISCHIO || []).map((r) => ({ ...r }));
+    }
+    renderTabellaRequisiti();
+
+    const raw23 = prev._testo_2_3_raw || DATA._testo_2_3_raw || {};
+    WIZARD.testo_2_3_1_p1 =
+      prev.testo_2_3_1_p1 != null && String(prev.testo_2_3_1_p1).trim()
+        ? String(prev.testo_2_3_1_p1)
+        : (raw23.testo_2_3_1_p1 || ADAPTER.TESTO_2_3_1_P1_DEFAULT || '');
+    WIZARD.testo_2_3_1_p2 =
+      prev.testo_2_3_1_p2 != null && String(prev.testo_2_3_1_p2).trim()
+        ? String(prev.testo_2_3_1_p2)
+        : (raw23.testo_2_3_1_p2 || ADAPTER.TESTO_2_3_1_P2_DEFAULT || '');
+    WIZARD.testo_2_3_2_p1 =
+      prev.testo_2_3_2_p1 != null && String(prev.testo_2_3_2_p1).trim()
+        ? String(prev.testo_2_3_2_p1)
+        : (raw23.testo_2_3_2_p1 || ADAPTER.TESTO_2_3_2_P1_DEFAULT || '');
+    WIZARD.testo_2_3_2_p2 =
+      prev.testo_2_3_2_p2 != null && String(prev.testo_2_3_2_p2).trim()
+        ? String(prev.testo_2_3_2_p2)
+        : (raw23.testo_2_3_2_p2 || ADAPTER.TESTO_2_3_2_P2_DEFAULT || '');
+    document.getElementById('taTesto231P1').value = WIZARD.testo_2_3_1_p1;
+    document.getElementById('taTesto231P2').value = WIZARD.testo_2_3_1_p2;
+    document.getElementById('taTesto232P1').value = WIZARD.testo_2_3_2_p1;
+    document.getElementById('taTesto232P2').value = WIZARD.testo_2_3_2_p2;
+    WIZARD.testo_2_3_4 =
+      prev.testo_2_3_4 != null && String(prev.testo_2_3_4).trim()
+        ? String(prev.testo_2_3_4)
+        : (raw23.testo_2_3_4 || ADAPTER.TESTO_2_3_4_DEFAULT || '');
+    document.getElementById('taTesto234').value = WIZARD.testo_2_3_4;
+
+    const raw24 = prev._testo_2_4_raw || DATA._testo_2_4_raw || {};
+    WIZARD.testo_2_4_p1 =
+      prev.testo_2_4_p1 != null && String(prev.testo_2_4_p1).trim()
+        ? String(prev.testo_2_4_p1)
+        : (raw24.testo_2_4_p1 || ADAPTER.TESTO_2_4_P1_DEFAULT || '');
+    WIZARD.testo_2_4_p2 =
+      prev.testo_2_4_p2 != null && String(prev.testo_2_4_p2).trim()
+        ? String(prev.testo_2_4_p2)
+        : (raw24.testo_2_4_p2 || ADAPTER.TESTO_2_4_P2_DEFAULT || '');
+    document.getElementById('taTesto24P1').value = WIZARD.testo_2_4_p1;
+    document.getElementById('taTesto24P2').value = WIZARD.testo_2_4_p2;
+    renderTesto24Preview();
+
+    const raw25 = prev._testo_2_5_raw || DATA._testo_2_5_raw || {};
+    const vociOccPrev = prev.voci_occupanti_esposti || raw25.voci_occupanti_esposti;
+    const vociTipPrev = prev.voci_tipologia_occupanti || raw25.voci_tipologia_occupanti;
+    if (Array.isArray(vociOccPrev) && vociOccPrev.length) {
+      WIZARD.voci_occupanti_esposti = ADAPTER.mergeVociElencoWizard(
+        'voci_occupanti_esposti',
+        ADAPTER.DEFAULT_VOCI_OCCUPANTI_ESPOSTI || [],
+        { voci_occupanti_esposti: vociOccPrev }
+      );
+    } else {
+      WIZARD.voci_occupanti_esposti = (ADAPTER.DEFAULT_VOCI_OCCUPANTI_ESPOSTI || []).map((r) => ({ ...r }));
+    }
+    if (Array.isArray(vociTipPrev) && vociTipPrev.length) {
+      WIZARD.voci_tipologia_occupanti = ADAPTER.mergeVociElencoWizard(
+        'voci_tipologia_occupanti',
+        ADAPTER.DEFAULT_VOCI_TIPOLOGIA_OCCUPANTI || [],
+        { voci_tipologia_occupanti: vociTipPrev }
+      );
+    } else {
+      WIZARD.voci_tipologia_occupanti = (ADAPTER.DEFAULT_VOCI_TIPOLOGIA_OCCUPANTI || []).map((r) => ({ ...r }));
+    }
+    renderSezione25();
+
+    const raw295 = prev._testo_2_9_5_raw || DATA._testo_2_9_5_raw || {};
+    WIZARD.testo_2_9_5 =
+      prev.testo_2_9_5 != null && String(prev.testo_2_9_5).trim()
+        ? String(prev.testo_2_9_5)
+        : (raw295.testo_2_9_5 || ADAPTER.TESTO_2_9_5_DEFAULT || '');
+    document.getElementById('taTesto295').value = WIZARD.testo_2_9_5;
+
+    const raw31 = prev._testo_3_1_raw || DATA._testo_3_1_raw || {};
+    WIZARD.testo_3_1_p1 =
+      prev.testo_3_1_p1 != null && String(prev.testo_3_1_p1).trim()
+        ? String(prev.testo_3_1_p1)
+        : (raw31.testo_3_1_p1 || ADAPTER.TESTO_3_1_P1_DEFAULT || '');
+    WIZARD.testo_3_1_p2 =
+      prev.testo_3_1_p2 != null && String(prev.testo_3_1_p2).trim()
+        ? String(prev.testo_3_1_p2)
+        : (raw31.testo_3_1_p2 || ADAPTER.TESTO_3_1_P2_DEFAULT || '');
+    document.getElementById('taTesto31P1').value = WIZARD.testo_3_1_p1;
+    document.getElementById('taTesto31P2').value = WIZARD.testo_3_1_p2;
+
+    loadStrategia3FromRaw(prev._strategia_3_raw || DATA._strategia_3_raw || {}, prev);
+
+    loadSezione45FromRaw(prev._sezione_4_5_raw || DATA._sezione_4_5_raw || {}, prev);
+
+    const rawCarico = prev._carico_incendio_raw || DATA._carico_incendio_raw || {};
+    WIZARD.metodo_carico_incendio =
+      prev.metodo_carico_incendio != null
+        ? (ADAPTER.normalizeMetodoCaricoIncendio
+          ? ADAPTER.normalizeMetodoCaricoIncendio(prev.metodo_carico_incendio)
+          : prev.metodo_carico_incendio)
+        : (rawCarico.metodo_carico_incendio || 'tabellare');
+    WIZARD.testo_caso1_assimilazione =
+      prev.testo_caso1_assimilazione != null && String(prev.testo_caso1_assimilazione).trim()
+        ? String(prev.testo_caso1_assimilazione)
+        : (rawCarico.testo_caso1_assimilazione || ADAPTER.TESTO_CASO1_ASSIMILAZIONE_DEFAULT || '');
+    WIZARD.testo_caso2_intro =
+      prev.testo_caso2_intro != null && String(prev.testo_caso2_intro).trim()
+        ? String(prev.testo_caso2_intro)
+        : (rawCarico.testo_caso2_intro || ADAPTER.TESTO_CASO2_INTRO_DEFAULT || '');
+    document.getElementById('taCaso1Assimilazione').value = WIZARD.testo_caso1_assimilazione;
+    document.getElementById('taCaso2Intro').value = WIZARD.testo_caso2_intro;
+    renderMetodoCaricoUi();
+
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

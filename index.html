@@ -5448,6 +5448,7 @@
                 MOD_VIBRAZIONI: '20260523b',
                 MOD_GAS_RADON: '20260524e',
                 MOD_RUMORE: '20260525i',
+                MOD_INCENDIO: '20260525u',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5637,7 +5638,7 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     await loadScriptOnce(base + 'logo-docx.js?v=20260520d');
@@ -5660,6 +5661,7 @@
                 : codice === 'MOD_VIBRAZIONI' ? '20260523b'
                 : codice === 'MOD_GAS_RADON' ? '20260524e'
                 : codice === 'MOD_RUMORE' ? '20260525i'
+                : codice === 'MOD_INCENDIO' ? '20260525u'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

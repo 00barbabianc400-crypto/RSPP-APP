@@ -344,6 +344,122 @@
     return zip;
   }
 
+  function decodeXmlText(s) {
+    return String(s)
+      .replace(/&apos;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
+  }
+
+  function normalizeMatchText(s) {
+    return decodeXmlText(s).replace(/\u2019/g, "'").replace(/\s+/g, ' ').trim();
+  }
+
+  function mergeWtInParagraphForced(block) {
+    const texts = [];
+    const re = /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/g;
+    let m;
+    while ((m = re.exec(block)) !== null) texts.push(m[1]);
+    if (texts.length < 2) return block;
+    const joined = texts.join('');
+    let idx = 0;
+    return block.replace(/<w:t(\s[^>]*)?>([^<]*)<\/w:t>/g, (_full, attrs) => {
+      const a = attrs || '';
+      if (idx === 0) {
+        idx += 1;
+        return '<w:t' + a + '>' + joined + '</w:t>';
+      }
+      idx += 1;
+      return '<w:t' + a + '></w:t>';
+    });
+  }
+
+  /** Unisce run spezzati (es. apostrofi) in paragrafi senza disegni. */
+  function mergeFragmentedParagraphsInXml(xml) {
+    return xml.replace(/<w:p[\s\S]*?<\/w:p>/g, (block) => {
+      if (/<w:drawing|<w:pict/i.test(block)) return block;
+      const runCount = (block.match(/<w:t(?:\s[^>]*)?>/g) || []).length;
+      if (runCount < 2) return block;
+      return mergeWtInParagraphForced(block);
+    });
+  }
+
+  /**
+   * Dopo il render, ricostruisce i bullet dei loop usando i testi del wizard
+   * (affidabile anche senza ";" tra le voci e con voci custom).
+   * cfg.loops: [{ texts: ['voce 1', 'voce 2', ...] }, ...] in ordine documento.
+   */
+  function expandVademecumListLoopsInXml(xml, cfg) {
+    const loops = Array.isArray(cfg?.loops) ? cfg.loops : [];
+    if (!loops.length) return xml;
+
+    let loopIdx = 0;
+    let lastListPPr = null;
+    const pRe = /<w:p[\s\S]*?<\/w:p>/g;
+    let out = '';
+    let lastEnd = 0;
+    let expanded = 0;
+    let m;
+    while ((m = pRe.exec(xml)) !== null) {
+      const block = m[0];
+      const pPr = extractPPr(block);
+      const hasNumPr = !!(pPr && /<w:numPr/.test(pPr));
+      if (hasNumPr) lastListPPr = pPr;
+
+      out += xml.slice(lastEnd, m.index);
+
+      if (loopIdx < loops.length) {
+        const texts = (loops[loopIdx].texts || [])
+          .map((t) => String(t == null ? '' : t).trim())
+          .filter(Boolean);
+        if (texts.length && (hasNumPr || lastListPPr)) {
+          const joined = decodeXmlText(paragraphPlainText(block));
+          const normJoined = normalizeMatchText(joined);
+          const probe = normalizeMatchText(texts[0]).slice(0, 40);
+          const probe2 =
+            texts.length > 1 ? normalizeMatchText(texts[1]).slice(0, 28) : '';
+          const shouldExpand =
+            probe.length >= 8 &&
+            normJoined.includes(probe) &&
+            (texts.length === 1 ||
+              normJoined.length > probe.length + 12 ||
+              (probe2 && normJoined.includes(probe2)));
+
+          if (shouldExpand) {
+            const usePPr = hasNumPr ? pPr : lastListPPr;
+            out += texts.map((t) => buildListParagraph(usePPr, t)).join('');
+            loopIdx += 1;
+            expanded += 1;
+            lastEnd = m.index + block.length;
+            continue;
+          }
+        }
+      }
+
+      out += block;
+      lastEnd = m.index + block.length;
+    }
+    out += xml.slice(lastEnd);
+    if (expanded) {
+      console.info('[GEN_DOCX_REPAIR] Loop vademecum espansi in', expanded, 'elenco/i');
+    }
+    return out;
+  }
+
+  function expandVademecumListLoopsInZip(zip, cfg) {
+    const path = 'word/document.xml';
+    const file = zip.file(path);
+    if (!file) return zip;
+    let xml = file.asText();
+    xml = expandVademecumListLoopsInXml(xml, cfg);
+    xml = mergeFragmentedParagraphsInXml(xml);
+    zip.file(path, xml);
+    return zip;
+  }
+
   function formatDocxtemplaterErrors(err) {
     const list = err.properties?.errors || (err.properties?.id ? [err] : []);
     const parts = list.map((e) => {
@@ -366,6 +482,7 @@
     repairDocxTemplateZip,
     expandJoinedListParagraphsInZip,
     expandSemicolonJoinedListParagraphsInZip,
+    expandVademecumListLoopsInZip,
     formatDocxtemplaterErrors,
     fixSplitPlaceholdersInXml,
   };

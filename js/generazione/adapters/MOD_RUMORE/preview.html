@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Rumore</title>
-<script src="adapter.js?v=20260525d"></script>
+<script src="adapter.js?v=20260525h"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -71,6 +71,25 @@
   #tblMisureRumorePreview { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
   #tblMisureRumorePreview th { background: #2c3e50; color: #fff; padding: 6px; text-align: center; }
   #tblMisureRumorePreview td { border: 1px solid #bbb; padding: 6px; }
+  .lex-gruppi-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 8px; }
+  .lex-gruppi-table th { background: #2c3e50; color: #fff; padding: 6px 8px; text-align: center; }
+  .lex-gruppi-table td { border: 1px solid #bbb; padding: 4px 6px; vertical-align: middle; }
+  .lex-gruppi-table td.num { width: 40px; text-align: center; font-weight: 600; }
+  .lex-gruppi-table td.nome { font-weight: 600; }
+  .lex-gruppi-table input.note-gruppo { width: 100%; font-size: 10pt; padding: 4px 6px; border: 1px solid #ccc; }
+  .profili-102-stack { margin-top: 10px; max-width: 480px; }
+  .profili-102-blocco { margin-bottom: 4px; }
+  .profili-102-blocco .cella-blu-preview { min-height: 36px; padding: 10px; margin: 0; }
+  .profili-102-spacer { height: 14px; background: #fff; border: 1px dashed #ddd; margin-bottom: 10px; }
+  .profili-102-par { font-size: 10pt; line-height: 1.45; margin: 6px 0; color: #333; }
+  .misure-prev-list { margin-top: 8px; }
+  .misure-prev-list label {
+    display: block; padding: 5px 8px; margin: 2px 0; cursor: pointer; font-size: 10pt; line-height: 1.4;
+  }
+  .misure-prev-list label:hover { background: #f0f7fc; }
+  .misure-prev-list input { margin-right: 8px; vertical-align: top; margin-top: 3px; }
+  .misure-prev-preview { margin-top: 10px; padding: 10px; background: #fafafa; border: 1px solid #ddd; font-size: 10pt; }
+  .misure-prev-preview li { margin: 4px 0 4px 18px; }
 </style>
 </head>
 <body>
@@ -168,9 +187,35 @@
       <p class="hint-str" style="margin-top:10px;">Anteprima cella Word (lista centrata):</p>
       <div class="cella-blu-preview" id="cellaBluPreview">—</div>
 
-      <h2 class="doc-section">§10 — Tabella rilevazioni (anteprima dati)</h2>
+      <h2 class="doc-section">§10 — Esposizione al rumore per gruppo omogeneo</h2>
+      <h3 class="doc-sub">§10.1 — Valutazione giornaliera LEX,8h</h3>
       <p class="hint-str">
-        Loop Word nella prima riga dati:
+        Una riga per ogni gruppo selezionato in §7.1. Nel Word (prima riga dati tabella N° / Gruppo / Note),
+        sostituire <code>*Una riga per ogni gruppo omogeneo*</code> con:
+      </p>
+      <p class="hint-str">
+        <code>{{#VALUTAZIONE_LEX_GRUPPI}}{{NUMERO}}{{GRUPPO_OMOGENO}}{{NOTE_GRUPPO}}{{/VALUTAZIONE_LEX_GRUPPI}}</code>
+      </p>
+      <div id="wrapValutazioneLexGruppi"></div>
+
+      <h3 class="doc-sub">§10.2 — Valutazione del rischio rumore per profili di rischio</h3>
+      <p class="hint-str">
+        Per <strong>ogni</strong> gruppo di §7.1, nel Word ripeti in sequenza:
+        <strong>1) cella blu</strong> (nome gruppo) → <strong>2) paragrafo</strong> tempi medi → <strong>3) riga vuota</strong>.
+        Avvolgi tutto il blocco con il loop (cella + paragrafo + paragrafo vuoto per lo spazio).
+      </p>
+      <p class="hint-str">
+        <code>{{#VALUTAZIONE_RUMORE_PROFILI}}{{GRUPPO_OMOGENO_CELLA}}{{PARAGRAFO_TEMPI_MEDI}}{{SPAZIO_RIGA}}{{/VALUTAZIONE_RUMORE_PROFILI}}</code>
+      </p>
+      <p class="hint-str"><strong>Testo paragrafo</strong> (uguale per ogni gruppo, modificabile):</p>
+      <textarea id="taParagrafoTempiMedi" class="ciclo-textarea" style="min-height:56px;"
+        oninput="onParagrafoTempiMediInput()"></textarea>
+      <p class="hint-str" style="margin-top:8px;">Anteprima blocco per gruppo:</p>
+      <div class="profili-102-stack" id="wrapProfiliRumore102"></div>
+
+      <h3 class="doc-sub">Tabella postazioni di misura (rilevamenti)</h3>
+      <p class="hint-str">
+        Loop Word (sezione misure strumentali):
         <code>{{#MISURE_RUMORE}}{{POSTAZIONE}}{{PEAK_DB_C}}{{LEQ_DB_A}}{{NOTE_POSTAZIONE}}{{/MISURE_RUMORE}}</code>
       </p>
       <div class="info-box" id="pRilevamentiInfo">—</div>
@@ -186,7 +231,29 @@
         <tbody id="tbodyMisureRumore"></tbody>
       </table>
 
-      <h2 class="doc-section" style="opacity:.55;">§8–9, §11+ (prossimo step)</h2>
+      <h2 class="doc-section">§13 — Osservazioni e raccomandazioni</h2>
+      <p class="hint-str">
+        Nel paragrafo iniziale (dopo «identificati come»), sostituire
+        <code>(**Campo di testo…**)</code> con <code>{{GRUPPI_SORVEGLIANZA_SANITARIA}}</code>.
+        <code>{{RAGIONE_SOCIALE}}</code> è già nel testo.
+      </p>
+      <p class="hint-str"><strong>Gruppi omogenei (protocollo sorveglianza)</strong> — precompilato da §7.1:</p>
+      <input type="text" id="inpGruppiSorveglianza" class="inline-select" style="width:100%;max-width:640px;margin-top:6px;"
+        oninput="onGruppiSorveglianzaInput()">
+      <button type="button" class="btn" style="margin-top:6px;font-size:10pt;padding:4px 10px;"
+        onclick="ripristinaGruppiSorveglianza()">Ripristina da gruppi §7.1</button>
+
+      <p class="hint-str" style="margin-top:14px;">
+        Elenco «o …» — nel Word, <strong>un paragrafo per punto</strong> nel loop (il «o» resta nel modello prima del tag):
+      </p>
+      <p class="hint-str">
+        <code>{{#MISURE_PREVENZIONE_RUMORE}}o	{{TESTO_MISURA}}{{/MISURE_PREVENZIONE_RUMORE}}</code>
+      </p>
+      <p class="hint-str">Deseleziona i punti non pertinenti; in Word restano solo quelli spuntati, in ordine.</p>
+      <div class="misure-prev-list" id="wrapMisurePrevenzione"></div>
+      <div class="misure-prev-preview" id="previewMisurePrevenzione"></div>
+
+      <h2 class="doc-section" style="opacity:.55;">§8–9, §11–12 (prossimo step)</h2>
     </div>
   </div>
 </div>
@@ -206,6 +273,9 @@
     testo_analisi_preliminare: '',
     note_wizard: '',
     gruppi_omogenei: [],
+    testo_paragrafo_temipi_medi: '',
+    gruppi_sorveglianza_sanitaria: '',
+    misure_prevenzione: [],
   };
 
   const ANAG_FIELDS = [
@@ -307,7 +377,122 @@
         cella.classList.add('empty');
       }
     }
+    renderValutazioneLexGruppi();
+    renderProfiliRumore102();
+    renderMisurePrevenzione();
   }
+
+  function renderMisurePrevenzione() {
+    const wrap = document.getElementById('wrapMisurePrevenzione');
+    const prev = document.getElementById('previewMisurePrevenzione');
+    if (!wrap || !ADAPTER) return;
+
+    WIZARD.misure_prevenzione = ADAPTER.mergeMisurePrevenzioneWizard({
+      misure_prevenzione: WIZARD.misure_prevenzione,
+    });
+
+    let html = '';
+    (WIZARD.misure_prevenzione || []).forEach((m, idx) => {
+      const checked = m.selezionato !== false ? ' checked' : '';
+      html +=
+        '<label><input type="checkbox"' + checked +
+        ' onchange="toggleMisuraPrevenzione(' + idx + ', this.checked)">' +
+        esc(m.testo) + '</label>';
+    });
+    wrap.innerHTML = html;
+
+    const sel = (WIZARD.misure_prevenzione || []).filter((m) => m.selezionato);
+    if (prev) {
+      prev.innerHTML = sel.length
+        ? '<ul>' + sel.map((m) => '<li>o ' + esc(m.testo) + '</li>').join('') + '</ul>'
+        : '<span class="hint-str">Nessuna misura selezionata.</span>';
+    }
+  }
+
+  window.onGruppiSorveglianzaInput = function () {
+    WIZARD.gruppi_sorveglianza_sanitaria = document.getElementById('inpGruppiSorveglianza')?.value || '';
+    sendUpdate();
+  };
+
+  window.ripristinaGruppiSorveglianza = function () {
+    if (!ADAPTER || !DATA) return;
+    WIZARD.gruppi_sorveglianza_sanitaria = ADAPTER.defaultGruppiSorveglianzaSanitaria(
+      { gruppi_omogenei: WIZARD.gruppi_omogenei },
+      DATA._profili_azienda
+    );
+    document.getElementById('inpGruppiSorveglianza').value = WIZARD.gruppi_sorveglianza_sanitaria;
+    sendUpdate();
+  };
+
+  window.toggleMisuraPrevenzione = function (idx, checked) {
+    if (!WIZARD.misure_prevenzione[idx]) return;
+    WIZARD.misure_prevenzione[idx].selezionato = !!checked;
+    renderMisurePrevenzione();
+    sendUpdate();
+  };
+
+  function renderProfiliRumore102() {
+    const wrap = document.getElementById('wrapProfiliRumore102');
+    if (!wrap || !ADAPTER || !DATA) return;
+    const rows = ADAPTER.valutazioneRumoreProfiliForTemplate(
+      { gruppi_omogenei: WIZARD.gruppi_omogenei },
+      DATA._profili_azienda
+    );
+    if (!rows.length) {
+      wrap.innerHTML = '<p class="hint-str">Seleziona gruppi in §7.1.</p>';
+      return;
+    }
+    const par = esc(rows[0]?.PARAGRAFO_TEMPI_MEDI || '');
+    wrap.innerHTML = rows
+      .map(
+        (r) =>
+          '<div class="profili-102-blocco">' +
+          '<div class="cella-blu-preview">' + esc(r.GRUPPO_OMOGENO_CELLA) + '</div>' +
+          '<p class="profili-102-par">' + par + '</p>' +
+          '<div class="profili-102-spacer" title="Spazio una riga nel Word"></div>' +
+          '</div>'
+      )
+      .join('');
+  }
+
+  window.onParagrafoTempiMediInput = function () {
+    WIZARD.testo_paragrafo_temipi_medi = document.getElementById('taParagrafoTempiMedi')?.value || '';
+    renderProfiliRumore102();
+    sendUpdate();
+  };
+
+  function renderValutazioneLexGruppi() {
+    const wrap = document.getElementById('wrapValutazioneLexGruppi');
+    if (!wrap || !ADAPTER || !DATA) return;
+
+    const inclusi = (WIZARD.gruppi_omogenei || []).filter((g) => g.incluso !== false);
+    if (!inclusi.length) {
+      wrap.innerHTML = '<p class="hint-str">Seleziona almeno un gruppo in §7.1 per generare le righe §10.1.</p>';
+      return;
+    }
+
+    let html =
+      '<table class="lex-gruppi-table"><thead><tr>' +
+      '<th>N°</th><th>Gruppo omogeneo</th><th>Note</th>' +
+      '</tr></thead><tbody>';
+    inclusi.forEach((row, i) => {
+      const idx = WIZARD.gruppi_omogenei.indexOf(row);
+      const note = row.note_gruppo != null ? String(row.note_gruppo) : '';
+      html +=
+        '<tr><td class="num">' + (i + 1) + '</td>' +
+        '<td class="nome">' + esc(row.nome) + '</td>' +
+        '<td><input type="text" class="note-gruppo" value="' + esc(note) + '" ' +
+        'oninput="setNotaGruppoLex(' + idx + ', this.value)" placeholder=""></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  window.setNotaGruppoLex = function (idx, val) {
+    if (!WIZARD.gruppi_omogenei[idx]) return;
+    WIZARD.gruppi_omogenei[idx].note_gruppo = val;
+    sendUpdate();
+  };
 
   function renderRilevamentiInfo() {
     const info = document.getElementById('pRilevamentiInfo');
@@ -338,8 +523,11 @@
       modulo_numero: WIZARD.modulo_numero,
       redatto_da: WIZARD.redatto_da,
       testo_analisi_preliminare: WIZARD.testo_analisi_preliminare,
+      testo_paragrafo_temipi_medi: WIZARD.testo_paragrafo_temipi_medi,
       note_wizard: WIZARD.note_wizard,
       gruppi_omogenei: WIZARD.gruppi_omogenei,
+      gruppi_sorveglianza_sanitaria: WIZARD.gruppi_sorveglianza_sanitaria,
+      misure_prevenzione: WIZARD.misure_prevenzione,
       profili_azienda: DATA._profili_azienda,
     });
   }
@@ -432,17 +620,34 @@
       ? String(prev.testo_analisi_preliminare)
       : (DATA.TESTO_ANALISI_PRELIMINARE || ADAPTER.TESTO_ANALISI_PRELIMINARE_DEFAULT || '');
     WIZARD.note_wizard = prev.note_wizard != null ? String(prev.note_wizard) : (DATA.NOTE_WIZARD || '');
+    WIZARD.testo_paragrafo_temipi_medi = prev.testo_paragrafo_temipi_medi != null
+      ? String(prev.testo_paragrafo_temipi_medi)
+      : (DATA.PARAGRAFO_TEMPI_MEDI || ADAPTER.PARAGRAFO_TEMPI_MEDI_DEFAULT || '');
 
     WIZARD.gruppi_omogenei = ADAPTER.mergeGruppiOmogeneiWizard(
       { gruppi_omogenei: prev.gruppi_omogenei || DATA._gruppi_omogenei },
       DATA._profili_azienda || []
     );
+    WIZARD.gruppi_sorveglianza_sanitaria = prev.gruppi_sorveglianza_sanitaria != null
+      ? String(prev.gruppi_sorveglianza_sanitaria)
+      : (DATA.GRUPPI_SORVEGLIANZA_SANITARIA || ADAPTER.defaultGruppiSorveglianzaSanitaria(
+        { gruppi_omogenei: WIZARD.gruppi_omogenei },
+        DATA._profili_azienda
+      ) || '');
+    WIZARD.misure_prevenzione = ADAPTER.mergeMisurePrevenzioneWizard({
+      misure_prevenzione: prev.misure_prevenzione || DATA._misure_prevenzione,
+    });
 
     document.getElementById('inpRedattoDa').value = WIZARD.redatto_da;
+    document.getElementById('inpGruppiSorveglianza').value = WIZARD.gruppi_sorveglianza_sanitaria;
     document.getElementById('taAnalisiPreliminare').value = WIZARD.testo_analisi_preliminare;
+    document.getElementById('taParagrafoTempiMedi').value = WIZARD.testo_paragrafo_temipi_medi;
 
     renderAnagraficaGrid();
     renderGruppiOmogenei();
+    renderValutazioneLexGruppi();
+    renderProfiliRumore102();
+    renderMisurePrevenzione();
     renderRilevamentiInfo();
     sendUpdate();
   }

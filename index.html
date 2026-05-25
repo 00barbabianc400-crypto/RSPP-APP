@@ -5447,7 +5447,7 @@
                 MOD_EMERGENZE: '20260523d',
                 MOD_VIBRAZIONI: '20260523b',
                 MOD_GAS_RADON: '20260524e',
-                MOD_RUMORE: '20260525d',
+                MOD_RUMORE: '20260525h',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5659,7 +5659,7 @@
                 : codice === 'MOD_EMERGENZE' ? '20260523d'
                 : codice === 'MOD_VIBRAZIONI' ? '20260523b'
                 : codice === 'MOD_GAS_RADON' ? '20260524e'
-                : codice === 'MOD_RUMORE' ? '20260525d'
+                : codice === 'MOD_RUMORE' ? '20260525h'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

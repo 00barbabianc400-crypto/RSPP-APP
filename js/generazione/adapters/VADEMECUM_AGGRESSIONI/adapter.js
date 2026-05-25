@@ -290,8 +290,13 @@
     }
 
     const outZip = doc.getZip();
-    if (repair?.expandSemicolonJoinedListParagraphsInZip) {
-      repair.expandSemicolonJoinedListParagraphsInZip(outZip, { minSemicolons: 1, minChars: 30 });
+    if (repair?.expandVademecumListLoopsInZip) {
+      repair.expandVademecumListLoopsInZip(outZip, {
+        loops: [
+          { texts: (templateData.VOCI_RACCOMANDAZIONI || []).map((r) => r.TESTO) },
+          { texts: (templateData.VOCI_DOPO_EVENTO || []).map((r) => r.TESTO) },
+        ],
+      });
     }
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);

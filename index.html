@@ -5451,6 +5451,7 @@
                 MOD_INCENDIO: '20260525v',
                 VADEMECUM_AGGRESSIONI: '20260526d',
                 VADEMECUM_ANTIRAPINA: '20260526d',
+                PROC_INFORTUNI_NEARMISS: '20260527a',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5640,12 +5641,12 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA', 'PROC_INFORTUNI_NEARMISS'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     const logoVer =
-                        codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA'
-                            ? '20260526d'
+                        codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA' || codice === 'PROC_INFORTUNI_NEARMISS'
+                            ? '20260527a'
                             : '20260520d';
                     await loadScriptOnce(base + 'logo-docx.js?v=' + logoVer);
                 } catch (_) { /* helper logo opzionale */ }
@@ -5670,6 +5671,7 @@
                 : codice === 'MOD_INCENDIO' ? '20260525v'
                 : codice === 'VADEMECUM_AGGRESSIONI' ? '20260526d'
                 : codice === 'VADEMECUM_ANTIRAPINA' ? '20260526d'
+                : codice === 'PROC_INFORTUNI_NEARMISS' ? '20260527a'
                 : '20260520c';
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

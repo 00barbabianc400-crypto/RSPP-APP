@@ -218,8 +218,13 @@
 
   function buildListParagraph(pPr, text) {
     const pr = pPr || '<w:pPr/>';
-    const t = escapeXmlText(text);
-    return '<w:p>' + pr + '<w:r><w:t xml:space="preserve">' + t + '</w:t></w:r></w:p>';
+    const parts = String(text == null ? '' : text).split('\n');
+    let runs = '';
+    parts.forEach((part, i) => {
+      if (i > 0) runs += '<w:br/>';
+      runs += '<w:r><w:t xml:space="preserve">' + escapeXmlText(part) + '</w:t></w:r>';
+    });
+    return '<w:p>' + pr + runs + '</w:p>';
   }
 
   /**

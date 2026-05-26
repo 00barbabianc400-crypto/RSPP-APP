@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Nota lavoratrici madri</title>
+<script src="rischi-madri-catalogo.js?v=20260527e"></script>
+<script src="adapter.js?v=20260527e"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 20px; }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .tag-pill { display: inline-block; font-family: monospace; font-size: 9pt; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; margin: 2px 4px 2px 0; }
+  .vib-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .vib-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .vib-actions button.secondary { border-color: #999; background: #f4f4f4; color: #333; font-weight: 500; }
+  .vad-table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 10px; }
+  .vad-table th { background: #2c3e50; color: #fff; padding: 6px 4px; text-align: center; font-size: 8.5pt; }
+  .vad-table td { border: 1px solid #bbb; padding: 2px; vertical-align: middle; }
+  .vad-table td input[type="text"] { width: 100%; border: none; background: transparent; font-size: 8.5pt; padding: 4px 3px; }
+  .vad-table .col-del { width: 36px; text-align: center; }
+  .vad-table .col-chk { width: 36px; text-align: center; }
+  .vad-table td.val-cell { font-size: 8pt; color: #444; line-height: 1.35; }
+  .vad-table tr.row-on td { background: #f4faf6; }
+  .rischi-preview { margin-top: 10px; padding-left: 22px; font-size: 9.5pt; }
+  .rischi-preview li { margin-bottom: 6px; }
+  .rischi-preview .val { color: #333; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">NOTA_LAVORATRICI_MADRI — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Nota informativa per le lavoratrici madri</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Caricare <code>NOTA_LAVORATRICI_MADRI.docx</code> nel bucket <code>modelli</code>.
+        I tag specifici del modello verranno allineati insieme al file Word.
+      </p>
+
+      <h2 class="doc-section">Dati documento</h2>
+      <p><strong>Ragione sociale</strong> <span class="tag-pill">{{RAGIONE_SOCIALE}}</span>: <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong> <span class="tag-pill">{{SEDE_OPERATIVA}}</span>: <span id="pSede" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong> <span class="tag-pill">{{MODULO_NUMERO}}</span>:<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+          style="width:120px;margin-top:6px;" placeholder="es. 250" autocomplete="off"
+          oninput="setModuloNumero(this.value)">
+      </p>
+      <p class="hint-str">Suggerimento dall’ordine catalogo documenti; nel Word viene formattato a 2 cifre.</p>
+      <p><strong>Data emissione</strong> <span class="tag-pill">{{DATA_EMISSIONE}}</span>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Luogo</strong> <span class="tag-pill">{{LUOGO}}</span>: <span id="pLuogo" class="field-auto">—</span></p>
+      <p style="margin-top:10px;">
+        <strong>Logo committente</strong> <span class="tag-pill">{%LOGO%}</span>
+        <span id="pLogo" class="field-auto" style="display:inline-block;vertical-align:middle;margin-left:8px;">—</span>
+      </p>
+
+      <h2 class="doc-section">Descrizione ciclo lavorativo</h2>
+      <p class="hint-str"><span class="tag-pill">{{TESTO_DESCRIZIONE_CICLO}}</span> — paragrafo modificabile (settore e attività)</p>
+      <textarea id="taTestoCiclo" class="inline-select" style="width:100%;min-height:96px;margin-top:6px;font-size:10pt;"
+        oninput="sendUpdate()"></textarea>
+      <div class="vib-actions" style="margin-top:8px;">
+        <button type="button" class="secondary" onclick="ripristinaTestoCiclo()">Ripristina testo default</button>
+      </div>
+      <p class="hint-str" style="margin-top:12px;">
+        Poi nel Word, paragrafo fisso «In particolare, l’organizzazione prevede…», sul <strong>primo</strong> bullet:
+        <span class="tag-pill">{{#GRUPPI_OMOGENEI}}{{NOME_GRUPPO}}{{/GRUPPI_OMOGENEI}}</span>
+        (elimina gli altri punti elenco fissi).
+      </p>
+      <ul id="listaGruppi" class="hint-str" style="margin-top:8px;padding-left:20px;"></ul>
+
+      <h2 class="doc-section">Attività svolte dalle lavoratrici</h2>
+      <p class="hint-str">
+        Nel Word, dopo il paragrafo con <span class="tag-pill">{{RAGIONE_SOCIALE}}</span>, sul <strong>primo</strong> bullet:
+        <span class="tag-pill">{{#ATTIVITA_LAVORATRICI}}{{TESTO}}{{/ATTIVITA_LAVORATRICI}}</span>
+        (elimina il testo segnaposto <code>**Attività da far inserire…**</code> e gli altri bullet fissi).
+      </p>
+      <div class="vib-actions">
+        <button type="button" onclick="addAttivita()">+ Attività</button>
+      </div>
+      <div id="wrapAttivita"></div>
+
+      <h2 class="doc-section">Agenti di rischio e valutazioni</h2>
+      <p class="hint-str">
+        Seleziona i rischi applicabili: compaiono nell’elenco numerato
+        <strong>Identificazione agenti di rischio</strong> e, con la valutazione collegata, in
+        <strong>Valutazione dei rischi</strong> (numerazione aggiornata automaticamente).
+      </p>
+      <p class="hint-str" style="margin-top:6px;">
+        Nel Word — primo punto dell’elenco numerato in «IDENTIFICAZIONE…»:
+        <span class="tag-pill">{{#RISCHI_IDENTIFICAZIONE}}{{TESTO_RISCHIO}}{{/RISCHI_IDENTIFICAZIONE}}</span>
+        (elimina gli altri punti fissi).<br>
+        Nel Word — primo punto dell’elenco numerato in «VALUTAZIONE…» (dopo l’intro, elimina il segnaposto con XXXXX):
+        <span class="tag-pill">{{#RISCHI_VALUTAZIONE}}{{TESTO_VALUTAZIONE}}{{/RISCHI_VALUTAZIONE}}</span>
+      </p>
+      <div id="wrapRischiTabella"></div>
+      <p class="hint-str" style="margin-top:12px;"><strong>Anteprima identificazione</strong></p>
+      <ol id="previewRischiId" class="rischi-preview"></ol>
+      <p class="hint-str" style="margin-top:10px;"><strong>Anteprima valutazioni</strong></p>
+      <ol id="previewRischiVal" class="rischi-preview"></ol>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let DATA = {};
+  let WIZARD = {
+    modulo_numero: '',
+    testo_descrizione_ciclo: '',
+    attivita_lavoratrici: [],
+    rischi_madri: [],
+  };
+  let activeView = 'compile';
+  let previewTimer = null;
+  const ADAPTER = window.GEN_ADAPTERS?.NOTA_LAVORATRICI_MADRI;
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;');
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el || !DATA) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML =
+        '<img src="' + escAttr(url) + '" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;vertical-align:middle;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.innerHTML = '<span class="hint-str">Logo caricato (visibile nel Word generato)</span>';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = '—';
+    el.className = 'field-missing';
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const n = parseInt(String(padded || '').trim(), 10);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function buildMerged() {
+    if (!DATA || !ADAPTER?.applyWizard) return {};
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  function renderListaGruppi(merged) {
+    const el = document.getElementById('listaGruppi');
+    if (!el) return;
+    const gruppi = merged?.GRUPPI_OMOGENEI || [];
+    if (!gruppi.length) {
+      el.innerHTML = '<li><em>Nessun profilo associato all’azienda</em></li>';
+      return;
+    }
+    el.innerHTML = gruppi.map((g) => '<li>' + esc(g.NOME_GRUPPO) + '</li>').join('');
+  }
+
+  function renderAttivitaTable() {
+    const wrap = document.getElementById('wrapAttivita');
+    if (!wrap) return;
+    const rows = WIZARD.attivita_lavoratrici || [];
+    if (!rows.length) {
+      wrap.innerHTML =
+        '<p class="hint-str" style="margin-top:8px;"><em>Nessuna attività: clicca «+ Attività» per aggiungere righe.</em></p>';
+      return;
+    }
+    let html =
+      '<table class="vad-table"><thead><tr><th>Attività</th><th></th></tr></thead><tbody>';
+    rows.forEach((r, idx) => {
+      html +=
+        '<tr><td><input type="text" value="' + escAttr(r.testo) +
+        '" placeholder="Descrizione attività…" oninput="editAttivita(' + idx + ',this.value)"></td>' +
+        '<td class="col-del"><button type="button" class="secondary" onclick="removeAttivita(' + idx +
+        ')" title="Elimina">✕</button></td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  window.addAttivita = function () {
+    WIZARD.attivita_lavoratrici = WIZARD.attivita_lavoratrici || [];
+    WIZARD.attivita_lavoratrici.push({ id: 'att_' + Date.now(), testo: '' });
+    renderAttivitaTable();
+    sendUpdate();
+  };
+
+  window.editAttivita = function (idx, val) {
+    if (!WIZARD.attivita_lavoratrici[idx]) return;
+    WIZARD.attivita_lavoratrici[idx].testo = val;
+    sendUpdate();
+  };
+
+  window.removeAttivita = function (idx) {
+    WIZARD.attivita_lavoratrici.splice(idx, 1);
+    renderAttivitaTable();
+    sendUpdate();
+  };
+
+  function renderRischiTabella() {
+    const wrap = document.getElementById('wrapRischiTabella');
+    if (!wrap || !ADAPTER) return;
+    WIZARD.rischi_madri = ADAPTER.mergeRischiMadriWizard({ rischi_madri: WIZARD.rischi_madri });
+    const rows = WIZARD.rischi_madri || [];
+    if (!rows.length) {
+      wrap.innerHTML =
+        '<p class="hint-str" style="margin-top:8px;color:#c0392b;">Catalogo rischi non caricato.</p>';
+      return;
+    }
+    let html =
+      '<table class="vad-table"><thead><tr>' +
+      '<th class="col-chk">✓</th><th>Rischio</th><th>Valutazione (nel Word se selezionato)</th>' +
+      '</tr></thead><tbody>';
+    rows.forEach((r, idx) => {
+      const on = r.selezionato === true;
+      html +=
+        '<tr class="' + (on ? 'row-on' : '') + '">' +
+        '<td class="col-chk"><input type="checkbox"' + (on ? ' checked' : '') +
+        ' onchange="toggleRischioMadre(' + idx + ', this.checked)"></td>' +
+        '<td>' + esc(r.rischio) + '</td>' +
+        '<td class="val-cell">' + esc(r.valutazione).replace(/\n/g, '<br>') + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function renderRischiPreview(merged) {
+    const idEl = document.getElementById('previewRischiId');
+    const valEl = document.getElementById('previewRischiVal');
+    const idRows = merged?.RISCHI_IDENTIFICAZIONE || [];
+    const valRows = merged?.RISCHI_VALUTAZIONE || [];
+    if (idEl) {
+      idEl.innerHTML = idRows.length
+        ? idRows.map((r) => '<li>' + esc(r.TESTO_RISCHIO) + '</li>').join('')
+        : '<li><em>Nessun rischio selezionato</em></li>';
+    }
+    if (valEl) {
+      valEl.innerHTML = valRows.length
+        ? valRows
+            .map(
+              (r) =>
+                '<li><span class="val">' +
+                esc(r.TESTO_VALUTAZIONE).replace(/\n/g, '<br>') +
+                '</span></li>'
+            )
+            .join('')
+        : '<li><em>Nessuna valutazione</em></li>';
+    }
+  }
+
+  window.toggleRischioMadre = function (idx, checked) {
+    if (!WIZARD.rischi_madri[idx]) return;
+    WIZARD.rischi_madri[idx].selezionato = !!checked;
+    renderRischiTabella();
+    sendUpdate();
+  };
+
+  window.ripristinaTestoCiclo = function () {
+    if (!ADAPTER) return;
+    WIZARD.testo_descrizione_ciclo = ADAPTER.TESTO_DESCRIZIONE_CICLO_DEFAULT;
+    document.getElementById('taTestoCiclo').value = WIZARD.testo_descrizione_ciclo;
+    sendUpdate();
+  };
+
+  function sendUpdate() {
+    WIZARD.testo_descrizione_ciclo = document.getElementById('taTestoCiclo')?.value || '';
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    window.parent.postMessage({
+      type: 'DATA_UPDATE',
+      data: merged,
+      valid: errors.length === 0,
+      errors,
+    }, '*');
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    renderListaGruppi(merged);
+    renderAttivitaTable();
+    renderRischiPreview(merged);
+    if (activeView === 'docx' && errors.length === 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 600);
+    }
+  }
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'NOTA_LAVORATRICI_MADRI — Compila' : 'NOTA_LAVORATRICI_MADRI — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    renderLogoPreview();
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+    const prev = DATA._nota_wizard || {};
+    WIZARD.testo_descrizione_ciclo =
+      prev.testo_descrizione_ciclo != null && String(prev.testo_descrizione_ciclo).trim() !== ''
+        ? String(prev.testo_descrizione_ciclo)
+        : DATA.TESTO_DESCRIZIONE_CICLO || ADAPTER.TESTO_DESCRIZIONE_CICLO_DEFAULT;
+    document.getElementById('taTestoCiclo').value = WIZARD.testo_descrizione_ciclo;
+    if (prev.modulo_numero != null && String(prev.modulo_numero).trim() !== '') {
+      WIZARD.modulo_numero = String(prev.modulo_numero).trim();
+      document.getElementById('inpModuloNumero').value = WIZARD.modulo_numero;
+    }
+    WIZARD.attivita_lavoratrici = ADAPTER.mergeAttivitaWizard({
+      attivita_lavoratrici: prev.attivita_lavoratrici,
+    });
+    WIZARD.rischi_madri = ADAPTER.mergeRischiMadriWizard({
+      rischi_madri: prev.rischi_madri,
+    });
+    renderAttivitaTable();
+    renderRischiTabella();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

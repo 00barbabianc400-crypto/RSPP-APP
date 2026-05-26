@@ -2884,6 +2884,82 @@
             }
         }
 
+        /** Stessa logica di fn_calcola_indice_livello (Supabase). */
+        function calcolaIndiceLivelloValutazione(probabilita, gravita) {
+            const p = probabilita != null && probabilita !== '' ? parseInt(probabilita, 10) : null;
+            const g = gravita != null && gravita !== '' ? parseInt(gravita, 10) : null;
+            if (p == null || g == null || p < 1 || p > 4 || g < 1 || g > 4) {
+                return { indice: null, livello: 'Trascurabile' };
+            }
+            const indice = p * g;
+            let livello = 'Trascurabile';
+            if (indice >= 10) livello = 'Alto';
+            else if (indice >= 5) livello = 'Medio';
+            else if (indice >= 1) livello = 'Basso';
+            return { indice, livello };
+        }
+
+        function getTestiCompatibiliValutazione(rischioId, livello, aziendaId) {
+            const testiStessoRischio = (STATE.data.testiDVR || []).filter(t => t.rischio_id === rischioId);
+            const testiPerLivello = testiStessoRischio.filter(t => t.livello === livello);
+            const testiScopeAzienda = (list) => list.filter(t =>
+                t.tipo_testo === 'Standard' ||
+                !t.azienda_origine_id ||
+                (aziendaId && t.azienda_origine_id === aziendaId)
+            );
+            return testiScopeAzienda(testiPerLivello).length > 0
+                ? testiScopeAzienda(testiPerLivello)
+                : testiScopeAzienda(testiStessoRischio);
+        }
+
+        function livelloPerTestiDvrValutazione(stato, probabilita, gravita, livelloSalvato) {
+            if (stato !== 'Presente') {
+                const salvato = livelloSalvato && livelloSalvato !== 'Trascurabile' ? livelloSalvato : 'Basso';
+                return { indice: null, livello: salvato };
+            }
+            const calc = calcolaIndiceLivelloValutazione(probabilita, gravita);
+            const livello = calc.livello === 'Trascurabile' ? 'Basso' : calc.livello;
+            return { indice: calc.indice, livello };
+        }
+
+        function refreshValutazioneTestiDvrSelect() {
+            const form = document.getElementById('valutazioneForm');
+            if (!form) return;
+
+            const rischioId = form.dataset.rischioId;
+            const aziendaId = form.dataset.aziendaId || null;
+            const livelloSalvato = form.dataset.livelloSalvato || '';
+            const stato = form.querySelector('[name="stato"]')?.value || 'Trascurabile';
+            const probabilita = form.querySelector('[name="probabilita"]')?.value;
+            const gravita = form.querySelector('[name="gravita"]')?.value;
+            const select = form.querySelector('[name="testo_dvr_id"]');
+            const hint = document.getElementById('valutazioneLivelloHint');
+            if (!select || !rischioId) return;
+
+            const { indice, livello } = livelloPerTestiDvrValutazione(stato, probabilita, gravita, livelloSalvato);
+            const prev = select.value || form.dataset.initialTesto || '';
+            const testi = getTestiCompatibiliValutazione(rischioId, livello, aziendaId);
+
+            select.innerHTML = '<option value="">— Nessuno —</option>'
+                + testi.map(t => `<option value="${t.id}">${esc(t.titolo_testo)}</option>`).join('');
+            if (prev && testi.some(t => String(t.id) === String(prev))) {
+                select.value = prev;
+            }
+
+            if (hint) {
+                if (stato === 'Presente' && indice != null) {
+                    hint.textContent = 'Indice ' + indice + ' → livello ' + livello + ' (testi filtrati per fascia)';
+                    hint.style.display = '';
+                } else if (stato === 'Presente') {
+                    hint.textContent = 'Inserisci P e G (1–4) per calcolare la fascia e filtrare i testi DVR';
+                    hint.style.display = '';
+                } else {
+                    hint.textContent = 'Stato Trascurabile: testi per livello ' + livello;
+                    hint.style.display = '';
+                }
+            }
+        }
+
         function openValutazioneModal(valutazioneId) {
             if (!canMutateData()) {
                 showToast('Profilo in sola lettura', 'warning');
@@ -2892,18 +2968,7 @@
             const item = (STATE.data.valutazioniRischio || []).find(v => v.id == valutazioneId);
             if (!item) return;
             const rischioId = item.rischio_id;
-            const livello = item.livello_rischio && item.livello_rischio !== 'Trascurabile' ? item.livello_rischio : 'Basso';
-            const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value || null;
-            const testiStessoRischio = (STATE.data.testiDVR || []).filter(t => t.rischio_id === rischioId);
-            const testiPerLivello = testiStessoRischio.filter(t => t.livello === livello);
-            const testiScopeAzienda = (list) => list.filter(t =>
-                t.tipo_testo === 'Standard' ||
-                !t.azienda_origine_id ||
-                (aziendaId && t.azienda_origine_id === aziendaId)
-            );
-            const testiCompatibili = testiScopeAzienda(testiPerLivello).length > 0
-                ? testiScopeAzienda(testiPerLivello)
-                : testiScopeAzienda(testiStessoRischio);
+            const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value || '';
 
             const modal = document.createElement('div');
             modal.className = 'modal-overlay';
@@ -2915,28 +2980,35 @@
                         <button class="icon-btn" onclick="closeModal('valutazioneModal')">✕</button>
                     </div>
                     <div class="modal-body">
-                        <form id="valutazioneForm" onsubmit="saveValutazione(event, '${valutazioneId}')">
+                        <form id="valutazioneForm"
+                              data-rischio-id="${rischioId}"
+                              data-azienda-id="${aziendaId}"
+                              data-livello-salvato="${esc(item.livello_rischio || '')}"
+                              data-initial-testo="${item.testo_dvr_id || ''}"
+                              onsubmit="saveValutazione(event, '${valutazioneId}')">
                             <div class="form-grid cols-3">
                                 <div class="form-field">
                                     <label>Stato</label>
-                                    <select name="stato" required onchange="toggleValutazionePG(this.value)">
+                                    <select name="stato" required onchange="toggleValutazionePG(this.value); refreshValutazioneTestiDvrSelect();">
                                         <option value="Trascurabile" ${item.stato === 'Trascurabile' ? 'selected' : ''}>Trascurabile</option>
                                         <option value="Presente" ${item.stato === 'Presente' ? 'selected' : ''}>Presente</option>
                                     </select>
                                 </div>
                                 <div class="form-field pg-field" style="${item.stato === 'Presente' ? '' : 'display:none;'}">
                                     <label>Probabilità (1-4)</label>
-                                    <input type="number" name="probabilita" min="1" max="4" value="${item.probabilita ?? ''}">
+                                    <input type="number" name="probabilita" min="1" max="4" value="${item.probabilita ?? ''}"
+                                           oninput="refreshValutazioneTestiDvrSelect()" onchange="refreshValutazioneTestiDvrSelect()">
                                 </div>
                                 <div class="form-field pg-field" style="${item.stato === 'Presente' ? '' : 'display:none;'}">
                                     <label>Gravità (1-4)</label>
-                                    <input type="number" name="gravita" min="1" max="4" value="${item.gravita ?? ''}">
+                                    <input type="number" name="gravita" min="1" max="4" value="${item.gravita ?? ''}"
+                                           oninput="refreshValutazioneTestiDvrSelect()" onchange="refreshValutazioneTestiDvrSelect()">
                                 </div>
                                 <div class="form-field full">
                                     <label>Testo DVR</label>
+                                    <p id="valutazioneLivelloHint" class="form-hint" style="margin:0 0 6px;font-size:12px;color:var(--sp-text-secondary);"></p>
                                     <select name="testo_dvr_id">
                                         <option value="">— Nessuno —</option>
-                                        ${testiCompatibili.map(t => `<option value="${t.id}" ${item.testo_dvr_id === t.id ? 'selected' : ''}>${esc(t.titolo_testo)}</option>`).join('')}
                                     </select>
                                 </div>
                                 <div class="form-field full">
@@ -2953,7 +3025,10 @@
                 </div>
             `;
             document.body.appendChild(modal);
-            setTimeout(() => modal.classList.add('show'), 10);
+            setTimeout(() => {
+                modal.classList.add('show');
+                refreshValutazioneTestiDvrSelect();
+            }, 10);
             modal.onclick = () => closeModal('valutazioneModal');
         }
 

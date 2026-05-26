@@ -443,13 +443,16 @@
     });
   }
 
-  /** Unisce run spezzati (es. apostrofi) in paragrafi senza disegni. */
+  function isStructuralOrFieldParagraph(block) {
+    return /<w:(?:fldChar|instrText|fldSimple|bookmarkStart|bookmarkEnd)\b/i.test(block);
+  }
+
+  /** Unisce run spezzati solo se servono ai tag Docxtemplater — non tocca sommario/campi Word. */
   function mergeFragmentedParagraphsInXml(xml) {
     return xml.replace(/<w:p[\s\S]*?<\/w:p>/g, (block) => {
       if (/<w:drawing|<w:pict/i.test(block)) return block;
-      const runCount = (block.match(/<w:t(?:\s[^>]*)?>/g) || []).length;
-      if (runCount < 2) return block;
-      return mergeWtInParagraphForced(block);
+      if (isStructuralOrFieldParagraph(block)) return block;
+      return mergeWtInParagraph(block);
     });
   }
 
@@ -476,6 +479,12 @@
       if (hasNumPr) lastListPPr = pPr;
 
       out += xml.slice(lastEnd, m.index);
+
+      if (!hasNumPr) {
+        out += block;
+        lastEnd = m.index + block.length;
+        continue;
+      }
 
       if (loopIdx < loops.length) {
         const joined = decodeXmlText(paragraphPlainText(block));

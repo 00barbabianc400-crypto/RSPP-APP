@@ -517,8 +517,19 @@
         ],
       });
     }
-    if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
+    if (logoBuffer) {
+      if (!window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
+        throw new Error(
+          'Modulo logo Word non caricato (logo-docx.js). Ricarica la pagina e riprova la generazione.'
+        );
+      }
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);
+      const docAfter = outZip.file('word/document.xml')?.asText() || '';
+      if (/\{%LOGO%?\}/.test(docAfter)) {
+        throw new Error(
+          'Il logo non è stato inserito nel Word: verifica il segnaposto {%LOGO} nel modello (un solo run, copia da Blocco note).'
+        );
+      }
     }
     return outZip.generate({ type: 'arraybuffer', compression: 'DEFLATE' });
   }

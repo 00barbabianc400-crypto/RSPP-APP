@@ -115,30 +115,32 @@
     });
   }
 
+  const LOGO_TAG_TEXT_RE = /\{%LOGO%?\}/;
+
   const runWithLogoRe =
-    /<w:r(?:\s[^>]*)?>(?:(?!<\/w:r>)[\s\S])*?<w:t(?:\s[^>]*)?>\{%LOGO\}<\/w:t>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/;
+    /<w:r(?:\s[^>]*)?>(?:(?!<\/w:r>)[\s\S])*?<w:t(?:\s[^>]*)?>[\s\S]*?\{%LOGO%?\}[\s\S]*?<\/w:t>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/;
 
   function replaceLogoInPartXml(docXml, rId, sizeEmus, partPath) {
-    if (docXml.indexOf('{%LOGO}') === -1) return { xml: docXml, replaced: false };
+    if (!LOGO_TAG_TEXT_RE.test(docXml)) return { xml: docXml, replaced: false };
     const drawingRun =
       '<w:r><w:rPr/><w:drawing>' + getImageDrawingXml(rId, sizeEmus) + '</w:drawing></w:r>';
     const m = docXml.match(runWithLogoRe);
     if (m && m[0].length <= 800) {
       return {
-        xml: docXml.replace(runWithLogoRe, drawingRun).replace(/\{%LOGO\}/g, ''),
+        xml: docXml.replace(runWithLogoRe, drawingRun).replace(LOGO_TAG_TEXT_RE, ''),
         replaced: true,
       };
     }
     const paraRe = /<w:p[\s\S]*?<\/w:p>/g;
     let pm;
     while ((pm = paraRe.exec(docXml)) !== null) {
-      if (!/\{%LOGO\}/.test(pm[0])) continue;
+      if (!LOGO_TAG_TEXT_RE.test(pm[0])) continue;
       console.warn('[GEN_LOGO_DOCX] {%LOGO} spezzato — fallback nel paragrafo', partPath || '');
-      const merged = pm[0].replace(runWithLogoRe, drawingRun).replace(/\{%LOGO\}/g, '');
+      const merged = pm[0].replace(runWithLogoRe, drawingRun).replace(LOGO_TAG_TEXT_RE, '');
       if (merged !== pm[0]) {
         return { xml: docXml.replace(pm[0], merged), replaced: true };
       }
-      const withDrawing = pm[0].replace(/\{%LOGO\}/g, '').replace(/<\/w:p>/, drawingRun + '</w:p>');
+      const withDrawing = pm[0].replace(LOGO_TAG_TEXT_RE, '').replace(/<\/w:p>/, drawingRun + '</w:p>');
       return { xml: docXml.replace(pm[0], withDrawing), replaced: true };
     }
     return { xml: docXml, replaced: false };
@@ -167,7 +169,7 @@
     let anyReplaced = false;
     partPaths.forEach((partPath) => {
       let partXml = zip.file(partPath).asText();
-      if (partXml.indexOf('{%LOGO}') === -1) return;
+      if (!LOGO_TAG_TEXT_RE.test(partXml)) return;
 
       const relsPath = relsPathForPart(partPath);
       const rId = addImageRelationship(zip, relsPath, mediaFile);

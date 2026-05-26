@@ -7,10 +7,50 @@
   const CODICE = 'NOTA_LAVORATRICI_MADRI';
   const NOME = 'Nota informativa per le lavoratrici madri';
 
-  /** Calibri 8pt (half-points 16) — solo elenco gruppi omogenei. */
-  const GRUPPI_OMOGENEI_RUN_PR =
+  /** Calibri 8pt (half-points 16) — elenchi puntati / numerati. */
+  const NOTA_ELENCO_8PT_RUN_PR =
     '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>' +
     '<w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+
+  function htmlToRuns(html) {
+    const runs = [];
+    let bold = false;
+    let underline = false;
+    const parts = String(html || '').split(/(<\/?strong>|<\/?u>)/gi);
+    for (const p of parts) {
+      const tag = p.toLowerCase();
+      if (tag === '<strong>') {
+        bold = true;
+        continue;
+      }
+      if (tag === '</strong>') {
+        bold = false;
+        continue;
+      }
+      if (tag === '<u>') {
+        underline = true;
+        continue;
+      }
+      if (tag === '</u>') {
+        underline = false;
+        continue;
+      }
+      if (!p) continue;
+      runs.push({ text: p, bold, underline });
+    }
+    return runs;
+  }
+
+  function valutazioneRunsFromDef(def) {
+    if (Array.isArray(def.valutazioneRuns) && def.valutazioneRuns.length) {
+      return def.valutazioneRuns;
+    }
+    if (def.valutazioneHtml) {
+      const fromHtml = htmlToRuns(def.valutazioneHtml);
+      if (fromHtml.length) return fromHtml;
+    }
+    return [{ text: def.valutazione || '', bold: false, underline: false }];
+  }
 
   const TESTO_DESCRIZIONE_CICLO_DEFAULT =
     'La societ\u00e0 opera nel settore terziario ed in particolar modo si occupa di fornire prestazioni di servizi di estetica generale, compresi i massaggi e l\u2019uso di apparecchiature con ultrasuoni e corrente galvanica oltre alla vendita di prodotti estetici di diversa natura.';
@@ -100,6 +140,8 @@
         id: def.id,
         rischio: def.rischio,
         valutazione: def.valutazione,
+        valutazioneHtml: def.valutazioneHtml || '',
+        valutazioneRuns: valutazioneRunsFromDef(def),
         selezionato: saved != null ? saved.selezionato === true : false,
       };
     });
@@ -115,6 +157,15 @@
     return mergeRischiMadriWizard(wizard)
       .filter((r) => r.selezionato)
       .map((r) => ({ TESTO_VALUTAZIONE: r.valutazione }));
+  }
+
+  function rischiValutazioneListItemsForDocx(wizard) {
+    return mergeRischiMadriWizard(wizard)
+      .filter((r) => r.selezionato)
+      .map((r) => ({
+        plain: r.valutazione,
+        runs: r.valutazioneRuns || [{ text: r.valutazione, bold: false, underline: false }],
+      }));
   }
 
   function buildData(azienda, _rilevamenti, wizardInput) {
@@ -284,21 +335,24 @@
     }
 
     const outZip = doc.getZip();
-    const gruppiNomi = (templateData.GRUPPI_OMOGENEI || []).map((r) => r.NOME_GRUPPO);
+    const rischiValItems = rischiValutazioneListItemsForDocx({
+      rischi_madri: data._nota_wizard?.rischi_madri,
+    });
     if (repair?.expandVademecumListLoopsInZip) {
       repair.expandVademecumListLoopsInZip(outZip, {
         loops: [
-          { texts: gruppiNomi, rPr: GRUPPI_OMOGENEI_RUN_PR },
+          {
+            texts: (templateData.GRUPPI_OMOGENEI || []).map((r) => r.NOME_GRUPPO),
+            rPr: NOTA_ELENCO_8PT_RUN_PR,
+          },
           { texts: (templateData.ATTIVITA_LAVORATRICI || []).map((r) => r.TESTO) },
-          { texts: (templateData.RISCHI_IDENTIFICAZIONE || []).map((r) => r.TESTO_RISCHIO) },
-          { texts: (templateData.RISCHI_VALUTAZIONE || []).map((r) => r.TESTO_VALUTAZIONE) },
+          {
+            texts: (templateData.RISCHI_IDENTIFICAZIONE || []).map((r) => r.TESTO_RISCHIO),
+            rPr: NOTA_ELENCO_8PT_RUN_PR,
+          },
+          { texts: rischiValItems, rPr: NOTA_ELENCO_8PT_RUN_PR },
         ],
       });
-    }
-    if (repair?.forceRunStyleForParagraphTextsInZip && gruppiNomi.length) {
-      repair.forceRunStyleForParagraphTextsInZip(outZip, [
-        { texts: gruppiNomi, rPr: GRUPPI_OMOGENEI_RUN_PR },
-      ]);
     }
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);

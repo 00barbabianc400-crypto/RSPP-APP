@@ -216,18 +216,57 @@
     return m ? m[0] : null;
   }
 
-  function applyDefaultRunToPPr(pPr, rPrXml) {
-    if (!rPrXml) return pPr || '<w:pPr/>';
-    if (!pPr) return '<w:pPr>' + rPrXml + '</w:pPr>';
-    let pr = pPr.replace(/<w:rPr[\s\S]*?<\/w:rPr>/gi, '');
-    if (/<w:pPr[\s>]/.test(pr)) {
-      return pr.replace(/<w:pPr([^>]*)>/, '<w:pPr$1>' + rPrXml);
-    }
-    return '<w:pPr>' + rPrXml + pr + '</w:pPr>';
+  function listItemPlainText(item) {
+    if (item == null) return '';
+    if (typeof item === 'string') return item;
+    if (Array.isArray(item.runs)) return item.runs.map((r) => r.text || '').join('');
+    return String(item.plain || item.text || '');
   }
 
-  function buildListParagraph(pPr, text, rPrXml) {
-    const pr = applyDefaultRunToPPr(pPr, rPrXml);
+  function runXml(text, bold, underline, baseRPrXml) {
+    let rPr = baseRPrXml || '';
+    const extra = (bold ? '<w:b/>' : '') + (underline ? '<w:u w:val="single"/>' : '');
+    if (extra) {
+      if (rPr && /<w:rPr/.test(rPr)) {
+        rPr = rPr.replace(/<\/w:rPr>/, extra + '</w:rPr>');
+      } else {
+        rPr = '<w:rPr>' + extra + '</w:rPr>';
+      }
+    }
+    return '<w:r>' + rPr + '<w:t xml:space="preserve">' + escapeXmlText(text) + '</w:t></w:r>';
+  }
+
+  function buildListParagraphRuns(pPr, runs, baseRPrXml) {
+    const pr = pPr || '<w:pPr/>';
+    const lines = [];
+    let current = [];
+    for (const r of runs || []) {
+      const parts = String(r.text == null ? '' : r.text).split('\n');
+      parts.forEach((part, i) => {
+        if (i > 0) {
+          lines.push(current);
+          current = [];
+        }
+        if (part) current.push({ text: part, bold: !!r.bold, underline: !!r.underline });
+      });
+    }
+    if (current.length) lines.push(current);
+    if (!lines.length) lines.push([{ text: '', bold: false, underline: false }]);
+
+    let body = '';
+    lines.forEach((lineRuns, li) => {
+      if (li > 0) body += '<w:br/>';
+      body += lineRuns.map((r) => runXml(r.text, r.bold, r.underline, baseRPrXml)).join('');
+    });
+    return '<w:p>' + pr + body + '</w:p>';
+  }
+
+  function buildListParagraph(pPr, item, rPrXml) {
+    if (item && Array.isArray(item.runs) && item.runs.length) {
+      return buildListParagraphRuns(pPr, item.runs, rPrXml);
+    }
+    const text = typeof item === 'string' ? item : listItemPlainText(item);
+    const pr = pPr || '<w:pPr/>';
     const rPr = rPrXml || '';
     const parts = String(text == null ? '' : text).split('\n');
     let runs = '';
@@ -240,45 +279,13 @@
 
   function paragraphMatchesLoopTexts(normJoined, texts) {
     if (!texts.length) return false;
-    const probe = normalizeMatchText(texts[0]).slice(0, 40);
+    const probe = normalizeMatchText(listItemPlainText(texts[0])).slice(0, 40);
     if (probe.length < 8 || !normJoined.includes(probe)) return false;
     if (texts.length === 1) return true;
-    const probe2 = normalizeMatchText(texts[1]).slice(0, 28);
+    const probe2 = normalizeMatchText(listItemPlainText(texts[1])).slice(0, 28);
     if (probe2 && normJoined.includes(probe2)) return true;
     if ((normJoined.match(/;/g) || []).length >= 1) return true;
-    if (normJoined.length > probe.length + 15) return true;
-    return texts.some((t, i) => i > 0 && normJoined.includes(normalizeMatchText(t).slice(0, 22)));
-  }
-
-  /** Applica stile run a paragrafi il cui testo coincide con una voce wizard (es. gruppi omogenei). */
-  function forceRunStyleForParagraphTextsInXml(xml, entries) {
-    const list = Array.isArray(entries) ? entries : [];
-    if (!list.length) return xml;
-    return xml.replace(/<w:p[\s\S]*?<\/w:p>/g, (block) => {
-      const norm = normalizeMatchText(decodeXmlText(paragraphPlainText(block)));
-      for (const entry of list) {
-        const rPrXml = entry.rPr || '';
-        const texts = (entry.texts || []).map((t) => normalizeMatchText(t)).filter(Boolean);
-        for (let i = 0; i < texts.length; i++) {
-          if (norm === texts[i] || norm.startsWith(texts[i])) {
-            const pPr = extractPPr(block);
-            const plain = decodeXmlText(paragraphPlainText(block)).trim();
-            return buildListParagraph(pPr, plain, rPrXml);
-          }
-        }
-      }
-      return block;
-    });
-  }
-
-  function forceRunStyleForParagraphTextsInZip(zip, entries) {
-    const path = 'word/document.xml';
-    const file = zip.file(path);
-    if (!file) return zip;
-    let xml = file.asText();
-    xml = forceRunStyleForParagraphTextsInXml(xml, entries);
-    zip.file(path, xml);
-    return zip;
+    return normJoined.length > probe.length + 15;
   }
 
   /**
@@ -475,9 +482,7 @@
         const normJoined = normalizeMatchText(joined);
         for (let tryIdx = loopIdx; tryIdx < loops.length; tryIdx++) {
           const loopCfg = loops[tryIdx] || {};
-          const texts = (loopCfg.texts || [])
-            .map((t) => String(t == null ? '' : t).trim())
-            .filter(Boolean);
+          const texts = (loopCfg.texts || []).filter((t) => listItemPlainText(t).trim());
           if (!texts.length) continue;
           if (!paragraphMatchesLoopTexts(normJoined, texts)) continue;
           const usePPr = (hasNumPr ? pPr : null) || lastListPPr || pPr || '<w:pPr/>';
@@ -536,7 +541,6 @@
     expandJoinedListParagraphsInZip,
     expandSemicolonJoinedListParagraphsInZip,
     expandVademecumListLoopsInZip,
-    forceRunStyleForParagraphTextsInZip,
     formatDocxtemplaterErrors,
     fixSplitPlaceholdersInXml,
   };

@@ -5452,7 +5452,7 @@
                 VADEMECUM_AGGRESSIONI: '20260526d',
                 VADEMECUM_ANTIRAPINA: '20260526d',
                 PROC_INFORTUNI_NEARMISS: '20260527a',
-                NOTA_LAVORATRICI_MADRI: '20260528a',
+                NOTA_LAVORATRICI_MADRI: '20260528d',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5653,7 +5653,7 @@
                 } catch (_) { /* helper logo opzionale */ }
             }
 
-            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260528a');
+            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260528d');
 
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520c');
@@ -5673,7 +5673,7 @@
                 : codice === 'VADEMECUM_AGGRESSIONI' ? '20260526d'
                 : codice === 'VADEMECUM_ANTIRAPINA' ? '20260526d'
                 : codice === 'PROC_INFORTUNI_NEARMISS' ? '20260527a'
-                : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528a'
+                : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);

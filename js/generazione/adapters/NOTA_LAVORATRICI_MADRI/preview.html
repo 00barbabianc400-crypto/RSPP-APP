@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Nota lavoratrici madri</title>
-<script src="rischi-madri-catalogo.js?v=20260528a"></script>
-<script src="adapter.js?v=20260528a"></script>
+<script src="rischi-madri-catalogo.js?v=20260528d"></script>
+<script src="adapter.js?v=20260528d"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -56,6 +56,8 @@
   .vad-table .col-del { width: 36px; text-align: center; }
   .vad-table .col-chk { width: 36px; text-align: center; }
   .vad-table td.val-cell { font-size: 8pt; color: #444; line-height: 1.35; }
+  .vad-table td.val-cell u { text-decoration: underline; }
+  .vad-table td.val-cell strong { font-weight: 700; }
   .vad-table tr.row-on td { background: #f4faf6; }
   .rischi-preview { margin-top: 10px; padding-left: 22px; font-size: 9.5pt; }
   .rischi-preview li { margin-bottom: 6px; }
@@ -281,7 +283,9 @@
         '<td class="col-chk"><input type="checkbox"' + (on ? ' checked' : '') +
         ' onchange="toggleRischioMadre(' + idx + ', this.checked)"></td>' +
         '<td>' + esc(r.rischio) + '</td>' +
-        '<td class="val-cell">' + esc(r.valutazione).replace(/\n/g, '<br>') + '</td></tr>';
+        '<td class="val-cell">' +
+        (r.valutazioneHtml || esc(r.valutazione).replace(/\n/g, '<br>')) +
+        '</td></tr>';
     });
     html += '</tbody></table>';
     wrap.innerHTML = html;
@@ -298,12 +302,13 @@
         : '<li><em>Nessun rischio selezionato</em></li>';
     }
     if (valEl) {
-      valEl.innerHTML = valRows.length
-        ? valRows
+      const sel = (WIZARD.rischi_madri || []).filter((r) => r.selezionato);
+      valEl.innerHTML = sel.length
+        ? sel
             .map(
               (r) =>
                 '<li><span class="val">' +
-                esc(r.TESTO_VALUTAZIONE).replace(/\n/g, '<br>') +
+                (r.valutazioneHtml || esc(r.valutazione).replace(/\n/g, '<br>')) +
                 '</span></li>'
             )
             .join('')

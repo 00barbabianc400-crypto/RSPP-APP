@@ -675,6 +675,7 @@
         .badge.warning { background: #FFF4CE; color: #997B00; }
         .badge.error { background: #FDE7E9; color: var(--sp-error); }
         .badge.info { background: #DEECF9; color: var(--sp-primary); }
+        tr.row-error td { background: #FDE7E9; }
         
         /* Rilevamenti — valore microclima tabellare (dashboard) */
         .rile-val-cell {
@@ -2998,6 +2999,173 @@
             await loadValutazioniByFilters();
         }
 
+        const TESTI_DVR_IMPORT_VER = '20260526a';
+
+        async function ensureTestiDvrImportReady() {
+            await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+            await loadScriptOnce('js/testi-dvr-import-xlsx.js?v=' + TESTI_DVR_IMPORT_VER);
+        }
+
+        function makeDuplicateTitoloTesto(base, existing) {
+            const names = new Set((existing || []).map(t => String(t.titolo_testo || '').trim().toLowerCase()));
+            let candidate = String(base || 'Testo').trim() + ' - Copia';
+            let n = 2;
+            while (names.has(candidate.toLowerCase())) {
+                candidate = String(base || 'Testo').trim() + ' - Copia (' + n + ')';
+                n += 1;
+            }
+            return candidate;
+        }
+
+        async function duplicateTestoDvr(itemId) {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const item = (STATE.data.testiDVR || []).find(t => t.id == itemId);
+            if (!item) return;
+            const titolo = makeDuplicateTitoloTesto(item.titolo_testo, STATE.data.testiDVR);
+            const payload = {
+                titolo_testo: titolo,
+                rischio_id: item.rischio_id,
+                livello: item.livello,
+                tipo_testo: item.tipo_testo,
+                azienda_origine_id: item.tipo_testo === 'Custom' ? item.azienda_origine_id : null,
+                priorita_intervento: item.priorita_intervento || null,
+                testo_valutazione: item.testo_valutazione,
+                misure_in_atto: item.misure_in_atto || null,
+                misure_programmate: item.misure_programmate || null,
+                autore_id: STATE.account?.id || null
+            };
+            const { data, error } = await supabaseClient
+                .from(CONFIG.tables.testiDVR)
+                .insert(payload)
+                .select('id')
+                .single();
+            if (error) {
+                showToast('Errore duplicazione: ' + error.message, 'error');
+                return;
+            }
+            showToast('Testo duplicato', 'success');
+            await renderTestiDvr();
+            openTestoDvrModal(data.id);
+        }
+
+        function triggerTestiDvrImport() {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            document.getElementById('testiDvrImportFile')?.click();
+        }
+
+        async function onTestiDvrImportFileSelected(event) {
+            const input = event.target;
+            const file = input?.files?.[0];
+            input.value = '';
+            if (!file) return;
+            await ensureTestiDvrImportReady();
+            await ensureAziendeLoaded();
+            let buf;
+            try {
+                buf = await file.arrayBuffer();
+            } catch (e) {
+                showToast('File non leggibile', 'error');
+                return;
+            }
+            const parsed = window.TESTI_DVR_IMPORT_XLSX?.parseQuestionarioArrayBuffer(buf, {
+                rischi: STATE.data.rischi,
+                aziende: STATE.data.aziende,
+                autoreId: STATE.account?.id
+            });
+            if (!parsed?.ok) {
+                showToast((parsed?.errors || ['Import fallito']).join(' '), 'error');
+                return;
+            }
+            if (!parsed.rows.length) {
+                showToast('Nessuna riga dati nel file', 'warning');
+                return;
+            }
+            openTestiDvrImportPreviewModal(parsed, file.name);
+        }
+
+        function openTestiDvrImportPreviewModal(parsed, fileName) {
+            const valid = parsed.valid || [];
+            const invalid = parsed.invalid || [];
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.id = 'testiDvrImportModal';
+            const rowHtml = (r) => `
+                <tr class="${r.ok ? '' : 'row-error'}">
+                    <td>${r._rowNum}</td>
+                    <td>${esc(r.titolo_testo || '—')}</td>
+                    <td>${esc(r.id_rischio || '—')}</td>
+                    <td>${esc(r.livello || '—')}</td>
+                    <td>${esc(r.tipo_testo || '—')}</td>
+                    <td>${r.ok ? '<span class="badge success">OK</span>' : '<span class="badge error">Errore</span>'}</td>
+                    <td style="font-size:12px;color:var(--sp-error);">${esc((r.errors || []).join('; '))}</td>
+                </tr>
+            `;
+            modal.innerHTML = `
+                <div class="modal" style="max-width:960px;" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <div class="modal-title">Import Testi DVR — ${esc(fileName || 'file')}</div>
+                        <button class="icon-btn" onclick="closeModal('testiDvrImportModal')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom:12px;">
+                            <strong>${valid.length}</strong> righe pronte,
+                            <strong>${invalid.length}</strong> con errori (non verranno importate).
+                        </p>
+                        <div style="max-height:360px;overflow:auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Riga</th><th>Titolo</th><th>Rischio</th><th>Livello</th><th>Tipo</th><th>Stato</th><th>Dettaglio</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${parsed.rows.map(rowHtml).join('')}</tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn" onclick="closeModal('testiDvrImportModal')">Annulla</button>
+                        <button class="btn btn-primary" ${valid.length ? '' : 'disabled'}
+                            onclick="confirmTestiDvrImport()">Importa ${valid.length} testi</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            STATE._testiDvrImportPending = parsed;
+            setTimeout(() => modal.classList.add('show'), 10);
+            modal.onclick = () => closeModal('testiDvrImportModal');
+        }
+
+        async function confirmTestiDvrImport() {
+            const parsed = STATE._testiDvrImportPending;
+            if (!parsed?.payloads?.length) {
+                showToast('Nessuna riga valida da importare', 'warning');
+                return;
+            }
+            const batchSize = 50;
+            let inserted = 0;
+            const errors = [];
+            for (let i = 0; i < parsed.payloads.length; i += batchSize) {
+                const chunk = parsed.payloads.slice(i, i + batchSize);
+                const { error } = await supabaseClient.from(CONFIG.tables.testiDVR).insert(chunk);
+                if (error) errors.push(error.message);
+                else inserted += chunk.length;
+            }
+            closeModal('testiDvrImportModal');
+            STATE._testiDvrImportPending = null;
+            if (errors.length) {
+                showToast('Import parziale: ' + inserted + ' ok, errori: ' + errors.join('; '), 'warning');
+            } else {
+                showToast('Importati ' + inserted + ' testi DVR', 'success');
+            }
+            await renderTestiDvr();
+        }
+
         async function renderTestiDvr() {
             const main = document.getElementById('mainContent');
             await ensureAziendeLoaded();
@@ -3026,7 +3194,7 @@
                         + Nuovo Testo
                     </button>
                 </div>
-                <div class="toolbar">
+                <div class="toolbar" style="flex-wrap:wrap;align-items:flex-end;gap:12px;">
                     <div class="form-field" style="max-width:320px;">
                         <label>Vista</label>
                         <select id="testiDvrViewMode" onchange="applyTestiDvrView()">
@@ -3034,6 +3202,11 @@
                             <option value="standard">TestiStandard</option>
                             <option value="custom">TestiCustom</option>
                         </select>
+                    </div>
+                    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-left:auto;">
+                        <a class="btn" href="templates/import-testi-dvr.xlsx" download="import-testi-dvr.xlsx">Scarica template Excel</a>
+                        <input type="file" id="testiDvrImportFile" accept=".xlsx,.xlsm,.xls" style="display:none" onchange="onTestiDvrImportFileSelected(event)">
+                        <button type="button" class="btn" onclick="triggerTestiDvrImport()">Importa da Excel</button>
                     </div>
                 </div>
                 <div class="card">
@@ -3094,8 +3267,9 @@
                     <td><span class="badge ${t.tipo_testo === 'Standard' ? 'info' : 'warning'}">${esc(t.tipo_testo || '—')}</span></td>
                     <td>${esc(t.azienda_origine?.ragione_sociale || '—')}</td>
                     <td>
-                        <button class="icon-btn" onclick="openTestoDvrModal('${t.id}')">✏️</button>
-                        <button class="icon-btn danger" onclick="deleteTestoDvr('${t.id}')">🗑️</button>
+                        <button class="icon-btn" title="Duplica" onclick="duplicateTestoDvr('${t.id}')">📋</button>
+                        <button class="icon-btn" title="Modifica" onclick="openTestoDvrModal('${t.id}')">✏️</button>
+                        <button class="icon-btn danger" title="Elimina" onclick="deleteTestoDvr('${t.id}')">🗑️</button>
                     </td>
                 </tr>
             `;

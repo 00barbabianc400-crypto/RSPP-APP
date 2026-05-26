@@ -5453,6 +5453,7 @@
                 VADEMECUM_ANTIRAPINA: '20260526d',
                 PROC_INFORTUNI_NEARMISS: '20260527a',
                 NOTA_LAVORATRICI_MADRI: '20260528d',
+                NOTA_ANTINCENDIO: '20260601b',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5642,11 +5643,11 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA', 'PROC_INFORTUNI_NEARMISS', 'NOTA_LAVORATRICI_MADRI'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA', 'PROC_INFORTUNI_NEARMISS', 'NOTA_LAVORATRICI_MADRI', 'NOTA_ANTINCENDIO'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     const logoVer =
-                        codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA' || codice === 'PROC_INFORTUNI_NEARMISS' || codice === 'NOTA_LAVORATRICI_MADRI'
+                        codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA' || codice === 'PROC_INFORTUNI_NEARMISS' || codice === 'NOTA_LAVORATRICI_MADRI' || codice === 'NOTA_ANTINCENDIO'
                             ? '20260527b'
                             : '20260520d';
                     await loadScriptOnce(base + 'logo-docx.js?v=' + logoVer);
@@ -5674,9 +5675,16 @@
                 : codice === 'VADEMECUM_ANTIRAPINA' ? '20260526d'
                 : codice === 'PROC_INFORTUNI_NEARMISS' ? '20260527a'
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
+                : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);
+            }
+            if (codice === 'NOTA_ANTINCENDIO') {
+                await loadScriptOnce(base + 'misure-prevenzione-catalogo.js?v=' + adapterVer);
+                await loadScriptOnce(base + 'misure-protezione-catalogo.js?v=' + adapterVer);
+                await loadScriptOnce(base + 'comportamenti-incendio-catalogo.js?v=' + adapterVer);
+                await loadScriptOnce(base + 'sorveglianza-catalogo.js?v=' + adapterVer);
             }
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

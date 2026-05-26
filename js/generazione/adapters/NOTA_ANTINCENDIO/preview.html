@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Nota antincendio</title>
+<script src="misure-prevenzione-catalogo.js?v=20260529c"></script>
+<script src="misure-protezione-catalogo.js?v=20260529d"></script>
+<script src="comportamenti-incendio-catalogo.js?v=20260529e"></script>
+<script src="sorveglianza-catalogo.js?v=20260601a"></script>
+<script src="adapter.js?v=20260601b"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; background: #fde8e8; padding: 2px 6px; border-radius: 3px; font-style: italic; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  .inline-select { font-size: 10.5pt; padding: 4px 8px; }
+  .tag-pill { display: inline-block; font-family: monospace; font-size: 9pt; background: #f0f0f0; padding: 2px 6px; border-radius: 3px; margin: 2px 4px 2px 0; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .todo-box { margin-top: 14px; padding: 12px; background: #fffbe6; border: 1px solid #f0d060; border-radius: 4px; font-size: 9.5pt; }
+  .todo-box ul { margin: 8px 0 0 18px; }
+  .prot-table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 8px; }
+  .prot-table th, .prot-table td { border: 1px solid #ccc; padding: 6px 8px; vertical-align: top; }
+  .prot-table th { background: #f5f5f5; text-align: left; }
+  .prot-table .col-chk { width: 36px; text-align: center; }
+  .prot-table .col-del { width: 40px; text-align: center; }
+  .prot-table tr.row-off td { color: #888; }
+  .prot-table input[type="text"] { width: 100%; font-size: 10pt; padding: 4px 6px; }
+  .prot-actions { margin-top: 8px; }
+  .prot-actions button {
+    font-size: 10.5pt; padding: 5px 12px; border-radius: 4px; cursor: pointer;
+    border: 1px solid #3498db; background: #eaf4fb; color: #1a5276; font-weight: 600;
+  }
+  .prot-hint-irai { font-size: 9pt; color: #7d6608; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">NOTA_ANTINCENDIO — Compila</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Informativa antincendio per i lavoratori</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Caricare <code>NOTA_ANTINCENDIO.docx</code> nel bucket <code>modelli</code>.
+        Nel Word: sostituire il segnaposto logo con <span class="tag-pill">{%LOGO%}</span>.
+      </p>
+
+      <h2 class="doc-section">Dati documento (già mappati)</h2>
+      <p><strong>Ragione sociale</strong> <span class="tag-pill">{{RAGIONE_SOCIALE}}</span>: <span id="pRagSoc" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong> <span class="tag-pill">{{SEDE_OPERATIVA}}</span>: <span id="pSede" class="field-auto">—</span></p>
+      <p>
+        <strong>Numero modulo</strong> <span class="tag-pill">{{MODULO_NUMERO}}</span>:<br>
+        <input type="text" id="inpModuloNumero" class="inline-select" inputmode="numeric" maxlength="6"
+          style="width:120px;margin-top:6px;" placeholder="es. 240" autocomplete="off"
+          oninput="setModuloNumero(this.value)">
+      </p>
+      <p class="hint-str">Suggerimento dall’ordine catalogo (240).</p>
+      <p><strong>Data emissione</strong> <span class="tag-pill">{{DATA_EMISSIONE}}</span>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Luogo</strong> <span class="tag-pill">{{LUOGO}}</span>: <span id="pLuogo" class="field-auto">—</span></p>
+      <p style="margin-top:10px;">
+        <strong>Logo</strong> <span class="tag-pill">{%LOGO%}</span>
+        <span id="pLogo" class="field-auto" style="display:inline-block;margin-left:8px;">—</span>
+      </p>
+
+      <h2 class="doc-section">Allegati (copertina)</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Nel Word, sul <strong>primo</strong> punto elenco sotto «ALLEGATI:» inserire
+        <span class="tag-pill">{{#ALLEGATI}}{{TESTO}}{{/ALLEGATI}}</span>
+        ed eliminare il secondo punto fisso «PROCEDURE DI GESTIONE DELLE EMERGENZE»
+        (già fatto nel file DEF in cartella).
+      </p>
+      <p>
+        <strong>L’azienda dispone di un piano di emergenza?</strong><br>
+        <label style="margin-right:14px;">
+          <input type="radio" name="pianoEmergenza" value="si" checked onchange="setPianoEmergenza(true)"> Sì
+        </label>
+        <label>
+          <input type="radio" name="pianoEmergenza" value="no" onchange="setPianoEmergenza(false)"> No
+        </label>
+      </p>
+      <p class="hint-str" id="hintAllegati">Con piano: due punti elenco. Senza piano: solo figure attive.</p>
+      <ul id="listAllegatiPreview" style="margin:8px 0 0 22px;font-size:10.5pt;line-height:1.5;"></ul>
+
+      <h2 class="doc-section">3.1 Misure di prevenzione</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Nel Word, sul <strong>primo</strong> punto elenco dopo l’intro «Ad ogni lavoratore…» inserire
+        <span class="tag-pill">{{#MISURE_PREVENZIONE}}{{TESTO}}{{/MISURE_PREVENZIONE}}</span>
+        ed eliminare gli altri 13 punti fissi (già fatto nel DEF in cartella).
+      </p>
+      <p>
+        <strong>Sono presenti porte tagliafuoco (porte REI)?</strong><br>
+        <label style="margin-right:14px;">
+          <input type="radio" name="porteRei" value="si" checked onchange="setPorteRei(true)"> Sì
+        </label>
+        <label>
+          <input type="radio" name="porteRei" value="no" onchange="setPorteRei(false)"> No
+        </label>
+      </p>
+      <p class="hint-str" id="hintMisurePrev">Con porte REI: 14 punti. Senza: il punto sulle porte tagliafuoco viene omesso.</p>
+      <ol id="listMisurePrevPreview" style="margin:8px 0 0 22px;font-size:10pt;line-height:1.45;"></ol>
+
+      <h2 class="doc-section">3.2 Misure di protezione</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Tag Word sul <strong>primo</strong> punto di ciascun elenco:
+        <span class="tag-pill">{{#PROTEZIONI_ATTIVE}}{{TESTO}}{{/PROTEZIONI_ATTIVE}}</span>
+        e
+        <span class="tag-pill">{{#PROTEZIONI_PASSIVE}}{{TESTO}}{{/PROTEZIONI_PASSIVE}}</span>
+        (già nel DEF). Testi modificabili; puoi aggiungere punti custom.
+      </p>
+
+      <h3 style="font-size:11pt;margin:14px 0 6px;">Protezioni attive</h3>
+      <div id="wrapProtezioniAttive"></div>
+      <div class="prot-actions">
+        <button type="button" onclick="addProtezioneCustom('attive')">+ Aggiungi punto attivo</button>
+      </div>
+      <ul id="previewProtAttive" class="hint-str" style="margin:8px 0 0 22px;font-size:10pt;"></ul>
+
+      <h3 style="font-size:11pt;margin:18px 0 6px;">Protezioni passive</h3>
+      <div id="wrapProtezioniPassive"></div>
+      <div class="prot-actions">
+        <button type="button" onclick="addProtezioneCustom('passive')">+ Aggiungi punto passivo</button>
+      </div>
+      <ul id="previewProtPassive" class="hint-str" style="margin:8px 0 0 22px;font-size:10pt;"></ul>
+
+      <h2 class="doc-section">4.1 Comportamenti in emergenza incendio</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Il segno ✓ nell’originale è solo lo stile del bullet Word, non va nel testo.
+        Tag sul primo punto di ciascun blocco:
+        <span class="tag-pill">{{#COMPORTAMENTI_INCENDIO_A}}{{TESTO}}{{/COMPORTAMENTI_INCENDIO_A}}</span>
+        (prima di «In caso di evacuazione occorre:») e
+        <span class="tag-pill">{{#COMPORTAMENTI_INCENDIO_B}}{{TESTO}}{{/COMPORTAMENTI_INCENDIO_B}}</span>
+        (dopo quell’intro).
+      </p>
+      <p>
+        <strong>Porte scorrevoli sui percorsi di esodo?</strong><br>
+        <label style="margin-right:14px;">
+          <input type="radio" name="porteScorrevoli" value="si" checked onchange="setPorteScorrevoli(true)"> Sì
+        </label>
+        <label>
+          <input type="radio" name="porteScorrevoli" value="no" onchange="setPorteScorrevoli(false)"> No
+        </label>
+      </p>
+      <p>
+        <strong>Ascensori nel sito?</strong><br>
+        <label style="margin-right:14px;">
+          <input type="radio" name="ascensori" value="si" checked onchange="setAscensori(true)"> Sì
+        </label>
+        <label>
+          <input type="radio" name="ascensori" value="no" onchange="setAscensori(false)"> No
+        </label>
+      </p>
+      <p class="hint-str" id="hintComportamenti41"></p>
+      <p class="hint-str" style="margin-top:8px;"><strong>Prima dell’evacuazione</strong></p>
+      <ol id="listComportamentiA" style="margin:4px 0 10px 22px;font-size:10pt;line-height:1.45;"></ol>
+      <p class="hint-str"><strong>In caso di evacuazione</strong> (testo fisso nel Word)</p>
+      <ol id="listComportamentiB" style="margin:4px 0 0 22px;font-size:10pt;line-height:1.45;"></ol>
+
+      <h2 class="doc-section">4.2 — Destinatario segnalazioni (comune)</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Stessa scelta per <strong>oggetto sospetto</strong> e per l’ultimo punto di <strong>fuga di gas</strong> (e altri elenchi §4.2 con «Posto di chiamata/Responsabile»).<br>
+        Tag oggetto sospetto: <span class="tag-pill">{{DESTINATARIO_OGGETTO_SOSPETTO}}</span> — es. «…al {{DESTINATARIO_OGGETTO_SOSPETTO}}, che provvederà…»<br>
+        Tag fuga di gas (ultimo bullet): <span class="tag-pill">{{DESTINATARIO_EMERGENZA_ALLERTA}}</span> — es. «Allertare il {{DESTINATARIO_EMERGENZA_ALLERTA}} per l’eventuale chiamata…»
+      </p>
+      <p>
+        <strong>Posto di chiamata o Responsabile delle emergenze?</strong><br>
+        <label style="margin-right:14px;">
+          <input type="radio" name="oggettoSospettoDest" value="posto_chiamata" checked
+            onchange="setOggettoSospettoDestinatario('posto_chiamata')"> Posto di Chiamata
+        </label>
+        <label>
+          <input type="radio" name="oggettoSospettoDest" value="responsabile"
+            onchange="setOggettoSospettoDestinatario('responsabile')"> Responsabile delle Emergenze
+        </label>
+      </p>
+      <p class="hint-str" id="hintOggettoSospetto"></p>
+      <p class="hint-str" id="previewOggettoSospetto" style="margin-top:6px;font-style:italic;"></p>
+      <p class="hint-str" id="previewGasAllerta" style="margin-top:4px;font-style:italic;"></p>
+
+      <h2 class="doc-section">6 — Procedure incendio</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Stessa scelta degli <strong>Allegati</strong> (piano di emergenza / procedure in allegato).<br>
+        Con piano: nel Word resta solo
+        <span class="tag-pill">{{#PROCEDURE_IN_ALLEGATO}}…{{/PROCEDURE_IN_ALLEGATO}}</span>
+        (frase «…ripotate in allegato…»).<br>
+        Senza piano: blocco
+        <span class="tag-pill">{{#PROCEDURE_INLINE}}…{{/PROCEDURE_INLINE}}</span>
+        (fasi incendio, gestione particolare, flusso sanitaria, §6.1 — chiusura tag dopo la 6.1). «OPPURE» eliminabile a mano.
+      </p>
+      <p class="hint-str" id="hintProcedure6"></p>
+      <div id="wrapProcedure6Inline" style="margin-top:10px;">
+        <p>
+          <strong>Evacuazione con segnale di allarme?</strong>
+          <span class="tag-pill">{{TESTO_EVACUAZIONE_SITO}}</span><br>
+          <label style="margin-right:14px;">
+            <input type="radio" name="segnaleAllarme" value="si" checked onchange="setSegnaleAllarme(true)"> Sì
+          </label>
+          <label>
+            <input type="radio" name="segnaleAllarme" value="no" onchange="setSegnaleAllarme(false)"> No
+          </label>
+        </p>
+        <p class="hint-str" id="previewEvacuazioneSito" style="font-style:italic;"></p>
+        <p style="margin-top:12px;">
+          <strong>Blocco del traffico al punto di raccolta?</strong>
+          <span class="tag-pill">{{TESTO_PUNTO_RACCOLTA_GESTIONE}}</span><br>
+          <label style="margin-right:14px;">
+            <input type="radio" name="bloccoTraffico" value="si" checked onchange="setBloccoTraffico(true)"> Sì
+          </label>
+          <label>
+            <input type="radio" name="bloccoTraffico" value="no" onchange="setBloccoTraffico(false)"> No
+          </label>
+        </p>
+        <p class="hint-str" id="previewPuntoRaccolta" style="font-style:italic;"></p>
+      </div>
+
+      <h2 class="doc-section">9.1 — Sorveglianza in esercizio</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Tag sul primo punto elenco dopo «In particolare, gli addetti alla sorveglianza dovranno verificare:»
+        <span class="tag-pill">{{#SORVEGLIANZA_VERIFICHE}}{{TESTO}}{{/SORVEGLIANZA_VERIFICHE}}</span>.
+        Tutti selezionati di default; testi modificabili.
+      </p>
+      <div id="wrapSorveglianza"></div>
+      <div class="prot-actions">
+        <button type="button" onclick="addSorveglianzaCustom()">+ Aggiungi verifica</button>
+      </div>
+      <ul id="previewSorveglianza" class="hint-str" style="margin:8px 0 0 22px;font-size:10pt;"></ul>
+
+      <h2 class="doc-section">10 — Aree operative</h2>
+      <p class="hint-str" style="margin-bottom:10px;">
+        Celle evidenziate (giallo): <span class="tag-pill">{{LUOGO_CENTRO_COORDINAMENTO}}</span>,
+        <span class="tag-pill">{{LUOGO_POSTO_CHIAMATA}}</span>,
+        punto di raccolta
+        <span class="tag-pill">{{LUOGO_PUNTO_RACCOLTA}}</span>.
+      </p>
+      <p>
+        <strong>Centro di coordinamento</strong><br>
+        <input type="text" id="inpLuogoCentro" class="inline-select" style="width:100%;max-width:520px;margin-top:6px;"
+          placeholder="es. RECEPTION" oninput="setLuogoCentro(this.value)">
+      </p>
+      <p style="margin-top:12px;">
+        <strong>Posto di chiamata</strong><br>
+        <input type="text" id="inpLuogoPosto" class="inline-select" style="width:100%;max-width:520px;margin-top:6px;"
+          placeholder="es. RECEPTION" oninput="setLuogoPosto(this.value)">
+      </p>
+      <p style="margin-top:12px;">
+        <strong>Punto di raccolta</strong> (cella accanto a «PUNTO DI RACCOLTA»)<br>
+        <input type="text" id="inpLuogoPuntoRaccolta" class="inline-select" style="width:100%;max-width:520px;margin-top:6px;"
+          placeholder="es. AREA ANTISTANTE L'INGRESSO PRINCIPALE DELLA SEDE"
+          oninput="setLuogoPuntoRaccolta(this.value)">
+      </p>
+
+      <div class="todo-box">
+        <strong>Prossimo passo</strong> — allineare il modello Word e definire i tag per sezione:
+        <ul>
+          <li>Premessa / riferimenti normativi</li>
+          <li>Organizzazione antincendio aziendale</li>
+          <li>Allarme, evacuazione, vie di esodo</li>
+          <li>Divieti e comportamenti in caso di incendio</li>
+          <li>Eventuali campi da anagrafica (addetti antincendio, ecc.)</li>
+        </ul>
+        Vedi <code>fields-map.md</code> nella cartella adapter.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let DATA = {};
+  let WIZARD = {
+    modulo_numero: '',
+    piano_emergenza: true,
+    porte_rei: true,
+    porte_scorrevoli: true,
+    ascensori: true,
+    oggetto_sospetto_destinatario: 'posto_chiamata',
+    segnale_allarme_evacuazione: true,
+    blocco_traffico_punto_raccolta: true,
+    luogo_centro_coordinamento: '',
+    luogo_posto_chiamata: '',
+    luogo_punto_raccolta: '',
+  };
+  let activeView = 'compile';
+  let previewTimer = null;
+  const ADAPTER = window.GEN_ADAPTERS?.NOTA_ANTINCENDIO;
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function escAttr(s) {
+    return esc(s).replace(/"/g, '&quot;');
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el || !DATA) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML =
+        '<img src="' + escAttr(url) + '" alt="Logo" style="max-height:52px;max-width:160px;object-fit:contain;vertical-align:middle;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.innerHTML = '<span class="hint-str">Logo caricato (visibile nel Word generato)</span>';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = '—';
+    el.className = 'field-missing';
+  }
+
+  function displayModuloInputFromPadded(padded) {
+    const n = parseInt(String(padded || '').trim(), 10);
+    return Number.isFinite(n) ? String(n) : '';
+  }
+
+  function buildMerged() {
+    if (!DATA || !ADAPTER?.applyWizard) return {};
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    window.parent.postMessage({
+      type: 'DATA_UPDATE',
+      data: merged,
+      valid: errors.length === 0,
+      errors,
+    }, '*');
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', errors.length === 0);
+    document.getElementById('btnGenera').disabled = errors.length > 0;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    if (activeView === 'docx' && errors.length === 0) {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(requestPreviewDocx, 600);
+    }
+  }
+
+  window.setModuloNumero = function (v) {
+    WIZARD.modulo_numero = v;
+    sendUpdate();
+  };
+
+  function renderAllegatiPreview() {
+    const list = document.getElementById('listAllegatiPreview');
+    const hint = document.getElementById('hintAllegati');
+    if (!list || !ADAPTER?.allegatiForTemplate) return;
+    const si = ADAPTER.pianoEmergenzaSi(WIZARD.piano_emergenza);
+    const items = ADAPTER.allegatiForTemplate(si);
+    list.innerHTML = items.map((r) => '<li>' + esc(r.TESTO) + '</li>').join('');
+    if (hint) {
+      hint.textContent = si
+        ? 'Nel Word compariranno entrambi i punti elenco.'
+        : 'Nel Word resta solo «FIGURE ATTIVE NELLA GESTIONE DELLE EMERGENZE».';
+    }
+    document.querySelectorAll('input[name="pianoEmergenza"]').forEach((el) => {
+      el.checked = (el.value === 'si') === si;
+    });
+  }
+
+  window.setPianoEmergenza = function (si) {
+    WIZARD.piano_emergenza = !!si;
+    renderAllegatiPreview();
+    renderProcedure6Preview();
+    sendUpdate();
+  };
+
+  function renderProcedure6Preview() {
+    const hint = document.getElementById('hintProcedure6');
+    const wrap = document.getElementById('wrapProcedure6Inline');
+    const prevEvac = document.getElementById('previewEvacuazioneSito');
+    const prevPunto = document.getElementById('previewPuntoRaccolta');
+    if (!ADAPTER || !hint) return;
+    const pianoSi = ADAPTER.pianoEmergenzaSi(WIZARD.piano_emergenza);
+    if (wrap) wrap.style.display = pianoSi ? 'none' : 'block';
+    hint.textContent = pianoSi
+      ? '§6: solo la frase di rimando all’allegato procedure (fino al cap. 7).'
+      : '§6: procedure complete nel corpo (incendio + sanitaria + §6.1); dopo restano cap. 8 (modalità soccorsi) ecc.';
+    const evac = ADAPTER.testoEvacuazioneSitoForTemplate(WIZARD);
+    const punto = ADAPTER.testoPuntoRaccoltaGestioneForTemplate(WIZARD);
+    if (prevEvac) prevEvac.textContent = 'Nel diagramma GESTIONE: «' + evac + '»';
+    if (prevPunto) prevPunto.textContent = 'Nel diagramma GESTIONE: «' + punto + '»';
+    const segSi = ADAPTER.segnaleAllarmeSi(WIZARD.segnale_allarme_evacuazione);
+    const blkSi = ADAPTER.bloccoTrafficoSi(WIZARD.blocco_traffico_punto_raccolta);
+    document.querySelectorAll('input[name="segnaleAllarme"]').forEach((el) => {
+      el.checked = (el.value === 'si') === segSi;
+    });
+    document.querySelectorAll('input[name="bloccoTraffico"]').forEach((el) => {
+      el.checked = (el.value === 'si') === blkSi;
+    });
+  }
+
+  window.setSegnaleAllarme = function (si) {
+    WIZARD.segnale_allarme_evacuazione = !!si;
+    renderProcedure6Preview();
+    sendUpdate();
+  };
+
+  window.setBloccoTraffico = function (si) {
+    WIZARD.blocco_traffico_punto_raccolta = !!si;
+    renderProcedure6Preview();
+    sendUpdate();
+  };
+
+  function syncWizardSorveglianzaFromAdapter() {
+    if (!ADAPTER?.mergeSorveglianzaWizard) return;
+    WIZARD.sorveglianza_verifiche = ADAPTER.mergeSorveglianzaWizard(WIZARD);
+  }
+
+  function renderSorveglianzaTable() {
+    const wrap = document.getElementById('wrapSorveglianza');
+    if (!wrap || !ADAPTER) return;
+    if (wrap.contains(document.activeElement) && document.activeElement?.matches('input[type="text"]')) {
+      return;
+    }
+    syncWizardSorveglianzaFromAdapter();
+    const rows = WIZARD.sorveglianza_verifiche || [];
+    let html =
+      '<table class="prot-table"><thead><tr><th class="col-chk">✓</th><th>Verifica nel Word</th><th></th></tr></thead><tbody>';
+    rows.forEach((r, idx) => {
+      const on = r.selezionato === true;
+      html +=
+        '<tr class="' + (on ? '' : 'row-off') + '">' +
+        '<td class="col-chk"><input type="checkbox"' + (on ? ' checked' : '') +
+        ' onchange="toggleSorveglianza(' + idx + ',this.checked)"></td>' +
+        '<td><input type="text" value="' + escAttr(r.testo) + '" oninput="editSorveglianza(' +
+        idx + ',this.value)"></td>' +
+        '<td class="col-del">' +
+        (r.custom
+          ? '<button type="button" class="secondary" onclick="removeSorveglianzaCustom(' +
+            idx + ')" title="Elimina">✕</button>'
+          : '') +
+        '</td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    const el = document.getElementById('previewSorveglianza');
+    if (el && ADAPTER.sorveglianzaVerificheForTemplate) {
+      const items = ADAPTER.sorveglianzaVerificheForTemplate(WIZARD);
+      el.innerHTML = items.length
+        ? items.map((r) => '<li>' + esc(r.TESTO) + '</li>').join('')
+        : '<li><em>Nessuna verifica selezionata</em></li>';
+    }
+  }
+
+  window.toggleSorveglianza = function (idx, checked) {
+    syncWizardSorveglianzaFromAdapter();
+    if (!WIZARD.sorveglianza_verifiche[idx]) return;
+    WIZARD.sorveglianza_verifiche[idx].selezionato = !!checked;
+    renderSorveglianzaTable();
+    sendUpdate();
+  };
+
+  window.editSorveglianza = function (idx, val) {
+    syncWizardSorveglianzaFromAdapter();
+    if (!WIZARD.sorveglianza_verifiche[idx]) return;
+    WIZARD.sorveglianza_verifiche[idx].testo = val;
+    const el = document.getElementById('previewSorveglianza');
+    if (el && ADAPTER?.sorveglianzaVerificheForTemplate) {
+      const items = ADAPTER.sorveglianzaVerificheForTemplate(WIZARD);
+      el.innerHTML = items.map((r) => '<li>' + esc(r.TESTO) + '</li>').join('');
+    }
+    sendUpdate();
+  };
+
+  window.addSorveglianzaCustom = function () {
+    syncWizardSorveglianzaFromAdapter();
+    WIZARD.sorveglianza_verifiche.push({
+      id: 'custom_' + Date.now(),
+      testo: '',
+      selezionato: true,
+      custom: true,
+    });
+    renderSorveglianzaTable();
+    sendUpdate();
+  };
+
+  window.removeSorveglianzaCustom = function (idx) {
+    syncWizardSorveglianzaFromAdapter();
+    if (!WIZARD.sorveglianza_verifiche[idx]?.custom) return;
+    WIZARD.sorveglianza_verifiche.splice(idx, 1);
+    renderSorveglianzaTable();
+    sendUpdate();
+  };
+
+  function renderAreeOperativePreview() {
+    if (!ADAPTER) return;
+    const centro =
+      WIZARD.luogo_centro_coordinamento ||
+      ADAPTER.DEFAULT_LUOGO_CENTRO_COORDINAMENTO ||
+      '';
+    const posto =
+      WIZARD.luogo_posto_chiamata || ADAPTER.DEFAULT_LUOGO_POSTO_CHIAMATA || '';
+    const punto =
+      WIZARD.luogo_punto_raccolta ||
+      ADAPTER.DEFAULT_LUOGO_PUNTO_RACCOLTA ||
+      '';
+    const setInp = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && document.activeElement !== el) el.value = val;
+    };
+    setInp('inpLuogoCentro', centro);
+    setInp('inpLuogoPosto', posto);
+    setInp('inpLuogoPuntoRaccolta', punto);
+  }
+
+  window.setLuogoCentro = function (v) {
+    WIZARD.luogo_centro_coordinamento = v;
+    sendUpdate();
+  };
+
+  window.setLuogoPosto = function (v) {
+    WIZARD.luogo_posto_chiamata = v;
+    sendUpdate();
+  };
+
+  window.setLuogoPuntoRaccolta = function (v) {
+    WIZARD.luogo_punto_raccolta = v;
+    sendUpdate();
+  };
+
+  function renderMisurePrevPreview() {
+    const list = document.getElementById('listMisurePrevPreview');
+    const hint = document.getElementById('hintMisurePrev');
+    if (!list || !ADAPTER?.misurePrevenzioneForTemplate) return;
+    const si = ADAPTER.porteReiSi(WIZARD.porte_rei);
+    const items = ADAPTER.misurePrevenzioneForTemplate(si);
+    list.innerHTML = items
+      .map((r, i) => '<li value="' + (i + 1) + '">' + esc(r.TESTO) + '</li>')
+      .join('');
+    if (hint) {
+      hint.textContent = si
+        ? 'Nel Word: ' + items.length + ' punti elenco (incluso porte REI).'
+        : 'Nel Word: ' + items.length + ' punti (punto porte tagliafuoco omesso).';
+    }
+    document.querySelectorAll('input[name="porteRei"]').forEach((el) => {
+      el.checked = (el.value === 'si') === si;
+    });
+  }
+
+  window.setPorteRei = function (si) {
+    WIZARD.porte_rei = !!si;
+    renderMisurePrevPreview();
+    sendUpdate();
+  };
+
+  function syncWizardProtezioniFromAdapter() {
+    if (!ADAPTER?.mergeProtezioniListaWizard) return;
+    WIZARD.protezioni_attive = ADAPTER.mergeProtezioniListaWizard(WIZARD, 'attive');
+    WIZARD.protezioni_passive = ADAPTER.mergeProtezioniListaWizard(WIZARD, 'passive');
+  }
+
+  function renderProtezioniTable(tipo) {
+    const wrapId = tipo === 'attive' ? 'wrapProtezioniAttive' : 'wrapProtezioniPassive';
+    const wrap = document.getElementById(wrapId);
+    if (!wrap || !ADAPTER) return;
+    if (wrap.contains(document.activeElement) && document.activeElement?.matches('input[type="text"]')) {
+      return;
+    }
+    syncWizardProtezioniFromAdapter();
+    const key = tipo === 'attive' ? 'protezioni_attive' : 'protezioni_passive';
+    const rows = WIZARD[key] || [];
+    let html =
+      '<table class="prot-table"><thead><tr><th class="col-chk">✓</th><th>Testo nel Word</th><th></th></tr></thead><tbody>';
+    rows.forEach((r, idx) => {
+      const on = r.selezionato === true;
+      const hint =
+        r.hint && r.id === 'IRAI'
+          ? '<div class="prot-hint-irai">' + esc(r.hint) + '</div>'
+          : '';
+      html +=
+        '<tr class="' + (on ? '' : 'row-off') + '">' +
+        '<td class="col-chk"><input type="checkbox"' + (on ? ' checked' : '') +
+        ' onchange="toggleProtezione(\'' + tipo + '\',' + idx + ',this.checked)"></td>' +
+        '<td><input type="text" value="' + escAttr(r.testo) + '" oninput="editProtezione(\'' +
+        tipo + '\',' + idx + ',this.value)">' + hint + '</td>' +
+        '<td class="col-del">' +
+        (r.custom
+          ? '<button type="button" class="secondary" onclick="removeProtezioneCustom(\'' +
+            tipo + '\',' + idx + ')" title="Elimina">✕</button>'
+          : '') +
+        '</td></tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function renderProtezioniPreviewLists() {
+    if (!ADAPTER) return;
+    const att = ADAPTER.protezioniAttiveForTemplate(WIZARD);
+    const pas = ADAPTER.protezioniPassiveForTemplate(WIZARD);
+    const elA = document.getElementById('previewProtAttive');
+    const elP = document.getElementById('previewProtPassive');
+    if (elA) {
+      elA.innerHTML = att.length
+        ? att.map((r) => '<li>' + esc(r.TESTO) + '</li>').join('')
+        : '<li><em>Nessun punto selezionato</em></li>';
+    }
+    if (elP) {
+      elP.innerHTML = pas.length
+        ? pas.map((r) => '<li>' + esc(r.TESTO) + '</li>').join('')
+        : '<li><em>Nessun punto selezionato</em></li>';
+    }
+  }
+
+  function renderProtezioniTables() {
+    renderProtezioniTable('attive');
+    renderProtezioniTable('passive');
+    renderProtezioniPreviewLists();
+  }
+
+  window.toggleProtezione = function (tipo, idx, checked) {
+    syncWizardProtezioniFromAdapter();
+    const key = tipo === 'attive' ? 'protezioni_attive' : 'protezioni_passive';
+    if (!WIZARD[key][idx]) return;
+    WIZARD[key][idx].selezionato = !!checked;
+    if (tipo === 'attive' && WIZARD[key][idx].id === 'IRAI' && checked) {
+      WIZARD[key].forEach((r) => {
+        if (r.id === 'RILEVAZIONE' || r.id === 'ALLARME') r.selezionato = false;
+      });
+    }
+    renderProtezioniTables();
+    sendUpdate();
+  };
+
+  window.editProtezione = function (tipo, idx, val) {
+    syncWizardProtezioniFromAdapter();
+    const key = tipo === 'attive' ? 'protezioni_attive' : 'protezioni_passive';
+    if (!WIZARD[key][idx]) return;
+    WIZARD[key][idx].testo = val;
+    renderProtezioniPreviewLists();
+    sendUpdate();
+  };
+
+  window.addProtezioneCustom = function (tipo) {
+    syncWizardProtezioniFromAdapter();
+    const key = tipo === 'attive' ? 'protezioni_attive' : 'protezioni_passive';
+    WIZARD[key].push({
+      id: 'custom_' + Date.now(),
+      testo: '',
+      selezionato: true,
+      custom: true,
+    });
+    renderProtezioniTables();
+    sendUpdate();
+  };
+
+  window.removeProtezioneCustom = function (tipo, idx) {
+    syncWizardProtezioniFromAdapter();
+    const key = tipo === 'attive' ? 'protezioni_attive' : 'protezioni_passive';
+    if (!WIZARD[key][idx]?.custom) return;
+    WIZARD[key].splice(idx, 1);
+    renderProtezioniTables();
+    sendUpdate();
+  };
+
+  function renderComportamenti41Preview() {
+    if (!ADAPTER) return;
+    const ps = ADAPTER.porteScorrevoliSi(WIZARD.porte_scorrevoli);
+    const asc = ADAPTER.ascensoriSi(WIZARD.ascensori);
+    const listA = ADAPTER.comportamentiIncendioAForTemplate(WIZARD);
+    const listB = ADAPTER.comportamentiIncendioBForTemplate(WIZARD);
+    const elA = document.getElementById('listComportamentiA');
+    const elB = document.getElementById('listComportamentiB');
+    const hint = document.getElementById('hintComportamenti41');
+    if (elA) {
+      elA.innerHTML = listA.map((r) => '<li>' + esc(r.TESTO) + '</li>').join('');
+    }
+    if (elB) {
+      elB.innerHTML = listB.map((r) => '<li>' + esc(r.TESTO) + '</li>').join('');
+    }
+    if (hint) {
+      hint.textContent =
+        (ps ? 'Con porte scorrevoli.' : 'Senza punto porte scorrevoli.') +
+        ' ' +
+        (asc ? 'Con divieto ascensori.' : 'Senza punto ascensori.');
+    }
+    document.querySelectorAll('input[name="porteScorrevoli"]').forEach((el) => {
+      el.checked = (el.value === 'si') === ps;
+    });
+    document.querySelectorAll('input[name="ascensori"]').forEach((el) => {
+      el.checked = (el.value === 'si') === asc;
+    });
+  }
+
+  window.setPorteScorrevoli = function (si) {
+    WIZARD.porte_scorrevoli = !!si;
+    renderComportamenti41Preview();
+    sendUpdate();
+  };
+
+  window.setAscensori = function (si) {
+    WIZARD.ascensori = !!si;
+    renderComportamenti41Preview();
+    sendUpdate();
+  };
+
+  function renderOggettoSospettoPreview() {
+    const hint = document.getElementById('hintOggettoSospetto');
+    const prev = document.getElementById('previewOggettoSospetto');
+    const prevGas = document.getElementById('previewGasAllerta');
+    if (!ADAPTER) return;
+    const dest = ADAPTER.normalizeOggettoSospettoDestinatario(WIZARD.oggetto_sospetto_destinatario);
+    const testo = ADAPTER.destinatarioOggettoSospettoForTemplate(WIZARD);
+    const testoGas = ADAPTER.testoAllertaGasCompletoForTemplate(WIZARD);
+    if (hint) {
+      hint.textContent =
+        'La scelta si applica a tutti i punti §4.2 con Posto di chiamata / Responsabile.';
+    }
+    if (prev) {
+      prev.textContent = testo
+        ? 'Oggetto sospetto: «…il più presto al ' + testo + ', che provvederà…»'
+        : '';
+    }
+    if (prevGas) {
+      prevGas.textContent = testoGas ? 'Fuga di gas (ultimo bullet): «' + testoGas + '»' : '';
+    }
+    document.querySelectorAll('input[name="oggettoSospettoDest"]').forEach((el) => {
+      el.checked = el.value === dest;
+    });
+  }
+
+  window.setOggettoSospettoDestinatario = function (value) {
+    WIZARD.oggetto_sospetto_destinatario = value;
+    renderOggettoSospettoPreview();
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'NOTA_ANTINCENDIO — Compila' : 'NOTA_ANTINCENDIO — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Completa: ' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA || !ADAPTER) return;
+    document.getElementById('pRagSoc').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    renderLogoPreview();
+    const pref = displayModuloInputFromPadded(DATA.MODULO_NUMERO);
+    document.getElementById('inpModuloNumero').value = pref;
+    WIZARD.modulo_numero = pref;
+    const prev = DATA._nota_antincendio_wizard || {};
+    if (prev.modulo_numero != null && String(prev.modulo_numero).trim() !== '') {
+      WIZARD.modulo_numero = String(prev.modulo_numero).trim();
+      document.getElementById('inpModuloNumero').value = WIZARD.modulo_numero;
+    }
+    if (prev.piano_emergenza != null) WIZARD.piano_emergenza = !!prev.piano_emergenza;
+    if (prev.porte_rei != null) WIZARD.porte_rei = !!prev.porte_rei;
+    if (prev.porte_scorrevoli != null) WIZARD.porte_scorrevoli = !!prev.porte_scorrevoli;
+    if (prev.ascensori != null) WIZARD.ascensori = !!prev.ascensori;
+    if (prev.oggetto_sospetto_destinatario != null) {
+      WIZARD.oggetto_sospetto_destinatario = prev.oggetto_sospetto_destinatario;
+    }
+    if (prev.segnale_allarme_evacuazione != null) {
+      WIZARD.segnale_allarme_evacuazione = !!prev.segnale_allarme_evacuazione;
+    }
+    if (prev.blocco_traffico_punto_raccolta != null) {
+      WIZARD.blocco_traffico_punto_raccolta = !!prev.blocco_traffico_punto_raccolta;
+    }
+    if (Array.isArray(prev.protezioni_attive)) WIZARD.protezioni_attive = prev.protezioni_attive;
+    if (Array.isArray(prev.protezioni_passive)) WIZARD.protezioni_passive = prev.protezioni_passive;
+    if (Array.isArray(prev.sorveglianza_verifiche)) {
+      WIZARD.sorveglianza_verifiche = prev.sorveglianza_verifiche;
+    }
+    if (prev.luogo_centro_coordinamento != null) {
+      WIZARD.luogo_centro_coordinamento = String(prev.luogo_centro_coordinamento);
+    }
+    if (prev.luogo_posto_chiamata != null) {
+      WIZARD.luogo_posto_chiamata = String(prev.luogo_posto_chiamata);
+    }
+    if (prev.luogo_punto_raccolta != null) {
+      WIZARD.luogo_punto_raccolta = String(prev.luogo_punto_raccolta);
+    }
+    if (prev.punto_raccolta_1 != null && !prev.luogo_punto_raccolta) {
+      WIZARD.luogo_punto_raccolta = String(prev.punto_raccolta_1);
+    }
+    renderAllegatiPreview();
+    renderMisurePrevPreview();
+    renderProtezioniTables();
+    renderComportamenti41Preview();
+    renderOggettoSospettoPreview();
+    renderProcedure6Preview();
+    renderSorveglianzaTable();
+    renderAreeOperativePreview();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message || 'Errore anteprima') + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    if (errors.length) { alert('Errori:\n' + errors.join('\n')); return; }
+    window.parent.postMessage({ type: 'GENERATE', data: merged }, '*');
+  });
+
+  if (!ADAPTER) {
+    document.getElementById('stopBadge').classList.add('visible');
+    document.getElementById('stopBadge').textContent = 'Adapter mancante';
+  }
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

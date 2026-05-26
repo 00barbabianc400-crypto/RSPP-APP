@@ -5452,7 +5452,7 @@
                 VADEMECUM_AGGRESSIONI: '20260526d',
                 VADEMECUM_ANTIRAPINA: '20260526d',
                 PROC_INFORTUNI_NEARMISS: '20260527a',
-                NOTA_LAVORATRICI_MADRI: '20260527e',
+                NOTA_LAVORATRICI_MADRI: '20260527f',
             };
             return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -5673,7 +5673,7 @@
                 : codice === 'VADEMECUM_AGGRESSIONI' ? '20260526d'
                 : codice === 'VADEMECUM_ANTIRAPINA' ? '20260526d'
                 : codice === 'PROC_INFORTUNI_NEARMISS' ? '20260527a'
-                : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260527e'
+                : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260527f'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);

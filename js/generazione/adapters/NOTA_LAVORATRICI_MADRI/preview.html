@@ -4,8 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Nota lavoratrici madri</title>
-<script src="rischi-madri-catalogo.js?v=20260527e"></script>
-<script src="adapter.js?v=20260527e"></script>
+<script src="rischi-madri-catalogo.js?v=20260527f"></script>
+<script src="adapter.js?v=20260527f"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -213,9 +213,15 @@
     el.innerHTML = gruppi.map((g) => '<li>' + esc(g.NOME_GRUPPO) + '</li>').join('');
   }
 
+  function isAttivitaInputFocused() {
+    const ae = document.activeElement;
+    return !!(ae && ae.closest && ae.closest('#wrapAttivita input[type="text"]'));
+  }
+
   function renderAttivitaTable() {
     const wrap = document.getElementById('wrapAttivita');
     if (!wrap) return;
+    if (isAttivitaInputFocused()) return;
     const rows = WIZARD.attivita_lavoratrici || [];
     if (!rows.length) {
       wrap.innerHTML =
@@ -226,7 +232,7 @@
       '<table class="vad-table"><thead><tr><th>Attività</th><th></th></tr></thead><tbody>';
     rows.forEach((r, idx) => {
       html +=
-        '<tr><td><input type="text" value="' + escAttr(r.testo) +
+        '<tr><td><input type="text" data-attivita-idx="' + idx + '" value="' + escAttr(r.testo) +
         '" placeholder="Descrizione attività…" oninput="editAttivita(' + idx + ',this.value)"></td>' +
         '<td class="col-del"><button type="button" class="secondary" onclick="removeAttivita(' + idx +
         ')" title="Elimina">✕</button></td></tr>';

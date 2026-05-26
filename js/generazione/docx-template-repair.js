@@ -216,15 +216,27 @@
     return m ? m[0] : null;
   }
 
-  function buildListParagraph(pPr, text) {
+  function buildListParagraph(pPr, text, rPrXml) {
     const pr = pPr || '<w:pPr/>';
+    const rPr = rPrXml || '';
     const parts = String(text == null ? '' : text).split('\n');
     let runs = '';
     parts.forEach((part, i) => {
       if (i > 0) runs += '<w:br/>';
-      runs += '<w:r><w:t xml:space="preserve">' + escapeXmlText(part) + '</w:t></w:r>';
+      runs += '<w:r>' + rPr + '<w:t xml:space="preserve">' + escapeXmlText(part) + '</w:t></w:r>';
     });
     return '<w:p>' + pr + runs + '</w:p>';
+  }
+
+  function paragraphMatchesLoopTexts(normJoined, texts) {
+    if (!texts.length) return false;
+    const probe = normalizeMatchText(texts[0]).slice(0, 40);
+    if (probe.length < 8 || !normJoined.includes(probe)) return false;
+    if (texts.length === 1) return true;
+    const probe2 = normalizeMatchText(texts[1]).slice(0, 28);
+    if (probe2 && normJoined.includes(probe2)) return true;
+    if ((normJoined.match(/;/g) || []).length >= 1) return true;
+    return normJoined.length > probe.length + 15;
   }
 
   /**
@@ -416,32 +428,25 @@
 
       out += xml.slice(lastEnd, m.index);
 
-      if (loopIdx < loops.length) {
-        const texts = (loops[loopIdx].texts || [])
-          .map((t) => String(t == null ? '' : t).trim())
-          .filter(Boolean);
-        if (texts.length && (hasNumPr || lastListPPr)) {
-          const joined = decodeXmlText(paragraphPlainText(block));
-          const normJoined = normalizeMatchText(joined);
-          const probe = normalizeMatchText(texts[0]).slice(0, 40);
-          const probe2 =
-            texts.length > 1 ? normalizeMatchText(texts[1]).slice(0, 28) : '';
-          const shouldExpand =
-            probe.length >= 8 &&
-            normJoined.includes(probe) &&
-            (texts.length === 1 ||
-              normJoined.length > probe.length + 12 ||
-              (probe2 && normJoined.includes(probe2)));
-
-          if (shouldExpand) {
-            const usePPr = hasNumPr ? pPr : lastListPPr;
-            out += texts.map((t) => buildListParagraph(usePPr, t)).join('');
-            loopIdx += 1;
-            expanded += 1;
-            lastEnd = m.index + block.length;
-            continue;
-          }
+      if (loopIdx < loops.length && (hasNumPr || lastListPPr)) {
+        const joined = decodeXmlText(paragraphPlainText(block));
+        const normJoined = normalizeMatchText(joined);
+        for (let tryIdx = loopIdx; tryIdx < loops.length; tryIdx++) {
+          const loopCfg = loops[tryIdx] || {};
+          const texts = (loopCfg.texts || [])
+            .map((t) => String(t == null ? '' : t).trim())
+            .filter(Boolean);
+          if (!texts.length) continue;
+          if (!paragraphMatchesLoopTexts(normJoined, texts)) continue;
+          const usePPr = hasNumPr ? pPr : lastListPPr;
+          const rPrXml = loopCfg.rPr || '';
+          out += texts.map((t) => buildListParagraph(usePPr, t, rPrXml)).join('');
+          loopIdx = tryIdx + 1;
+          expanded += 1;
+          lastEnd = m.index + block.length;
+          break;
         }
+        if (lastEnd > m.index) continue;
       }
 
       out += block;
@@ -459,6 +464,7 @@
     const file = zip.file(path);
     if (!file) return zip;
     let xml = file.asText();
+    xml = mergeFragmentedParagraphsInXml(xml);
     xml = expandVademecumListLoopsInXml(xml, cfg);
     xml = mergeFragmentedParagraphsInXml(xml);
     zip.file(path, xml);

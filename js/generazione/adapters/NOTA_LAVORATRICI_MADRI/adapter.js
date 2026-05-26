@@ -7,6 +7,11 @@
   const CODICE = 'NOTA_LAVORATRICI_MADRI';
   const NOME = 'Nota informativa per le lavoratrici madri';
 
+  /** Calibri 8pt (half-points 16) — solo elenco gruppi omogenei. */
+  const GRUPPI_OMOGENEI_RUN_PR =
+    '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>' +
+    '<w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>';
+
   const TESTO_DESCRIZIONE_CICLO_DEFAULT =
     'La societ\u00e0 opera nel settore terziario ed in particolar modo si occupa di fornire prestazioni di servizi di estetica generale, compresi i massaggi e l\u2019uso di apparecchiature con ultrasuoni e corrente galvanica oltre alla vendita di prodotti estetici di diversa natura.';
 
@@ -282,7 +287,10 @@
     if (repair?.expandVademecumListLoopsInZip) {
       repair.expandVademecumListLoopsInZip(outZip, {
         loops: [
-          { texts: (templateData.GRUPPI_OMOGENEI || []).map((r) => r.NOME_GRUPPO) },
+          {
+            texts: (templateData.GRUPPI_OMOGENEI || []).map((r) => r.NOME_GRUPPO),
+            rPr: GRUPPI_OMOGENEI_RUN_PR,
+          },
           { texts: (templateData.ATTIVITA_LAVORATRICI || []).map((r) => r.TESTO) },
           { texts: (templateData.RISCHI_IDENTIFICAZIONE || []).map((r) => r.TESTO_RISCHIO) },
           { texts: (templateData.RISCHI_VALUTAZIONE || []).map((r) => r.TESTO_VALUTAZIONE) },

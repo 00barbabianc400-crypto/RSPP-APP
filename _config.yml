@@ -12,4 +12,4 @@ exclude:
   - js/generazione/adapters/MOD_INCENDIO/fields-map.md
   - js/generazione/adapters/VADEMECUM_AGGRESSIONI/fields-map.md
   - js/generazione/adapters/VADEMECUM_ANTIRAPINA/fields-map.md
-  - js/generazione/adapters/NOTA_ANTICENDIO/fields-map.md
+  - js/generazione/adapters/NOTA_ANTINCENDIO/fields-map.md

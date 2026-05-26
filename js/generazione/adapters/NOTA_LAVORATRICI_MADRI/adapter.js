@@ -284,18 +284,21 @@
     }
 
     const outZip = doc.getZip();
+    const gruppiNomi = (templateData.GRUPPI_OMOGENEI || []).map((r) => r.NOME_GRUPPO);
     if (repair?.expandVademecumListLoopsInZip) {
       repair.expandVademecumListLoopsInZip(outZip, {
         loops: [
-          {
-            texts: (templateData.GRUPPI_OMOGENEI || []).map((r) => r.NOME_GRUPPO),
-            rPr: GRUPPI_OMOGENEI_RUN_PR,
-          },
+          { texts: gruppiNomi, rPr: GRUPPI_OMOGENEI_RUN_PR },
           { texts: (templateData.ATTIVITA_LAVORATRICI || []).map((r) => r.TESTO) },
           { texts: (templateData.RISCHI_IDENTIFICAZIONE || []).map((r) => r.TESTO_RISCHIO) },
           { texts: (templateData.RISCHI_VALUTAZIONE || []).map((r) => r.TESTO_VALUTAZIONE) },
         ],
       });
+    }
+    if (repair?.forceRunStyleForParagraphTextsInZip && gruppiNomi.length) {
+      repair.forceRunStyleForParagraphTextsInZip(outZip, [
+        { texts: gruppiNomi, rPr: GRUPPI_OMOGENEI_RUN_PR },
+      ]);
     }
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);

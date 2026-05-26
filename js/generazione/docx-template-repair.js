@@ -216,8 +216,18 @@
     return m ? m[0] : null;
   }
 
+  function applyDefaultRunToPPr(pPr, rPrXml) {
+    if (!rPrXml) return pPr || '<w:pPr/>';
+    if (!pPr) return '<w:pPr>' + rPrXml + '</w:pPr>';
+    let pr = pPr.replace(/<w:rPr[\s\S]*?<\/w:rPr>/gi, '');
+    if (/<w:pPr[\s>]/.test(pr)) {
+      return pr.replace(/<w:pPr([^>]*)>/, '<w:pPr$1>' + rPrXml);
+    }
+    return '<w:pPr>' + rPrXml + pr + '</w:pPr>';
+  }
+
   function buildListParagraph(pPr, text, rPrXml) {
-    const pr = pPr || '<w:pPr/>';
+    const pr = applyDefaultRunToPPr(pPr, rPrXml);
     const rPr = rPrXml || '';
     const parts = String(text == null ? '' : text).split('\n');
     let runs = '';
@@ -236,7 +246,39 @@
     const probe2 = normalizeMatchText(texts[1]).slice(0, 28);
     if (probe2 && normJoined.includes(probe2)) return true;
     if ((normJoined.match(/;/g) || []).length >= 1) return true;
-    return normJoined.length > probe.length + 15;
+    if (normJoined.length > probe.length + 15) return true;
+    return texts.some((t, i) => i > 0 && normJoined.includes(normalizeMatchText(t).slice(0, 22)));
+  }
+
+  /** Applica stile run a paragrafi il cui testo coincide con una voce wizard (es. gruppi omogenei). */
+  function forceRunStyleForParagraphTextsInXml(xml, entries) {
+    const list = Array.isArray(entries) ? entries : [];
+    if (!list.length) return xml;
+    return xml.replace(/<w:p[\s\S]*?<\/w:p>/g, (block) => {
+      const norm = normalizeMatchText(decodeXmlText(paragraphPlainText(block)));
+      for (const entry of list) {
+        const rPrXml = entry.rPr || '';
+        const texts = (entry.texts || []).map((t) => normalizeMatchText(t)).filter(Boolean);
+        for (let i = 0; i < texts.length; i++) {
+          if (norm === texts[i] || norm.startsWith(texts[i])) {
+            const pPr = extractPPr(block);
+            const plain = decodeXmlText(paragraphPlainText(block)).trim();
+            return buildListParagraph(pPr, plain, rPrXml);
+          }
+        }
+      }
+      return block;
+    });
+  }
+
+  function forceRunStyleForParagraphTextsInZip(zip, entries) {
+    const path = 'word/document.xml';
+    const file = zip.file(path);
+    if (!file) return zip;
+    let xml = file.asText();
+    xml = forceRunStyleForParagraphTextsInXml(xml, entries);
+    zip.file(path, xml);
+    return zip;
   }
 
   /**
@@ -428,7 +470,7 @@
 
       out += xml.slice(lastEnd, m.index);
 
-      if (loopIdx < loops.length && (hasNumPr || lastListPPr)) {
+      if (loopIdx < loops.length) {
         const joined = decodeXmlText(paragraphPlainText(block));
         const normJoined = normalizeMatchText(joined);
         for (let tryIdx = loopIdx; tryIdx < loops.length; tryIdx++) {
@@ -438,7 +480,7 @@
             .filter(Boolean);
           if (!texts.length) continue;
           if (!paragraphMatchesLoopTexts(normJoined, texts)) continue;
-          const usePPr = hasNumPr ? pPr : lastListPPr;
+          const usePPr = (hasNumPr ? pPr : null) || lastListPPr || pPr || '<w:pPr/>';
           const rPrXml = loopCfg.rPr || '';
           out += texts.map((t) => buildListParagraph(usePPr, t, rPrXml)).join('');
           loopIdx = tryIdx + 1;
@@ -494,6 +536,7 @@
     expandJoinedListParagraphsInZip,
     expandSemicolonJoinedListParagraphsInZip,
     expandVademecumListLoopsInZip,
+    forceRunStyleForParagraphTextsInZip,
     formatDocxtemplaterErrors,
     fixSplitPlaceholdersInXml,
   };

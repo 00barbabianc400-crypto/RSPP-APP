@@ -5877,7 +5877,7 @@
                 NOTA_LAVORATRICI_MADRI: '20260528d',
                 NOTA_ANTINCENDIO: '20260601b',
                 APPENDICE_A_ORGANIGRAMMA: '20260601c',
-                APPENDICE_B1_PROFILI: '20260207f',
+                APPENDICE_B1_PROFILI: '20260207h',
             };
             return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -6024,6 +6024,32 @@
             const statusBadge = panel.querySelector('#gen-status-' + codice);
             let currentData = initialData;
 
+            function mergeAppendiceB1GenPayload(cur, init) {
+                const out = { ...(cur || {}) };
+                if (!init) return out;
+                if (!Array.isArray(out._profili_azienda) || !out._profili_azienda.length) {
+                    out._profili_azienda = init._profili_azienda;
+                }
+                if (!out._appendice_b1_rischi_by_profilo && init._appendice_b1_rischi_by_profilo) {
+                    out._appendice_b1_rischi_by_profilo = init._appendice_b1_rischi_by_profilo;
+                }
+                if (!out._appendice_b1_livelli_by_profilo && init._appendice_b1_livelli_by_profilo) {
+                    out._appendice_b1_livelli_by_profilo = init._appendice_b1_livelli_by_profilo;
+                }
+                if (
+                    !out._appendice_b1_selezione_rischi ||
+                    !Object.keys(out._appendice_b1_selezione_rischi).length
+                ) {
+                    out._appendice_b1_selezione_rischi = init._appendice_b1_selezione_rischi;
+                }
+                if (!out._logo_buffer?.byteLength && init._logo_buffer?.byteLength) {
+                    out._logo_buffer = init._logo_buffer;
+                    out._logo_path = out._logo_path || init._logo_path;
+                    out.LOGO_PREVIEW_URL = out.LOGO_PREVIEW_URL || init.LOGO_PREVIEW_URL;
+                }
+                return out;
+            }
+
             // Listener messaggi dall'iframe
             function onIframeMessage(e) {
                 if (!e.data || typeof e.data !== 'object') return;
@@ -6033,8 +6059,10 @@
                     iframe.contentWindow.postMessage({ type: 'SET_DATA', data: initialData }, '*');
                 }
                 if (e.data.type === 'DATA_UPDATE') {
-                    currentData = e.data.data;
-                    if (!currentData?._logo_buffer?.byteLength && initialData?._logo_buffer?.byteLength) {
+                    currentData = codice === 'APPENDICE_B1_PROFILI'
+                        ? mergeAppendiceB1GenPayload(e.data.data, initialData)
+                        : e.data.data;
+                    if (codice !== 'APPENDICE_B1_PROFILI' && !currentData?._logo_buffer?.byteLength && initialData?._logo_buffer?.byteLength) {
                         currentData._logo_buffer = initialData._logo_buffer;
                         currentData._logo_path = currentData._logo_path || initialData._logo_path;
                         currentData.LOGO_PREVIEW_URL = currentData.LOGO_PREVIEW_URL || initialData.LOGO_PREVIEW_URL;
@@ -6053,7 +6081,10 @@
                     }
                 }
                 if (e.data.type === 'GENERATE') {
-                    triggerGeneration(codice, aziendaId, e.data.data);
+                    const genPayload = codice === 'APPENDICE_B1_PROFILI'
+                        ? mergeAppendiceB1GenPayload(e.data.data, initialData)
+                        : e.data.data;
+                    triggerGeneration(codice, aziendaId, genPayload);
                 }
                 if (e.data.type === 'PREVIEW_DOCX' || e.data.type === 'PREVIEW_XLSX') {
                     renderGenerazionePreviewDocx(codice, e.data.data, iframe);
@@ -6063,7 +6094,10 @@
 
             // Genera DOCX dal pulsante del panel padre
             generateBtn.addEventListener('click', () => {
-                triggerGeneration(codice, aziendaId, currentData);
+                const genPayload = codice === 'APPENDICE_B1_PROFILI'
+                    ? mergeAppendiceB1GenPayload(currentData, initialData)
+                    : currentData;
+                triggerGeneration(codice, aziendaId, genPayload);
             });
 
             // Cleanup quando il panel viene rimosso
@@ -6140,7 +6174,7 @@
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260601c'
-                : codice === 'APPENDICE_B1_PROFILI' ? '20260207f'
+                : codice === 'APPENDICE_B1_PROFILI' ? '20260207h'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);

@@ -20,6 +20,7 @@
   const TMPL_DATA_START   = 6;   // prima riga dati (fasi)
   const TMPL_DATA_COUNT   = 5;   // righe dati nel template (6-10)
   const TMPL_GAP_ROWS     = 1;   // riga vuota tra dati e blocco statico
+  const TMPL_DATA_COL_END = 21;  // colonna U
   const DATA_ROW_HEIGHT   = 127.5;
   const STATIC_ROW_HEIGHTS = [102, 75, 112.5, 68.25];
 
@@ -233,9 +234,62 @@
   }
 
   // ─── ExcelJS clone worksheet ─────────────────────────────────────────────────
+  /** Snapshot stili riga (per duplicare la riga-modello fasi). */
+  function snapshotRowStyles(ws, rowNum, colEnd) {
+    const srcRow = ws.getRow(rowNum);
+    const cells = [];
+    for (let c = 1; c <= colEnd; c++) {
+      const style = srcRow.getCell(c).style;
+      cells.push(
+        style && Object.keys(style).length ? deepCloneObj(style) : null
+      );
+    }
+    return { height: srcRow.height, cells };
+  }
+
+  function applyRowStyleSnapshot(ws, rowNum, snap, colEnd) {
+    const destRow = ws.getRow(rowNum);
+    if (snap.height) destRow.height = snap.height;
+    for (let c = 1; c <= colEnd; c++) {
+      const style = snap.cells[c - 1];
+      if (style) destRow.getCell(c).style = deepCloneObj(style);
+    }
+    try { destRow.commit(); } catch (e) { /* skip */ }
+  }
+
+  /** Aggiorna il ref della colorScale (C..S) in base al numero di fasi. */
+  function updateMatrixColorScaleRange(ws, fasiCount) {
+    if (!ws.conditionalFormattings?.length || fasiCount < 1) return;
+    const endRow = TMPL_DATA_START + fasiCount - 1;
+    const sqref = 'C' + TMPL_DATA_START + ':S' + endRow;
+    ws.conditionalFormattings.forEach((cf) => { cf.ref = sqref; });
+  }
+
+  /**
+   * Adatta il numero di righe fasi: inserimento con stile copiato da riga 6,
+   * rimozione con spliceRows (solo righe in eccesso).
+   */
+  function adjustFasiRowCount(ws, N, tmplN) {
+    const modelSnap = snapshotRowStyles(ws, TMPL_DATA_START, TMPL_DATA_COL_END);
+    if (N > tmplN) {
+      const extra = N - tmplN;
+      const insertAt = TMPL_DATA_START + tmplN;
+      ws.spliceRows(insertAt, 0, ...Array(extra).fill([]));
+      for (let i = 0; i < extra; i++) {
+        const r = insertAt + i;
+        applyRowStyleSnapshot(ws, r, modelSnap, TMPL_DATA_COL_END);
+        try { ws.mergeCells('A' + r + ':B' + r); } catch (e) { /* skip */ }
+      }
+    } else if (N < tmplN) {
+      ws.spliceRows(TMPL_DATA_START + N, tmplN - N);
+    }
+    updateMatrixColorScaleRange(ws, N);
+  }
+
   /**
    * Clona il foglio srcName in un nuovo foglio destName.
-   * Copia: dimensioni colonne/righe, valori+stili celle, merge, page setup.
+   * Copia: dimensioni colonne/righe, valori+stili celle, merge, page setup,
+   * views, margini, header/footer, formattazione condizionale.
    */
   function cloneWorksheet(wb, srcName, destName) {
     const src = wb.getWorksheet(srcName);
@@ -243,11 +297,28 @@
 
     const dest = wb.addWorksheet(destName);
 
-    // Page setup
+    // Page setup + margini
     try {
-      dest.pageSetup.orientation = src.pageSetup.orientation;
-      dest.pageSetup.paperSize   = src.pageSetup.paperSize;
+      const ps = src.pageSetup || {};
+      dest.pageSetup.orientation   = ps.orientation;
+      dest.pageSetup.paperSize     = ps.paperSize;
+      dest.pageSetup.scale         = ps.scale;
+      dest.pageSetup.fitToPage     = ps.fitToPage;
+      dest.pageSetup.fitToWidth    = ps.fitToWidth;
+      dest.pageSetup.fitToHeight   = ps.fitToHeight;
+      if (ps.margins) dest.pageSetup.margins = deepCloneObj(ps.margins);
     } catch (e) { /* skip if not available */ }
+
+    // Vista foglio (pageBreakPreview → grigio margini + bordo pagina in Excel)
+    if (src.views?.length) dest.views = deepCloneObj(src.views);
+
+    // Footer intestazione
+    if (src.headerFooter) dest.headerFooter = deepCloneObj(src.headerFooter);
+
+    // ColorScale matrice rischi (C6:S…)
+    if (src.conditionalFormattings?.length) {
+      dest.conditionalFormattings = deepCloneObj(src.conditionalFormattings);
+    }
 
     // Column widths
     src.columns.forEach((col) => {
@@ -298,15 +369,8 @@
     const N = fasi.length;
     const tmplN = TMPL_DATA_COUNT; // 5
 
-    // ── Adattamento righe se N ≠ tmplN ──
-    if (N > tmplN) {
-      // Inserisci N-tmplN righe dopo l'ultima riga dati del template (prima del gap)
-      const extra = N - tmplN;
-      ws.spliceRows(TMPL_DATA_START + tmplN, 0, ...Array(extra).fill(null).map(() => []));
-    } else if (N < tmplN) {
-      // Rimuovi le righe dati in eccesso
-      ws.spliceRows(TMPL_DATA_START + N, tmplN - N);
-    }
+    // ── Adattamento righe se N ≠ tmplN (stile da riga-modello 6) ──
+    adjustFasiRowCount(ws, N, tmplN);
 
     // ── Scrivi righe fasi ──
     fasi.forEach((fase, idx) => {
@@ -348,7 +412,6 @@
     // Posizione dinamica: TMPL_DATA_START + N + TMPL_GAP_ROWS
     const R0 = TMPL_DATA_START + N + TMPL_GAP_ROWS;
     const labelFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF99' } };
-    const labelFont = { bold: true, size: 9 };
 
     const staticRows = [
       {
@@ -390,7 +453,7 @@
       const cellA = ws.getCell('A' + r);
       cellA.value = label;
       cellA.fill      = labelFill;
-      cellA.font      = labelFont;
+      cellA.font      = FONT_STATIC_LABEL;
       cellA.alignment = wrapTop;
 
       const cellC = ws.getCell('C' + r);
@@ -516,30 +579,35 @@
     wsScheda.getCell('A7').value =
       PREFIX_DESCRIZIONE_CICLO + String(data.descrizione_ciclo_produttivo || '').trim();
 
-    const wrapTop = { vertical: 'top', wrapText: true };
-    wsScheda.getCell('A9').value = schedaCellaA9Testo(data._profili_azienda);
-    wsScheda.getCell('A9').alignment = wrapTop;
-    wsScheda.getCell('C9').value = schedaCellaC9Testo(data._profili_azienda);
-    wsScheda.getCell('C9').alignment = wrapTop;
+    const profiliSrc = resolveProfiliAzienda(data);
+    wsScheda.getCell('A9').value = schedaCellaA9Testo(profiliSrc);
+    wsScheda.getCell('A9').alignment = ALIGN_SCHEDA_ELENCO;
+    wsScheda.getCell('C9').value = schedaCellaC9Testo(profiliSrc);
+    wsScheda.getCell('C9').alignment = ALIGN_SCHEDA_ELENCO;
 
     // Tabella profili rischio (righe 13+)
     const byProfilo = data._appendice_b1_rischi_by_profilo || {};
     const selezione = data._appendice_b1_selezione_rischi  || {};
-    const profiliTab = profiliSchedaSorted(data._profili_azienda);
+    const profiliTab = profiliSrc;
     const startR = TABLE_PROFILI_DATA_START_ROW;
     for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
-      ['A','B','C','D'].forEach((col) => {
-        wsScheda.getCell(col + (startR + i)).value = null;
-      });
+      const r = startR + i;
+      const rowObj = wsScheda.getRow(r);
+      rowObj.getCell(1).value = '';
+      rowObj.getCell(2).value = '';
+      rowObj.getCell(3).value = '';
+      rowObj.getCell(4).value = '';
     }
     profiliTab.forEach((p, idx) => {
       const row = startR + idx;
-      wsScheda.getCell('A' + row).value = String(p.nome || '').trim();
-      wsScheda.getCell('B' + row).value = fasiLavoroVirgola(p.fasi_lavoro);
-      wsScheda.getCell('C' + row).value = nomiRischiSelezione(byProfilo, selezione, String(p.id), 'sicurezza');
-      wsScheda.getCell('D' + row).value = nomiRischiSelezione(byProfilo, selezione, String(p.id), 'igiene');
-      ['A','B','C','D'].forEach((col) => {
-        wsScheda.getCell(col + row).alignment = wrapTop;
+      const rowObj = wsScheda.getRow(row);
+      const pid = String(p.id || '');
+      rowObj.getCell(1).value = String(p.nome || '').trim();
+      rowObj.getCell(2).value = fasiLavoroVirgola(p.fasi_lavoro);
+      rowObj.getCell(3).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
+      rowObj.getCell(4).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
+      [1, 2, 3, 4].forEach((colNum) => {
+        rowObj.getCell(colNum).alignment = ALIGN_WRAP_TOP;
       });
     });
 
@@ -602,9 +670,16 @@
     return wb.xlsx.writeBuffer({ type: 'arraybuffer', compression: true });
   }
 
-  // Costanti tabella Scheda Azienda (righe 13+)
   const TABLE_PROFILI_DATA_START_ROW = 13;
   const TABLE_PROFILI_CLEAR_ROW_COUNT = 40;
+  const ALIGN_SCHEDA_ELENCO = { vertical: 'middle', horizontal: 'left', wrapText: true };
+  const ALIGN_WRAP_TOP = { vertical: 'top', wrapText: true };
+  const FONT_STATIC_LABEL = { name: 'Calibri', size: 26, bold: true };
+
+  function resolveProfiliAzienda(data) {
+    const raw = data?._profili_azienda ?? data?.profili_azienda ?? [];
+    return profiliSchedaSorted(Array.isArray(raw) ? raw : []);
+  }
 
   // ─── Export ──────────────────────────────────────────────────────────────────
   window.GEN_ADAPTERS = window.GEN_ADAPTERS || {};

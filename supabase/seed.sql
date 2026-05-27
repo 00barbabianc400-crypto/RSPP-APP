@@ -1,4 +1,5 @@
 -- Seed data for RSPP
+-- catalogo_rischi.macro_categoria: usata da APPENDICE_B1_PROFILI → col. C (solo «Rischi per la Sicurezza») vs col. D («Rischi per la Salute», «Rischi Psicosociali e Trasversali»).
 
 insert into public.catalogo_rischi (id_rischio, nome_rischio, categoria, macro_categoria, attivo, ordine)
 values

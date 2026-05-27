@@ -952,7 +952,7 @@
                 loghi: 'loghi',
                 output: 'output'
             },
-            modelliAllowedExt: ['docx', 'doc', 'dotx', 'pdf'],
+            modelliAllowedExt: ['docx', 'doc', 'dotx', 'pdf', 'xlsx', 'xlsm'],
             loghiAllowedExt: ['png', 'jpg', 'jpeg', 'webp', 'svg'],
             n8n: {
                 outputWipeWebhookUrl: RUNTIME_ENV.N8N_OUTPUT_WIPE_WEBHOOK_URL || '',
@@ -2789,6 +2789,86 @@
             }
         }
 
+        async function ensureValutazioniAllineateCatalogo(aziendaId, profiloKey = '') {
+            if (!aziendaId) return;
+
+            const associazioni = (STATE.data.aziendeProfili || []).filter(ap =>
+                ap.azienda_id === aziendaId &&
+                ap.profilo_id &&
+                ap.profilo?.attivo !== false
+            );
+            if (!associazioni.length) return;
+
+            const targetProfili = profiloKey
+                ? associazioni.filter(ap => (ap.profilo?.nome_profilo || '').trim().toLowerCase() === profiloKey)
+                : associazioni;
+            const profiloIds = [...new Set(targetProfili.map(ap => ap.profilo_id).filter(Boolean))];
+            if (!profiloIds.length) return;
+
+            const [{ data: az }, { data: rischi, error: rischiErr }, { data: existing, error: existingErr }] = await Promise.all([
+                supabaseClient
+                    .from(CONFIG.tables.aziende)
+                    .select('partita_iva')
+                    .eq('id', aziendaId)
+                    .single(),
+                supabaseClient
+                    .from(CONFIG.tables.catalogoRischi)
+                    .select('id, id_rischio')
+                    .eq('attivo', true),
+                supabaseClient
+                    .from(CONFIG.tables.valutazioniRischio)
+                    .select('profilo_id, rischio_id')
+                    .eq('azienda_id', aziendaId)
+                    .in('profilo_id', profiloIds)
+            ]);
+
+            if (!az?.partita_iva || rischiErr || existingErr) {
+                if (rischiErr || existingErr) {
+                    console.warn('[Valutazioni] Sync catalogo→valutazioni saltata', rischiErr || existingErr);
+                }
+                return;
+            }
+
+            const riskList = (rischi || []).filter(r => r?.id && r?.id_rischio);
+            if (!riskList.length) return;
+
+            const existingSet = new Set((existing || []).map(v => `${v.profilo_id}|${v.rischio_id}`));
+            const testoDefault = "Rischio non rilevato per il profilo professionale. Le caratteristiche dell'attivita e dell'ambiente di lavoro non comportano esposizione a tale tipologia di rischio.";
+            const missingRows = [];
+            profiloIds.forEach((profiloId) => {
+                riskList.forEach((r) => {
+                    const key = `${profiloId}|${r.id}`;
+                    if (existingSet.has(key)) return;
+                    missingRows.push({
+                        chiave_valutazione: `${az.partita_iva}_${profiloId}_${r.id_rischio}`,
+                        azienda_id: aziendaId,
+                        profilo_id: profiloId,
+                        rischio_id: r.id,
+                        rischio_associato: true,
+                        stato: 'Trascurabile',
+                        livello_rischio: 'Trascurabile',
+                        testo_valutazione: testoDefault,
+                        valutatore_id: STATE.account?.id || null,
+                    });
+                });
+            });
+            if (!missingRows.length) return;
+
+            for (let i = 0; i < missingRows.length; i += 500) {
+                const chunk = missingRows.slice(i, i + 500);
+                const { error } = await supabaseClient
+                    .from(CONFIG.tables.valutazioniRischio)
+                    .upsert(chunk, {
+                        onConflict: 'azienda_id,profilo_id,rischio_id',
+                        ignoreDuplicates: true
+                    });
+                if (error) {
+                    console.warn('[Valutazioni] Sync catalogo→valutazioni fallita', error);
+                    break;
+                }
+            }
+        }
+
         async function loadValutazioniByFilters() {
             const container = document.getElementById('valutazioniListContainer');
             if (!container) return;
@@ -2813,6 +2893,12 @@
                     </div>
                 `;
                 return;
+            }
+
+            try {
+                await ensureValutazioniAllineateCatalogo(aziendaId, profiloKey || '');
+            } catch (syncErr) {
+                console.warn('[Valutazioni] Sync preliminare saltata', syncErr);
             }
 
             container.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento valutazioni...</div>';
@@ -5044,7 +5130,7 @@
             if (canManage) {
                 actionsHtml += '<button type="button" class="btn" data-action="pick-modello" data-codice="' + codiceAttr + '">'
                     + (file ? 'Sostituisci' : 'Carica') + '</button>';
-                actionsHtml += '<input type="file" class="modelli-file-input" accept=".doc,.docx,.dotx,.pdf" data-codice="'
+                actionsHtml += '<input type="file" class="modelli-file-input" accept=".doc,.docx,.dotx,.pdf,.xlsx,.xlsm" data-codice="'
                     + codiceAttr + '" hidden>';
                 if (file) {
                     actionsHtml += '<button type="button" class="icon-btn danger" data-action="delete-modello" data-codice="'
@@ -5647,8 +5733,16 @@
                     .from(CONFIG.storage.output).list(aziendaId, { limit: 1000 });
                 const outputByCode = {};
                 (outputFiles || []).forEach(f => {
-                    const base = codiceFromStorageName(f.name);
-                    if (base) outputByCode[base] = f;
+                    const parsed = parseOutputFileName(f.name);
+                    const ck = parsed.codice;
+                    if (!ck) return;
+                    const prev = outputByCode[ck];
+                    if (!prev) {
+                        outputByCode[ck] = f;
+                        return;
+                    }
+                    const pts = parseOutputFileName(prev.name).ts || 0;
+                    if ((parsed.ts || 0) >= pts) outputByCode[ck] = f;
                 });
 
                 // Group by category (preserve seed order)
@@ -5761,6 +5855,11 @@
 
         // ─── GENERAZIONE DOCX — preview inline + iframe ───────────────────────────
 
+        function genAdapterFolder(codice) {
+            if (codice === 'APPENDICE_B1_PROFILI') return 'APPENDICE_B_1';
+            return codice;
+        }
+
         function previewHtmlSrc(codice) {
             const v = {
                 MOD_STRESS_LC: '20260520stress16',
@@ -5778,8 +5877,9 @@
                 NOTA_LAVORATRICI_MADRI: '20260528d',
                 NOTA_ANTINCENDIO: '20260601b',
                 APPENDICE_A_ORGANIGRAMMA: '20260601c',
+                APPENDICE_B1_PROFILI: '20260207f',
             };
-            return 'js/generazione/adapters/' + codice + '/preview.html?v=' + (v[codice] || Date.now());
+            return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
         }
 
         async function openGeneraDocPreview(codice, aziendaId) {
@@ -5832,7 +5932,10 @@
                     .order('data_rilevamento', { ascending: false }),
                 supabaseClient
                     .from(CONFIG.tables.aziendeProfili)
-                    .select('profilo_id, profilo:profilo_id(id, nome_profilo, attivo, descrizione_attivita, protocollo_sor_san)')
+                    .select(
+                        'profilo_id, profilo:profilo_id(id, nome_profilo, attivo, descrizione_attivita, '
+                        + 'protocollo_sor_san, fasi_lavoro, misure_gen_generali, dpi_base, dpi_collettivi)'
+                    )
                     .eq('azienda_id', aziendaId),
             ]);
             const profiliNomi = (profiliAssociati || [])
@@ -5846,9 +5949,26 @@
                     nome: row.profilo.nome_profilo || '',
                     descrizione_attivita: row.profilo.descrizione_attivita || '',
                     protocollo_sor_san: row.profilo.protocollo_sor_san,
+                    misure_gen_generali: row.profilo.misure_gen_generali || '',
+                    dpi_base: row.profilo.dpi_base || '',
+                    dpi_collettivi: row.profilo.dpi_collettivi || '',
                     attivo: row.profilo.attivo,
+                    fasi_lavoro: Array.isArray(row.profilo?.fasi_lavoro) ? row.profilo.fasi_lavoro : [],
                 }))
                 .filter((p) => p.id && p.nome);
+
+            let valutazioniAppendiceB1 = [];
+            if (codice === 'APPENDICE_B1_PROFILI') {
+                const { data: vRows, error: vErr } = await supabaseClient
+                    .from(CONFIG.tables.valutazioniRischio)
+                    .select(
+                        'profilo_id, rischio_id, rischio_associato, livello_rischio, rischio:rischio_id(id, id_rischio, nome_rischio, macro_categoria, ordine)'
+                    )
+                    .eq('azienda_id', aziendaId)
+                    .eq('rischio_associato', true);
+                if (vErr) console.warn('[APPENDICE_B1] valutazioni_rischio', vErr);
+                valutazioniAppendiceB1 = vRows || [];
+            }
 
             // Recupera numero modulo dal catalogo
             const catalogoItem = (STATE.data?.catalogoDocumenti || []).find(d => d.codice === codice);
@@ -5865,6 +5985,9 @@
                     modulo_numero: moduloNumero,
                     profili_nomi:  profiliNomi,
                     profili_azienda: profiliAzienda,
+                    ...(codice === 'APPENDICE_B1_PROFILI'
+                        ? { valutazioni_appendice_b1: valutazioniAppendiceB1 }
+                        : {}),
                 }
             );
 
@@ -5879,12 +6002,13 @@
                 + '<strong style="flex:1;font-size:14px;">📄 Anteprima generazione: ' + esc(codice) + '</strong>'
                 + '<span class="hint" style="font-size:12px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + attrEsc(sedeResolved.sede) + '">Sede: ' + esc(shortLabelSede(sedeResolved.sede)) + '</span>'
                 + '<span id="gen-status-' + attrEsc(codice) + '" class="badge warning">In compilazione…</span>'
-                + '<button class="btn btn-primary" id="gen-btn-' + attrEsc(codice) + '" disabled>Genera DOCX</button>'
+                + '<button class="btn btn-primary" id="gen-btn-' + attrEsc(codice) + '" disabled>'
+                + (codice === 'APPENDICE_B1_PROFILI' ? 'Genera XLSX' : 'Genera DOCX') + '</button>'
                 + '<button class="btn" onclick="document.getElementById(\'gen-preview-' + attrEsc(codice) + '\')?.remove()">✕ Chiudi</button>'
                 + '</div>'
                 + '<div style="height:700px;overflow:hidden;">'
                 + '<p class="hint" style="padding:6px 16px;margin:0;font-size:12px;border-bottom:1px solid var(--sp-border,#333);">'
-                + 'Nella barra nera sotto: <strong>Compila</strong> · <strong>Anteprima Word</strong> · Genera DOCX</p>'
+                + 'Nella barra nera sotto: <strong>Compila</strong> · <strong>Anteprima Word / Excel</strong> · Genera</p>'
                 + '<iframe id="gen-iframe-' + attrEsc(codice) + '"'
                 + ' src="' + attrEsc(previewHtmlSrc(codice)) + '"'
                 + ' style="width:100%;height:100%;border:none;"'
@@ -5931,7 +6055,7 @@
                 if (e.data.type === 'GENERATE') {
                     triggerGeneration(codice, aziendaId, e.data.data);
                 }
-                if (e.data.type === 'PREVIEW_DOCX') {
+                if (e.data.type === 'PREVIEW_DOCX' || e.data.type === 'PREVIEW_XLSX') {
                     renderGenerazionePreviewDocx(codice, e.data.data, iframe);
                 }
             }
@@ -5965,7 +6089,7 @@
 
         async function loadAdapter(codice) {
             if (window.GEN_ADAPTERS?.[codice]) return;
-            const base = 'js/generazione/adapters/' + codice + '/';
+            const base = 'js/generazione/adapters/' + genAdapterFolder(codice) + '/';
 
             if (codice === 'MOD_VDT_ILLUMINAMENTO') {
                 await loadScriptOnce(base + 'uni-options.js');
@@ -5987,7 +6111,13 @@
                 }
             }
 
-            await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260528d');
+            if (codice !== 'APPENDICE_B1_PROFILI') {
+                await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260528d');
+            }
+
+            if (codice === 'APPENDICE_B1_PROFILI') {
+                await loadScriptOnce('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js');
+            }
 
             if (codice === 'MOD_STRESS_LC') {
                 await loadScriptOnce(base + 'stress-questionario-xlsx.js?v=20260520c');
@@ -6010,6 +6140,7 @@
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260601c'
+                : codice === 'APPENDICE_B1_PROFILI' ? '20260207f'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);
@@ -6025,7 +6156,8 @@
 
         async function downloadModelloTemplate(codice) {
             await loadModelliStorageIndex();
-            const path = STATE.data.modelliStorageByCodice?.[codice]?.name || (codice + '.docx');
+            const fallbackName = codice === 'APPENDICE_B1_PROFILI' ? (codice + '.xlsx') : (codice + '.docx');
+            const path = STATE.data.modelliStorageByCodice?.[codice]?.name || fallbackName;
             const { data, error } = await supabaseClient.storage
                 .from(CONFIG.storage.modelli)
                 .download(path, { cache: 'no-store' });
@@ -6053,10 +6185,20 @@
             if (!adapter) return;
             try {
                 const templateBuffer = await downloadModelloTemplate(codice);
+                if (typeof adapter.generateXlsx === 'function') {
+                    await loadScriptOnce('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js');
+                    const buffer = await adapter.generateXlsx(templateBuffer, wizardData);
+                    iframe.contentWindow.postMessage({ type: 'PREVIEW_XLSX_BLOB', buffer }, '*', [buffer]);
+                    return;
+                }
                 const buffer = await adapter.generateDocx(templateBuffer, wizardData);
                 iframe.contentWindow.postMessage({ type: 'PREVIEW_DOCX_BLOB', buffer }, '*', [buffer]);
             } catch (err) {
-                iframe.contentWindow.postMessage({ type: 'PREVIEW_DOCX_ERROR', message: err.message }, '*');
+                if (typeof adapter.generateXlsx === 'function') {
+                    iframe.contentWindow.postMessage({ type: 'PREVIEW_XLSX_ERROR', message: err.message }, '*');
+                } else {
+                    iframe.contentWindow.postMessage({ type: 'PREVIEW_DOCX_ERROR', message: err.message }, '*');
+                }
             }
         }
 
@@ -6075,19 +6217,23 @@
             try {
                 const templateBuffer = await downloadModelloTemplate(codice);
 
-                // Genera DOCX
-                const outputBuffer = await adapter.generateDocx(templateBuffer, data);
+                const xlsxGen = typeof adapter.generateXlsx === 'function';
+                const outputBuffer = xlsxGen
+                    ? await adapter.generateXlsx(templateBuffer, data)
+                    : await adapter.generateDocx(templateBuffer, data);
 
-                // Nome file output
                 const dataStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-                const outputFileName = codice + '_' + dataStr + '.docx';
+                const outExt = xlsxGen ? 'xlsx' : 'docx';
+                const outputFileName = codice + '_' + dataStr + '.' + outExt;
 
-                // Upload al bucket output
                 const outputPath = aziendaId + '/' + outputFileName;
+                const outMime = xlsxGen
+                    ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                    : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
                 const { error: upErr } = await supabaseClient.storage
                     .from(CONFIG.storage.output)
                     .upload(outputPath, outputBuffer, {
-                        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        contentType: outMime,
                         upsert: true,
                     });
                 if (upErr) throw upErr;
@@ -6111,11 +6257,15 @@
             try {
                 const { data: files } = await supabaseClient.storage
                     .from(CONFIG.storage.output).list(aziendaId, { limit: 1000 });
-                const file = (files || []).find(f => codiceFromStorageName(f.name) === codice);
-                if (!file) { showToast('File non trovato', 'warning'); return; }
+                const match = (files || [])
+                    .filter(f => f.name && !f.name.endsWith('/') && f.name.includes('.'))
+                    .map(f => ({ ...parseOutputFileName(f.name), name: f.name }))
+                    .filter(p => p.codice === codice)
+                    .sort((a, b) => (b.ts || 0) - (a.ts || 0))[0];
+                if (!match?.name) { showToast('File non trovato', 'warning'); return; }
                 const { data, error } = await supabaseClient.storage
                     .from(CONFIG.storage.output)
-                    .createSignedUrl(aziendaId + '/' + file.name, 120);
+                    .createSignedUrl(aziendaId + '/' + match.name, 120);
                 if (error) throw error;
                 window.open(data.signedUrl, '_blank', 'noopener');
             } catch (err) {

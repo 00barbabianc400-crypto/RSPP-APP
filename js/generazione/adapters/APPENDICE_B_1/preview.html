@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Appendice B.1 (Excel)</title>
+<script src="adapter.js?v=20260207f"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 900px; margin: 16px auto 40px; }
+  .page { background: #fff; padding: 1.2cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  h1.doc-title { font-size: 13pt; font-weight: bold; margin-bottom: 10px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; margin-bottom: 10px; }
+  .field-auto { color: #1a5276; font-weight: 600; }
+  .field-missing { color: #922b21; font-weight: 600; }
+  .hidden { display: none !important; }
+  #viewPreview { display: none; padding: 12px; background: #fff; overflow: auto; max-height: 620px; }
+  #viewPreview.active { display: block; }
+  #xlsxPreviewHost table { border-collapse: collapse; font-size: 9pt; width: 100%; }
+  #xlsxPreviewHost td { border: 1px solid #ccc; padding: 4px 6px; vertical-align: top; }
+  #xlsxPreviewHost .hint-prev { font-size: 10pt; color: #666; margin-bottom: 8px; }
+  .wizard-block { margin: 14px 0 0; padding: 12px 14px; background: #f8f9fa; border: 1px solid #dde2e6; border-radius: 4px; }
+  .wizard-block label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 11pt; }
+  .wizard-block textarea {
+    width: 100%; min-height: 100px; max-width: 100%; padding: 8px; font-size: 11pt; font-family: inherit; resize: vertical;
+  }
+  .scheda-preview-bl { margin-top: 12px; padding: 10px; background: #f4f6f8; border-radius: 4px; font-size: 10pt; white-space: pre-wrap; word-break: break-word; line-height: 1.4; }
+  .b1-profilo-fs { margin-top: 12px; padding: 10px 12px; border: 1px solid #ccd2d8; border-radius: 4px; background: #fff; }
+  .b1-profilo-fs legend { font-weight: 700; padding: 0 6px; }
+  .b1-risk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  @media (max-width: 640px) { .b1-risk-grid { grid-template-columns: 1fr; } }
+  .b1-risk-col strong { display: block; margin-bottom: 6px; font-size: 10pt; color: #1a5276; }
+  .b1-risk-lbl { display: block; font-weight: normal; margin: 4px 0; font-size: 10pt; cursor: pointer; line-height: 1.35; }
+  .b1-fase-block { margin-top: 8px; border: 1px solid #dee3e7; border-radius: 4px; overflow: hidden; }
+  .b1-fase-header { background: #e8eef4; padding: 6px 10px; font-weight: 600; font-size: 10pt; color: #1a3a5c; }
+  .b1-fase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 8px 10px; }
+  @media (max-width: 640px) { .b1-fase-row { grid-template-columns: 1fr; } }
+  .b1-fase-row label { display: block; font-size: 9.5pt; font-weight: 600; margin-bottom: 3px; color: #555; }
+  .b1-fase-row textarea { width: 100%; min-height: 58px; font-family: inherit; font-size: 10pt; padding: 5px 7px; resize: vertical; border: 1px solid #ccc; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">APPENDICE_B1_PROFILI</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabPrevBtn" onclick="showView('preview')">Anteprima Excel</button>
+  <button type="button" id="btnGenera" disabled>Genera XLSX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Appendice B.1 — Profili di rischio (Excel)</h1>
+      <p class="hint-str">Template bucket: <code>modelli/APPENDICE_B1_PROFILI.xlsx</code></p>
+      <p><strong>Azienda</strong>: <span id="pAzienda" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong>: <span id="pSede" class="field-auto">—</span></p>
+      <p><strong>Emissione (tutto in D2)</strong>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Logo (D4)</strong> <span id="pLogo" class="field-auto" style="display:inline-block;margin-left:8px;">—</span></p>
+
+      <div class="wizard-block" style="margin-top:0;">
+        <label>Gruppi omogenei → cella A9 (da profili associati)</label>
+        <div id="previewGruppiOmogenei" class="scheda-preview-bl">—</div>
+      </div>
+      <div class="wizard-block">
+        <label>Fasi di lavoro → cella C9 (array <code>fasi_lavoro</code> per profilo, stesso ordine di A9)</label>
+        <div id="previewFasiLavoro" class="scheda-preview-bl">—</div>
+      </div>
+      <div class="wizard-block">
+        <label for="taDescrizioneCiclo">Descrizione sintetica del ciclo produttivo (Scheda Azienda, cella A7)</label>
+        <textarea id="taDescrizioneCiclo" placeholder="Es. La società ha per oggetto l’acquisto, la produzione e la commercializzazione…"
+          oninput="setDescrizioneCiclo(this.value)"></textarea>
+        <p id="hintA7Prefix" class="hint-str" style="margin-top:8px;"></p>
+      </div>
+      <div class="wizard-block">
+        <label>Rischi per profilo → colonne C (Sicurezza) e D (Igiene / salute / psicosociali), da riga 13</label>
+        <div id="appendiceB1RischiWizard"></div>
+      </div>
+      <div class="wizard-block" style="margin-top:14px;">
+        <label>Misure di prevenzione specifiche e DPI per fase di lavoro → colonne T e U (foglio profilo)</label>
+        <div id="appendiceB1FasiWizard"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewPreview">
+  <div id="xlsxPreviewHost"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let DATA = {};
+  const PREFIX_A7 = 'Descrizione sintetica del ciclo produttivo: ';
+  const WIZARD = {
+    descrizione_ciclo_produttivo: '',
+    appendice_b1_selezione_rischi: {},
+    appendice_b1_misure_per_fase: {},
+    appendice_b1_dpi_per_fase: {},
+  };
+
+  function normalizzaFasiPreview(fasi_lavoro) {
+    const raw = Array.isArray(fasi_lavoro) ? fasi_lavoro : [];
+    return raw.map((s) => String(s || '').trim()).filter(Boolean);
+  }
+
+  function deepCloneWiz(o) {
+    try { return JSON.parse(JSON.stringify(o)); } catch (e) { return {}; }
+  }
+  const ADAPTER = window.GEN_ADAPTERS?.APPENDICE_B1_PROFILI;
+  const SHEET_SCHEDA = 'Scheda Azienda';
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML = '<img src="' + esc(url) + '" alt="logo" style="max-height:40px;vertical-align:middle;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.textContent = 'Logo caricato (visibile nel file generato)';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = '— (carica logo in Loghi)';
+    el.className = 'field-missing';
+  }
+
+  function buildMerged() {
+    if (!ADAPTER?.applyWizard) return { ...DATA };
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  function renderHintA7() {
+    const el = document.getElementById('hintA7Prefix');
+    if (el) {
+      el.textContent = PREFIX_A7 + (String(WIZARD.descrizione_ciclo_produttivo || '').trim() || '…');
+    }
+  }
+
+  window.setDescrizioneCiclo = function (val) {
+    WIZARD.descrizione_ciclo_produttivo = String(val || '');
+    renderHintA7();
+    sendUpdate();
+  };
+
+  function cloneSelezioneRischi(o) {
+    const out = {};
+    Object.keys(o || {}).forEach((k) => {
+      out[k] = [...(o[k] || [])];
+    });
+    return out;
+  }
+
+  function renderCheckboxColonna(pid, rows) {
+    if (!rows.length) return '<p class="hint-str" style="margin-top:4px;">—</p>';
+    return rows.map((r) => {
+      const arr = WIZARD.appendice_b1_selezione_rischi[pid] || [];
+      const checked = arr.includes(r.rischio_id) ? ' checked' : '';
+      return '<label class="b1-risk-lbl"><input type="checkbox" data-appendice-b1-risk="1" data-pid="' + esc(pid) + '" data-rid="' + esc(r.rischio_id) + '"' + checked + '> ' + esc(r.nome_rischio) + '</label>';
+    }).join('');
+  }
+
+  function renderAppendiceRischiWizard() {
+    const host = document.getElementById('appendiceB1RischiWizard');
+    if (!host || !ADAPTER) return;
+    const macroFn = ADAPTER.macroVersoColonnaSicIgiene;
+    if (typeof macroFn !== 'function') {
+      host.innerHTML = '<p class="hint-str">Adapter non espone la mappa macro categorie.</p>';
+      return;
+    }
+    const profili = ADAPTER.profiliSchedaSorted(DATA._profili_azienda);
+    const by = DATA._appendice_b1_rischi_by_profilo || {};
+    let html = '<p class="hint-str">Fonte: <code>valutazioni_rischio</code> con «Rischio associato» attivo. Di default tutti selezionati; deseleziona per escluderli dal foglio. Le macro provengono dal catalogo (<code>seed.sql</code>).</p>';
+    profili.forEach((p) => {
+      const pid = String(p.id);
+      const rows = by[pid] || [];
+      const sic = rows.filter((r) => macroFn(r.macro_categoria) === 'sicurezza');
+      const igi = rows.filter((r) => macroFn(r.macro_categoria) === 'igiene');
+      const unk = rows.filter((r) => !macroFn(r.macro_categoria));
+      html += '<fieldset class="b1-profilo-fs"><legend>' + esc(p.nome) + '</legend>';
+      if (!rows.length) {
+        html += '<p class="hint-str">Nessun rischio associato in Valutazioni per questo profilo.</p></fieldset>';
+        return;
+      }
+      if (unk.length) {
+        html += '<p class="hint-str" style="color:#922b21;">Attenzione: alcuni rischi hanno una macro non mappata su Sicurezza/Igiene; la generazione sarà bloccata finché il catalogo non è allineato.</p>';
+      }
+      html += '<div class="b1-risk-grid">'
+        + '<div class="b1-risk-col"><strong>Sicurezza</strong>' + renderCheckboxColonna(pid, sic) + '</div>'
+        + '<div class="b1-risk-col"><strong>Igiene / salute / psicosociali</strong>' + renderCheckboxColonna(pid, igi) + '</div>'
+        + '</div></fieldset>';
+    });
+    host.innerHTML = html;
+  }
+
+  // ── Wizard: Misure specifiche e DPI per fase (col. T e U) ──────────────────
+  function renderAppediceFasiWizard() {
+    const host = document.getElementById('appendiceB1FasiWizard');
+    if (!host || !ADAPTER) return;
+    const profili = ADAPTER.profiliSchedaSorted(DATA._profili_azienda || []);
+    if (!profili.length) {
+      host.innerHTML = '<p class="hint-str">Nessun profilo trovato.</p>';
+      return;
+    }
+    let html = '<p class="hint-str">Per ogni fase di lavoro inserisci testo libero che finirà nelle colonne <strong>T</strong> (Misure di Prevenzione Specifiche) e <strong>U</strong> (DPI Specifici) del foglio Excel del profilo.</p>';
+    profili.forEach((p) => {
+      const pid = String(p.id);
+      const fasi = normalizzaFasiPreview(p.fasi_lavoro);
+      if (!fasi.length) {
+        html += '<p class="hint-str" style="color:#c0392b;">Profilo «' + esc(p.nome) + '»: nessuna fase di lavoro configurata nell\'anagrafica.</p>';
+        return;
+      }
+      const misure = WIZARD.appendice_b1_misure_per_fase[pid] || [];
+      const dpi    = WIZARD.appendice_b1_dpi_per_fase[pid]    || [];
+      html += '<fieldset class="b1-profilo-fs" style="margin-top:12px;"><legend>' + esc(p.nome) + '</legend>';
+      fasi.forEach((fase, idx) => {
+        const mid = 'b1m_' + pid.replace(/-/g, '') + '_' + idx;
+        const did = 'b1d_' + pid.replace(/-/g, '') + '_' + idx;
+        html += '<div class="b1-fase-block">'
+          + '<div class="b1-fase-header">' + esc(fase) + '</div>'
+          + '<div class="b1-fase-row">'
+          + '<div><label for="' + mid + '">Misure di Prevenzione Specifiche (col. T)</label>'
+          + '<textarea id="' + mid + '" data-b1-fase-field="misure" data-pid="' + esc(pid) + '" data-idx="' + idx + '" placeholder="Rispetto delle procedure di lavoro…">'
+          + esc(misure[idx] || '')
+          + '</textarea></div>'
+          + '<div><label for="' + did + '">DPI Specifici (col. U)</label>'
+          + '<textarea id="' + did + '" data-b1-fase-field="dpi" data-pid="' + esc(pid) + '" data-idx="' + idx + '" placeholder="Guanti di protezione (EN 388)…">'
+          + esc(dpi[idx] || '')
+          + '</textarea></div>'
+          + '</div></div>';
+      });
+      html += '</fieldset>';
+    });
+    host.innerHTML = html;
+  }
+
+  document.addEventListener('input', function (e) {
+    const t = e.target;
+    if (!t) return;
+    const field = t.getAttribute('data-b1-fase-field');
+    if (field !== 'misure' && field !== 'dpi') return;
+    const pid = t.getAttribute('data-pid');
+    const idx = parseInt(t.getAttribute('data-idx'), 10);
+    if (!pid || isNaN(idx)) return;
+    const storeKey = field === 'misure' ? 'appendice_b1_misure_per_fase' : 'appendice_b1_dpi_per_fase';
+    const arr = [...(WIZARD[storeKey][pid] || [])];
+    while (arr.length <= idx) arr.push('');
+    arr[idx] = t.value;
+    WIZARD[storeKey] = { ...WIZARD[storeKey], [pid]: arr };
+    sendUpdate();
+  });
+
+  document.addEventListener('change', function (e) {
+    const t = e.target;
+    if (!t || t.getAttribute('data-appendice-b1-risk') !== '1') return;
+    const pid = t.getAttribute('data-pid');
+    const rid = t.getAttribute('data-rid');
+    if (!pid || !rid) return;
+    let arr = [...(WIZARD.appendice_b1_selezione_rischi[pid] || [])];
+    if (t.checked) {
+      if (!arr.includes(rid)) arr.push(rid);
+    } else {
+      arr = arr.filter((x) => x !== rid);
+    }
+    WIZARD.appendice_b1_selezione_rischi = { ...WIZARD.appendice_b1_selezione_rischi, [pid]: arr };
+    sendUpdate();
+  });
+
+  function renderProfiliSchedaPreview(data) {
+    const elGr = document.getElementById('previewGruppiOmogenei');
+    const elFa = document.getElementById('previewFasiLavoro');
+    if (!elGr || !elFa || !data || !ADAPTER) return;
+    const a9 = typeof ADAPTER.schedaCellaA9Testo === 'function'
+      ? ADAPTER.schedaCellaA9Testo(data._profili_azienda)
+      : '';
+    const c9 = typeof ADAPTER.schedaCellaC9Testo === 'function'
+      ? ADAPTER.schedaCellaC9Testo(data._profili_azienda)
+      : '';
+    elGr.textContent = a9 || '—';
+    elFa.textContent = c9 || '—';
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    renderProfiliSchedaPreview(merged);
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', !errors.length);
+    document.getElementById('btnGenera').disabled = !!errors.length;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+  }
+
+  window.showView = function (view) {
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewPreview').classList.toggle('active', view === 'preview');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabPrevBtn').classList.toggle('active', view === 'preview');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'APPENDICE_B1_PROFILI — Compila' : 'APPENDICE_B1_PROFILI — Anteprima';
+    if (view === 'preview') requestPreviewXlsx();
+  };
+
+  function requestPreviewXlsx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('xlsxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:16px;">' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p class="hint-prev">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_XLSX', data: merged }, '*');
+  }
+
+  function renderXlsxBuffer(buffer) {
+    const host = document.getElementById('xlsxPreviewHost');
+    if (!window.XLSX) {
+      host.innerHTML = '<p style="color:#c0392b;">SheetJS non caricato</p>';
+      return;
+    }
+    try {
+      const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+      const ws = wb.Sheets[SHEET_SCHEDA];
+      if (!ws) {
+        host.innerHTML = '<p style="color:#c0392b;">Foglio «' + esc(SHEET_SCHEDA) + '» assente</p>';
+        return;
+      }
+      const html = XLSX.utils.sheet_to_html(ws, { id: 'scheda-table', editable: false });
+      host.innerHTML =
+        '<p class="hint-prev">Anteprima testuale «' + esc(SHEET_SCHEDA) + '» (il logo non compare qui; è nel file Excel).</p>' +
+        html;
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA) return;
+    document.getElementById('pAzienda').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE
+      ? (' Emissione del ' + DATA.DATA_EMISSIONE)
+      : '—';
+    if (DATA.descrizione_ciclo_produttivo !== undefined) {
+      WIZARD.descrizione_ciclo_produttivo = String(DATA.descrizione_ciclo_produttivo || '');
+    }
+    WIZARD.appendice_b1_selezione_rischi  = cloneSelezioneRischi(DATA._appendice_b1_selezione_rischi);
+    WIZARD.appendice_b1_misure_per_fase   = deepCloneWiz(DATA._appendice_b1_misure_per_fase  || {});
+    WIZARD.appendice_b1_dpi_per_fase      = deepCloneWiz(DATA._appendice_b1_dpi_per_fase     || {});
+    const ta = document.getElementById('taDescrizioneCiclo');
+    if (ta) ta.value = WIZARD.descrizione_ciclo_produttivo;
+    renderHintA7();
+    renderLogoPreview();
+    renderProfiliSchedaPreview(DATA);
+    renderAppendiceRischiWizard();
+    renderAppediceFasiWizard();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_XLSX_BLOB' && e.data.buffer) {
+      renderXlsxBuffer(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_XLSX_ERROR') {
+      document.getElementById('xlsxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:16px;">' + esc(e.data.message) + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    window.parent.postMessage({ type: 'GENERATE', data: buildMerged() }, '*');
+  });
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

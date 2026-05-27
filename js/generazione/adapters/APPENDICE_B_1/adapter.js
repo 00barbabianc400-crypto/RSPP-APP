@@ -633,7 +633,6 @@
 
     // Righe Mansione/Tipologia/Sicurezza/Igiene: dopo i fogli profilo, con font leggibile
     writeSchedaProfiliIntervallo(wsScheda, startR, profiliTab, byProfilo, selezione);
-    logSchedaProfiliReadback(wsScheda, startR, profiliTab.length);
 
     const buf = data._logo_buffer;
     if (buf && buf.byteLength) {
@@ -662,8 +661,13 @@
 
   const TABLE_PROFILI_DATA_START_ROW = 13;
   const TABLE_PROFILI_CLEAR_ROW_COUNT = 40;
+  /** Altezze righe dati nel modello (es. righe 15–16 template: 121 / 169.5 pt). */
+  const SCHEDA_DATA_ROW_HEIGHTS = [121, 169.5, 121, 169.5];
+  const SCHEDA_MIN_DATA_ROW_HEIGHT = 72;
+  const SCHEDA_MAX_DATA_ROW_HEIGHT = 409;
   const ALIGN_SCHEDA_ELENCO = { vertical: 'middle', horizontal: 'left', wrapText: true };
-  const ALIGN_WRAP_TOP = { vertical: 'top', wrapText: true };
+  const ALIGN_SCHEDA_MANSIONE = { vertical: 'top', horizontal: 'left', wrapText: true };
+  const ALIGN_SCHEDA_WRAP_COLS = { vertical: 'top', horizontal: 'left', wrapText: true };
   const FONT_STATIC_LABEL = { name: 'Calibri', size: 26, bold: true };
 
   function resolveProfiliAzienda(data) {
@@ -696,18 +700,39 @@
     };
   }
 
-  function logSchedaProfiliReadback(ws, startR, count) {
-    const rows = [];
+  function snapshotSchedaRowHeights(ws, startR, count) {
+    const snap = {};
     for (let i = 0; i < count; i++) {
       const r = startR + i;
-      const a = ws.getCell('A' + r);
-      rows.push({
-        r,
-        A: String(a.value ?? '').slice(0, 40),
-        fontArgb: a.font?.color?.argb || a.font?.color?.theme || '(default)',
-      });
+      const h = ws.getRow(r).height;
+      if (h != null && h > 0) snap[r] = h;
     }
-    console.log('[APPENDICE_B1] readback in memoria prima di writeBuffer:', rows);
+    return snap;
+  }
+
+  /** Stima altezza riga in base al testo a capo su B/C/D (larghezza colonna dal template). */
+  function estimateSchedaDataRowHeight(ws, tipologia, sicurezza, igiene) {
+    const texts = { B: tipologia, C: sicurezza, D: igiene };
+    let maxH = SCHEDA_MIN_DATA_ROW_HEIGHT;
+    Object.keys(texts).forEach((col) => {
+      const text = String(texts[col] || '');
+      if (!text) return;
+      const w = ws.getColumn(col).width || 20;
+      const charsPerLine = Math.max(10, Math.floor(w * 1.05));
+      const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+      const h = lines * 15 + 8;
+      if (h > maxH) maxH = h;
+    });
+    return Math.min(SCHEDA_MAX_DATA_ROW_HEIGHT, maxH);
+  }
+
+  function resolveSchedaDataRowHeight(snapHeights, rowNum, profiloIndex, estimated) {
+    const snap = snapHeights[rowNum];
+    const fromTemplate = (snap != null && snap > 30) ? snap : SCHEDA_DATA_ROW_HEIGHTS[profiloIndex % SCHEDA_DATA_ROW_HEIGHTS.length];
+    return Math.min(
+      SCHEDA_MAX_DATA_ROW_HEIGHT,
+      Math.max(SCHEDA_MIN_DATA_ROW_HEIGHT, fromTemplate, estimated)
+    );
   }
 
   function colLettersToNum(letters) {
@@ -791,39 +816,44 @@
     };
   }
 
-  /** Scrive Mansione/Tipologia/Sicurezza/Igiene (celle classiche A:D, senza merge). */
+  /** Scrive Mansione/Tipologia/Sicurezza/Igiene (celle classiche A:D). */
   function writeSchedaProfiliIntervallo(ws, startR, profiliTab, byProfilo, selezione) {
     const cols = ['A', 'B', 'C', 'D'];
+    const snapHeights = snapshotSchedaRowHeights(ws, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
     unmergeSchedaIntervalloDati(ws, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
     for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
       const r = startR + i;
-      cols.forEach((c) => {
-        const cell = ws.getCell(c + r);
-        cell.value = '';
-      });
+      cols.forEach((c) => { ws.getCell(c + r).value = ''; });
     }
     profiliTab.forEach((p, idx) => {
       const r = startR + idx;
       const pid = String(p.id || '');
-      const vals = [
-        String(p.nome || '').trim(),
-        fasiLavoroVirgola(p.fasi_lavoro),
-        nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza'),
-        nomiRischiSelezione(byProfilo, selezione, pid, 'igiene'),
-      ];
-      cols.forEach((c, ci) => {
-        const cell = ws.getCell(c + r);
-        cell.value = vals[ci];
-        cell.alignment = ALIGN_WRAP_TOP;
+      const mansione = String(p.nome || '').trim();
+      const tipologia = fasiLavoroVirgola(p.fasi_lavoro);
+      const sicurezza = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
+      const igiene = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
+
+      const cellA = ws.getCell('A' + r);
+      cellA.value = mansione;
+      cellA.alignment = ALIGN_SCHEDA_MANSIONE;
+      ensureSchedaCellVisible(cellA);
+
+      [['B', tipologia], ['C', sicurezza], ['D', igiene]].forEach(([col, val]) => {
+        const cell = ws.getCell(col + r);
+        cell.value = val;
+        cell.alignment = ALIGN_SCHEDA_WRAP_COLS;
         ensureSchedaCellVisible(cell);
       });
-      try {
-        const rowObj = ws.getRow(r);
-        rowObj.hidden = false;
-        rowObj.commit();
-      } catch (e) { /* skip */ }
+
+      const rowObj = ws.getRow(r);
+      rowObj.hidden = false;
+      rowObj.height = resolveSchedaDataRowHeight(
+        snapHeights,
+        r,
+        idx,
+        estimateSchedaDataRowHeight(ws, tipologia, sicurezza, igiene)
+      );
     });
-    console.log('[APPENDICE_B1] scritte', profiliTab.length, 'righe da riga', startR);
   }
 
   /** Log diagnostico payload wizard → adapter (solo in console, non in UI). */

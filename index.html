@@ -1160,6 +1160,13 @@
             const select = document.getElementById('generazioneSedeSelect');
             if (!field || !select) return;
 
+            // La sede operativa serve solo per la generazione (tab "Genera"), non per l'elenco output.
+            const isOutputTab = document.getElementById('genPane-output')?.style?.display !== 'none';
+            if (isOutputTab) {
+                field.style.display = 'none';
+                return;
+            }
+
             if (!aziendaId) {
                 field.style.display = 'none';
                 select.innerHTML = '';
@@ -5524,6 +5531,9 @@
             // Chart: visibile solo in tab output
             const chart = document.getElementById('genStorageChart');
             if (chart) chart.style.display = tab === 'output' ? '' : 'none';
+
+            // Sede operativa: solo tab "Genera"
+            updateGenerazioneSedeSelect();
 
             const aziendaId = document.getElementById('generazioneAziendaSelect')?.value;
             if (tab === 'genera') {

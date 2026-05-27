@@ -195,11 +195,10 @@ create table if not exists public.valutazioni_rischio (
   valutatore_id uuid references public.profiles(id) on delete set null,
   note text,
   created_at timestamptz not null default timezone('utc', now()),
-  -- NULL = valutazione a livello profilo (retrocompatibile); NOT NULL = per fase specifica
+  -- NULL = valutazione a livello profilo; NOT NULL = per fase specifica
   profilo_fase_id uuid references public.profilo_fasi(id) on delete cascade,
-  updated_at timestamptz not null default timezone('utc', now()),
-  unique (azienda_id, profilo_id, rischio_id)
-  -- partial unique per righe con fase (vedi migration 20260527_profilo_fasi.sql)
+  updated_at timestamptz not null default timezone('utc', now())
+  -- unique parziali: uq_valutazioni_profilo_livello + uq_valutazioni_azienda_profilo_fase_rischio
 );
 
 -- ── Fasi di lavoro come entità stabili (Approccio B) ────────────────────────

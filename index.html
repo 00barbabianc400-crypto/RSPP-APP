@@ -2507,6 +2507,7 @@
             }
 
             try {
+                let profiloIdSaved = itemId;
                 if (itemId) {
                     const existing = STATE.data.profili.find(p => p.id == itemId);
                     if (existing?.fields?.TipoProfilo === 'Standard') {
@@ -2523,11 +2524,31 @@
                     if (error) throw error;
                     showToast('Profilo aggiornato con successo', 'success');
                 } else {
-                    const { error } = await supabaseClient
+                    const { data: inserted, error } = await supabaseClient
                         .from(CONFIG.tables.profili)
-                        .insert(payload);
+                        .insert(payload)
+                        .select('id')
+                        .single();
                     if (error) throw error;
+                    profiloIdSaved = inserted?.id;
                     showToast('Profilo creato con successo', 'success');
+                }
+
+                if (profiloIdSaved) {
+                    const { error: syncFasiErr } = await supabaseClient.rpc('fn_sincronizza_fasi_da_array', {
+                        p_profilo_id: profiloIdSaved
+                    });
+                    if (syncFasiErr) {
+                        console.warn('[Profili] sync fasi', syncFasiErr);
+                        showToast('Profilo salvato; sync fasi: ' + syncFasiErr.message, 'warning');
+                    }
+                    const { data: fasiData, error: fasiReloadErr } = await supabaseClient
+                        .from('profilo_fasi')
+                        .select('id, profilo_id, nome, ordine')
+                        .order('ordine');
+                    if (!fasiReloadErr) {
+                        STATE.data.profiloFasi = fasiData || [];
+                    }
                 }
 
                 closeModal('profiloModal');
@@ -2690,6 +2711,22 @@
                 .order('titolo_testo', { ascending: true });
             if (testiError) throw testiError;
             STATE.data.testiDVR = testiData || [];
+
+            const { data: fasiData, error: fasiError } = await supabaseClient
+                .from('profilo_fasi')
+                .select('id, profilo_id, nome, ordine')
+                .order('ordine');
+            if (fasiError) console.warn('[Valutazioni] profilo_fasi', fasiError);
+            STATE.data.profiloFasi = fasiData || [];
+        }
+
+        const VALUTAZIONI_FASE_GENERALE = '__generale__';
+
+        function getProfiloFasiForProfilo(profiloId) {
+            if (!profiloId) return [];
+            return (STATE.data.profiloFasi || [])
+                .filter((f) => f.profilo_id === profiloId)
+                .sort((a, b) => (a.ordine ?? 0) - (b.ordine ?? 0));
         }
 
         async function renderValutazioni() {
@@ -2710,7 +2747,7 @@
                 <div class="card">
                     <div class="card-body">
                         <form id="valutazioniFilterForm" onsubmit="event.preventDefault();loadValutazioniByFilters();">
-                            <div class="form-grid cols-3">
+                            <div class="form-grid cols-4">
                                 <div class="form-field">
                                     <label>Azienda</label>
                                     <select id="valutazioniAziendaFilter" onchange="updateValutazioniProfiloFilter();loadValutazioniByFilters()">
@@ -2720,9 +2757,15 @@
                                 </div>
                                 <div class="form-field">
                                     <label>Profilo</label>
-                                    <select id="valutazioniProfiloFilter" onchange="loadValutazioniByFilters()">
+                                    <select id="valutazioniProfiloFilter" onchange="updateValutazioniFaseFilter();loadValutazioniByFilters()">
                                         <option value="">— Tutti i profili —</option>
                                         ${profili.map(p => `<option value="${p.id}">${esc(p.fields.NomeProfilo || '')}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Fase di lavoro</label>
+                                    <select id="valutazioniFaseFilter" onchange="loadValutazioniByFilters()" disabled>
+                                        <option value="">— Seleziona profilo —</option>
                                     </select>
                                 </div>
                                 <div class="form-field">
@@ -2753,22 +2796,20 @@
         }
 
         function getValutazioniProfiliForAzienda(aziendaId) {
-            if (!aziendaId) return STATE.data.profili || [];
-            const byLabel = new Map();
+            if (!aziendaId) return [];
+            const byId = new Map();
             (STATE.data.aziendeProfili || [])
                 .filter(ap => ap.azienda_id === aziendaId && ap.profilo?.attivo !== false)
                 .forEach(ap => {
                     if (!ap.profilo_id || !ap.profilo?.nome_profilo) return;
-                    const nomeProfilo = (ap.profilo.nome_profilo || '').trim();
-                    const labelKey = nomeProfilo.toLowerCase();
-                    if (byLabel.has(labelKey)) return;
-                    byLabel.set(labelKey, {
-                        id: labelKey,
-                        fields: { NomeProfilo: nomeProfilo }
+                    if (byId.has(ap.profilo_id)) return;
+                    byId.set(ap.profilo_id, {
+                        id: ap.profilo_id,
+                        fields: { NomeProfilo: (ap.profilo.nome_profilo || '').trim() }
                     });
                 });
-            return Array.from(byLabel.values()).sort((a, b) =>
-                (a.fields.NomeProfilo || '').localeCompare(b.fields.NomeProfilo || '')
+            return Array.from(byId.values()).sort((a, b) =>
+                (a.fields.NomeProfilo || '').localeCompare(b.fields.NomeProfilo || '', 'it')
             );
         }
 
@@ -2787,9 +2828,58 @@
             } else {
                 profiloSelect.value = '';
             }
+            updateValutazioniFaseFilter();
         }
 
-        async function ensureValutazioniAllineateCatalogo(aziendaId, profiloKey = '') {
+        function updateValutazioniFaseFilter() {
+            const profiloId = document.getElementById('valutazioniProfiloFilter')?.value || '';
+            const faseSelect = document.getElementById('valutazioniFaseFilter');
+            if (!faseSelect) return;
+            const current = faseSelect.value || '';
+            if (!profiloId) {
+                faseSelect.disabled = true;
+                faseSelect.innerHTML = '<option value="">— Seleziona profilo —</option>';
+                return;
+            }
+            faseSelect.disabled = false;
+            const fasi = getProfiloFasiForProfilo(profiloId);
+            faseSelect.innerHTML = `
+                <option value="">— Tutte le voci —</option>
+                <option value="${VALUTAZIONI_FASE_GENERALE}">Livello profilo (generale)</option>
+                ${fasi.map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}
+            `;
+            if (current && [...faseSelect.options].some(o => o.value === current)) {
+                faseSelect.value = current;
+            } else {
+                faseSelect.value = '';
+            }
+        }
+
+        async function syncNuovoRischioCatalogoValutazioni(rischioUuid) {
+            if (!rischioUuid) return;
+            if (!(STATE.data.aziendeProfili || []).length) {
+                const { data, error } = await supabaseClient
+                    .from(CONFIG.tables.aziendeProfili)
+                    .select('azienda_id, profilo_id');
+                if (error) {
+                    console.warn('[Catalogo] associazioni per sync', error);
+                    return;
+                }
+                STATE.data.aziendeProfili = data || [];
+            }
+            const aziendaIds = [...new Set(
+                (STATE.data.aziendeProfili || []).map(ap => ap.azienda_id).filter(Boolean)
+            )];
+            for (const azId of aziendaIds) {
+                try {
+                    await ensureValutazioniAllineateCatalogo(azId, '', rischioUuid);
+                } catch (e) {
+                    console.warn('[Catalogo] sync valutazioni azienda', azId, e);
+                }
+            }
+        }
+
+        async function ensureValutazioniAllineateCatalogo(aziendaId, profiloIdFilter = '', rischioUuidFilter = '') {
             if (!aziendaId) return;
 
             const associazioni = (STATE.data.aziendeProfili || []).filter(ap =>
@@ -2799,13 +2889,13 @@
             );
             if (!associazioni.length) return;
 
-            const targetProfili = profiloKey
-                ? associazioni.filter(ap => (ap.profilo?.nome_profilo || '').trim().toLowerCase() === profiloKey)
+            const targetProfili = profiloIdFilter
+                ? associazioni.filter(ap => ap.profilo_id === profiloIdFilter)
                 : associazioni;
             const profiloIds = [...new Set(targetProfili.map(ap => ap.profilo_id).filter(Boolean))];
             if (!profiloIds.length) return;
 
-            const [{ data: az }, { data: rischi, error: rischiErr }, { data: existing, error: existingErr }] = await Promise.all([
+            const [{ data: az }, { data: rischi, error: rischiErr }, { data: existing, error: existingErr }, { data: fasiRows, error: fasiErr }] = await Promise.all([
                 supabaseClient
                     .from(CONFIG.tables.aziende)
                     .select('partita_iva')
@@ -2817,8 +2907,12 @@
                     .eq('attivo', true),
                 supabaseClient
                     .from(CONFIG.tables.valutazioniRischio)
-                    .select('profilo_id, rischio_id')
+                    .select('profilo_id, profilo_fase_id, rischio_id')
                     .eq('azienda_id', aziendaId)
+                    .in('profilo_id', profiloIds),
+                supabaseClient
+                    .from('profilo_fasi')
+                    .select('id, profilo_id, nome')
                     .in('profilo_id', profiloIds)
             ]);
 
@@ -2828,40 +2922,65 @@
                 }
                 return;
             }
+            if (fasiErr) console.warn('[Valutazioni] profilo_fasi sync', fasiErr);
 
-            const riskList = (rischi || []).filter(r => r?.id && r?.id_rischio);
+            let riskList = (rischi || []).filter(r => r?.id && r?.id_rischio);
+            if (rischioUuidFilter) {
+                riskList = riskList.filter(r => r.id === rischioUuidFilter);
+            }
             if (!riskList.length) return;
 
-            const existingSet = new Set((existing || []).map(v => `${v.profilo_id}|${v.rischio_id}`));
+            const existingSet = new Set((existing || []).map(v =>
+                `${v.profilo_id}|${v.profilo_fase_id || ''}|${v.rischio_id}`
+            ));
+            const fasiByProfilo = {};
+            (fasiRows || []).forEach((f) => {
+                if (!fasiByProfilo[f.profilo_id]) fasiByProfilo[f.profilo_id] = [];
+                fasiByProfilo[f.profilo_id].push(f);
+            });
+
             const testoDefault = "Rischio non rilevato per il profilo professionale. Le caratteristiche dell'attivita e dell'ambiente di lavoro non comportano esposizione a tale tipologia di rischio.";
             const missingRows = [];
+
+            const pushMissing = (profiloId, faseId, idRischio, rischioUuid) => {
+                const key = `${profiloId}|${faseId || ''}|${rischioUuid}`;
+                if (existingSet.has(key)) return;
+                const chiave = faseId
+                    ? `${az.partita_iva}_${profiloId}_${faseId}_${idRischio}`
+                    : `${az.partita_iva}_${profiloId}_${idRischio}`;
+                missingRows.push({
+                    chiave_valutazione: chiave,
+                    azienda_id: aziendaId,
+                    profilo_id: profiloId,
+                    profilo_fase_id: faseId || null,
+                    rischio_id: rischioUuid,
+                    rischio_associato: true,
+                    stato: 'Trascurabile',
+                    livello_rischio: 'Trascurabile',
+                    testo_valutazione: testoDefault,
+                    valutatore_id: STATE.account?.id || null,
+                });
+                existingSet.add(key);
+            };
+
             profiloIds.forEach((profiloId) => {
                 riskList.forEach((r) => {
-                    const key = `${profiloId}|${r.id}`;
-                    if (existingSet.has(key)) return;
-                    missingRows.push({
-                        chiave_valutazione: `${az.partita_iva}_${profiloId}_${r.id_rischio}`,
-                        azienda_id: aziendaId,
-                        profilo_id: profiloId,
-                        rischio_id: r.id,
-                        rischio_associato: true,
-                        stato: 'Trascurabile',
-                        livello_rischio: 'Trascurabile',
-                        testo_valutazione: testoDefault,
-                        valutatore_id: STATE.account?.id || null,
+                    pushMissing(profiloId, null, r.id_rischio, r.id);
+                });
+                (fasiByProfilo[profiloId] || []).forEach((fase) => {
+                    riskList.forEach((r) => {
+                        pushMissing(profiloId, fase.id, r.id_rischio, r.id);
                     });
                 });
             });
+
             if (!missingRows.length) return;
 
-            for (let i = 0; i < missingRows.length; i += 500) {
-                const chunk = missingRows.slice(i, i + 500);
+            for (let i = 0; i < missingRows.length; i += 200) {
+                const chunk = missingRows.slice(i, i + 200);
                 const { error } = await supabaseClient
                     .from(CONFIG.tables.valutazioniRischio)
-                    .upsert(chunk, {
-                        onConflict: 'azienda_id,profilo_id,rischio_id',
-                        ignoreDuplicates: true
-                    });
+                    .insert(chunk);
                 if (error) {
                     console.warn('[Valutazioni] Sync catalogo→valutazioni fallita', error);
                     break;
@@ -2874,7 +2993,8 @@
             if (!container) return;
             const canWrite = canMutateData();
             const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value;
-            const profiloKey = document.getElementById('valutazioniProfiloFilter')?.value;
+            const profiloId = document.getElementById('valutazioniProfiloFilter')?.value || '';
+            const faseFilter = document.getElementById('valutazioniFaseFilter')?.value || '';
             const viewMode = document.getElementById('valutazioniViewMode')?.value || 'perAzienda';
             if (!aziendaId) {
                 container.innerHTML = `
@@ -2885,7 +3005,7 @@
                 `;
                 return;
             }
-            if (viewMode === 'perProfilo' && !profiloKey) {
+            if (viewMode === 'perProfilo' && !profiloId) {
                 container.innerHTML = `
                     <div class="empty-state" style="padding:20px;">
                         <h3>Vista PerProfilo</h3>
@@ -2896,7 +3016,7 @@
             }
 
             try {
-                await ensureValutazioniAllineateCatalogo(aziendaId, profiloKey || '');
+                await ensureValutazioniAllineateCatalogo(aziendaId, profiloId);
             } catch (syncErr) {
                 console.warn('[Valutazioni] Sync preliminare saltata', syncErr);
             }
@@ -2908,7 +3028,8 @@
                     *,
                     rischio:rischio_id(id, id_rischio, nome_rischio, categoria, macro_categoria),
                     testo_dvr:testo_dvr_id(id, titolo_testo, livello),
-                    profilo:profilo_id(id, nome_profilo)
+                    profilo:profilo_id(id, nome_profilo),
+                    profilo_fase:profilo_fase_id(id, nome, ordine)
                 `)
                 .eq('azienda_id', aziendaId);
             const { data, error } = await query.order('created_at', { ascending: true });
@@ -2918,8 +3039,13 @@
             }
 
             let rows = data || [];
-            if (profiloKey) {
-                rows = rows.filter(v => ((v.profilo?.nome_profilo || '').trim().toLowerCase() === profiloKey));
+            if (profiloId) {
+                rows = rows.filter(v => v.profilo_id === profiloId);
+            }
+            if (profiloId && faseFilter === VALUTAZIONI_FASE_GENERALE) {
+                rows = rows.filter(v => !v.profilo_fase_id);
+            } else if (profiloId && faseFilter) {
+                rows = rows.filter(v => v.profilo_fase_id === faseFilter);
             }
 
             // Ordinamento prioritario: prima i rischi "Presenti", poi indice più alto.
@@ -2952,15 +3078,19 @@
                     rows.forEach(v => {
                         const macro = v.rischio?.macro_categoria || 'Altro';
                         const prof = v.profilo?.nome_profilo || 'Senza profilo';
+                        const faseLabel = v.profilo_fase?.nome
+                            ? v.profilo_fase.nome
+                            : 'Livello profilo';
+                        const key = prof + ' · ' + faseLabel;
                         groups[macro] = groups[macro] || {};
-                        groups[macro][prof] = groups[macro][prof] || [];
-                        groups[macro][prof].push(v);
+                        groups[macro][key] = groups[macro][key] || [];
+                        groups[macro][key].push(v);
                     });
                     return Object.entries(groups).map(([macro, byProf]) => `
-                        <tr><td colspan="10"><strong>${esc(macro)}</strong></td></tr>
+                        <tr><td colspan="11"><strong>${esc(macro)}</strong></td></tr>
                         ${Object.entries(byProf).map(([prof, list]) => `
-                            <tr><td colspan="10" style="padding-left:24px;"><em>${esc(prof)}</em></td></tr>
-                            ${list.map(renderValutazioneRow).join('')}
+                            <tr><td colspan="11" style="padding-left:24px;"><em>${esc(prof)}</em></td></tr>
+                            ${list.map((v) => renderValutazioneRow(v, canWrite)).join('')}
                         `).join('')}
                     `).join('');
                 }
@@ -2972,12 +3102,36 @@
                         byLevel[level].push(v);
                     });
                     return Object.entries(byLevel).map(([level, list]) => `
-                        <tr><td colspan="10"><strong>Livello: ${esc(level)}</strong></td></tr>
-                        ${list.map(renderValutazioneRow).join('')}
+                        <tr><td colspan="11"><strong>Livello: ${esc(level)}</strong></td></tr>
+                        ${list.map((v) => renderValutazioneRow(v, canWrite)).join('')}
                     `).join('');
                 }
-                return rows.map(renderValutazioneRow).join('');
+                return rows.map((v) => renderValutazioneRow(v, canWrite)).join('');
             };
+
+            function renderValutazioneRow(v, allowEdit) {
+                const faseLabel = v.profilo_fase?.nome
+                    ? esc(v.profilo_fase.nome)
+                    : '<span class="hint-str">Profilo</span>';
+                const editBtn = allowEdit
+                    ? `<button class="icon-btn" onclick="openValutazioneModal('${v.id}')" title="Compila">✏️</button>`
+                    : '';
+                return `
+                    <tr>
+                        <td>${esc(v.rischio?.id_rischio || '—')}</td>
+                        <td>${esc(v.rischio?.nome_rischio || '—')}</td>
+                        <td>${esc(v.profilo?.nome_profilo || '—')}</td>
+                        <td>${faseLabel}</td>
+                        <td><span class="badge ${v.stato === 'Presente' ? 'warning' : 'info'}">${esc(v.stato || '—')}</span></td>
+                        <td>${v.probabilita ?? '—'}</td>
+                        <td>${v.gravita ?? '—'}</td>
+                        <td>${v.indice_rischio ?? '—'}</td>
+                        <td>${esc(v.livello_rischio || '—')}</td>
+                        <td>${esc(v.testo_dvr?.titolo_testo || '—')}</td>
+                        <td>${editBtn}</td>
+                    </tr>
+                `;
+            }
 
             container.innerHTML = `
                 <table class="data-table">
@@ -2986,6 +3140,7 @@
                             <th>ID</th>
                             <th>Rischio</th>
                             <th>Profilo</th>
+                            <th>Fase</th>
                             <th>Stato</th>
                             <th>P</th>
                             <th>G</th>
@@ -3000,33 +3155,16 @@
                     </tbody>
                 </table>
             `;
-
-            function renderValutazioneRow(v) {
-                return `
-                    <tr>
-                        <td>${esc(v.rischio?.id_rischio || '—')}</td>
-                        <td>${esc(v.rischio?.nome_rischio || '—')}</td>
-                        <td>${esc(v.profilo?.nome_profilo || '—')}</td>
-                        <td><span class="badge ${v.stato === 'Presente' ? 'warning' : 'info'}">${esc(v.stato || '—')}</span></td>
-                        <td>${v.probabilita ?? '—'}</td>
-                        <td>${v.gravita ?? '—'}</td>
-                        <td>${v.indice_rischio ?? '—'}</td>
-                        <td>${esc(v.livello_rischio || '—')}</td>
-                        <td>${esc(v.testo_dvr?.titolo_testo || '—')}</td>
-                        <td>
-                            <button class="icon-btn" onclick="openValutazioneModal('${v.id}')" title="Compila">✏️</button>
-                        </td>
-                    </tr>
-                `;
-            }
         }
 
         function clearValutazioniFilters() {
             const a = document.getElementById('valutazioniAziendaFilter');
             const p = document.getElementById('valutazioniProfiloFilter');
+            const f = document.getElementById('valutazioniFaseFilter');
             const v = document.getElementById('valutazioniViewMode');
             if (a) a.value = '';
             if (p) p.value = '';
+            if (f) { f.value = ''; f.disabled = true; }
             if (v) v.value = 'perAzienda';
             updateValutazioniProfiloFilter();
             const container = document.getElementById('valutazioniListContainer');
@@ -3124,6 +3262,10 @@
             if (!item) return;
             const rischioId = item.rischio_id;
             const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value || '';
+            const faseTitolo = item.profilo_fase?.nome
+                ? ` · Fase: ${item.profilo_fase.nome}`
+                : ' · Livello profilo';
+            const sottotitolo = `${item.profilo?.nome_profilo || '—'}${faseTitolo} — ${item.rischio?.id_rischio || ''} ${item.rischio?.nome_rischio || ''}`;
 
             const modal = document.createElement('div');
             modal.className = 'modal-overlay';
@@ -3132,6 +3274,7 @@
                 <div class="modal" onclick="event.stopPropagation()">
                     <div class="modal-header">
                         <div class="modal-title">Compila Valutazione</div>
+                        <p class="form-hint" style="margin:4px 0 0;font-size:12px;">${esc(sottotitolo)}</p>
                         <button class="icon-btn" onclick="closeModal('valutazioneModal')">✕</button>
                     </div>
                     <div class="modal-body">
@@ -7230,20 +7373,33 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             };
 
             let error;
+            let nuovoRischioId = null;
             if (itemId) {
                 ({ error } = await supabaseClient
                     .from(CONFIG.tables.catalogoRischi)
                     .update(payload)
                     .eq('id', itemId));
             } else {
-                ({ error } = await supabaseClient
+                const { data: inserted, error: insertErr } = await supabaseClient
                     .from(CONFIG.tables.catalogoRischi)
-                    .insert(payload));
+                    .insert(payload)
+                    .select('id')
+                    .single();
+                error = insertErr;
+                nuovoRischioId = inserted?.id || null;
             }
 
             if (error) {
                 showToast('Errore salvataggio rischio: ' + error.message, 'error');
                 return;
+            }
+
+            if (nuovoRischioId && payload.attivo !== false) {
+                try {
+                    await syncNuovoRischioCatalogoValutazioni(nuovoRischioId);
+                } catch (syncErr) {
+                    console.warn('[Catalogo] sync valutazioni nuovo rischio', syncErr);
+                }
             }
 
             closeModal('rischioModal');

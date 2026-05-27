@@ -61,6 +61,10 @@ security definer
 set search_path = public
 as $$
 begin
+  if not public.app_is_internal_user() then
+    raise exception 'Permessi insufficienti';
+  end if;
+
   insert into public.valutazioni_rischio (
     chiave_valutazione,
     azienda_id,
@@ -77,7 +81,7 @@ begin
     p_partita_iva || '_' || p_profilo_id::text || '_' || cr.id_rischio,
     p_azienda_id,
     p_profilo_id,
-    null,           -- livello profilo
+    null,
     cr.id,
     true,
     'Trascurabile',
@@ -86,11 +90,13 @@ begin
     p_user_id
   from public.catalogo_rischi cr
   where cr.attivo = true
-  on conflict (azienda_id, profilo_id, rischio_id)
-    where profilo_fase_id is null
+  on conflict (azienda_id, profilo_id, rischio_id) where (profilo_fase_id is null)
   do nothing;
 end;
 $$;
+
+revoke all on function public._fn_crea_valutazioni_profilo(uuid, uuid, text, uuid) from public;
+revoke all on function public._fn_crea_valutazioni_profilo(uuid, uuid, text, uuid) from authenticated;
 
 -- ── Helper interno: crea valutazioni per una fase clonando quelle del profilo ─
 create or replace function public._fn_crea_valutazioni_fase(
@@ -107,8 +113,10 @@ security definer
 set search_path = public
 as $$
 begin
-  -- Clona i valori dalle valutazioni livello-profilo per questa azienda/profilo.
-  -- Se non esistono ancora (primo inserimento), usa i default.
+  if not public.app_is_internal_user() then
+    raise exception 'Permessi insufficienti';
+  end if;
+
   insert into public.valutazioni_rischio (
     chiave_valutazione,
     azienda_id,
@@ -148,10 +156,14 @@ begin
     and vp.rischio_id  = cr.id
     and vp.profilo_fase_id is null
   where cr.attivo = true
-  on conflict on constraint uq_valutazioni_azienda_profilo_fase_rischio
+  on conflict (azienda_id, profilo_id, profilo_fase_id, rischio_id)
+    where (profilo_fase_id is not null)
   do nothing;
 end;
 $$;
+
+revoke all on function public._fn_crea_valutazioni_fase(uuid, uuid, uuid, text, text, uuid) from public;
+revoke all on function public._fn_crea_valutazioni_fase(uuid, uuid, uuid, text, text, uuid) from authenticated;
 
 create or replace function public.fn_associa_profilo_azienda(
   p_azienda_id uuid,
@@ -348,9 +360,7 @@ $$;
 revoke all on function public.fn_rimuovi_fase_profilo(uuid, uuid) from public;
 grant execute on function public.fn_rimuovi_fase_profilo(uuid, uuid) to authenticated;
 
--- ── Allinea fasi a profili.fasi_lavoro (sync array → tabella) ────────────────
--- Utility per allineare il vecchio array con la nuova tabella.
--- Da chiamare dopo eventuali edit manuali di profili.fasi_lavoro.
+-- ── Sync profili.fasi_lavoro[] → profilo_fasi (+ valutazioni per fasi nuove) ─
 create or replace function public.fn_sincronizza_fasi_da_array(
   p_profilo_id uuid,
   p_user_id    uuid default auth.uid()
@@ -361,25 +371,68 @@ security definer
 set search_path = public
 as $$
 declare
-  v_fase text;
-  v_ord  integer := 0;
+  v_fase      text;
+  v_ord       integer;
+  v_fase_id   uuid;
+  v_is_new    boolean;
+  v_nomi      text[] := '{}';
+  v_az        record;
 begin
   if not public.app_is_internal_user() then
     raise exception 'Permessi insufficienti';
   end if;
 
-  -- Inserisce nuove fasi dall'array; non rimuove quelle esistenti (idempotente)
-  for v_fase, v_ord in
-    select trim(f), row_number() over ()
+  select coalesce(
+    array_agg(trim(f) order by ord)
+      filter (where trim(f) <> ''),
+    '{}'::text[]
+  )
+  into v_nomi
+  from (
+    select trim(f) as f, row_number() over () as ord
     from public.profili p,
-         unnest(p.fasi_lavoro) as f
+         unnest(coalesce(p.fasi_lavoro, '{}'::text[])) as f
     where p.id = p_profilo_id
-      and trim(f) <> ''
-  loop
-    insert into public.profilo_fasi (profilo_id, nome, ordine)
-    values (p_profilo_id, v_fase, v_ord)
-    on conflict (profilo_id, nome) do update
-      set ordine = excluded.ordine;
+  ) s;
+
+  -- Rimuove fasi non più nell'array (CASCADE sulle valutazioni per fase)
+  delete from public.profilo_fasi pf
+  where pf.profilo_id = p_profilo_id
+    and not (pf.nome = any (v_nomi));
+
+  v_ord := 0;
+  foreach v_fase in array v_nomi loop
+    v_ord := v_ord + 1;
+    v_is_new := false;
+
+    select id into v_fase_id
+    from public.profilo_fasi
+    where profilo_id = p_profilo_id and nome = v_fase;
+
+    if v_fase_id is null then
+      insert into public.profilo_fasi (profilo_id, nome, ordine)
+      values (p_profilo_id, v_fase, v_ord)
+      returning id into v_fase_id;
+      v_is_new := true;
+    else
+      update public.profilo_fasi
+      set ordine = v_ord
+      where id = v_fase_id;
+    end if;
+
+    if v_is_new then
+      for v_az in
+        select ap.azienda_id, az.partita_iva
+        from public.aziende_profili ap
+        join public.aziende az on az.id = ap.azienda_id
+        where ap.profilo_id = p_profilo_id
+      loop
+        perform public._fn_crea_valutazioni_fase(
+          v_az.azienda_id, p_profilo_id, v_fase_id, v_fase,
+          v_az.partita_iva, p_user_id
+        );
+      end loop;
+    end if;
   end loop;
 end;
 $$;

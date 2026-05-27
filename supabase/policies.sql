@@ -133,11 +133,7 @@ create policy profilo_fasi_read_auth on public.profilo_fasi
 for select to authenticated
 using (public.app_is_active_user());
 
-drop policy if exists profilo_fasi_write_internal on public.profilo_fasi;
-create policy profilo_fasi_write_internal on public.profilo_fasi
-for all to authenticated
-using (public.app_is_internal_user())
-with check (public.app_is_internal_user());
+-- profilo_fasi: SELECT per utenti attivi; INSERT/UPDATE/DELETE solo via RPC (SECURITY DEFINER)
 
 drop policy if exists profili_read_auth on public.profili;
 create policy profili_read_auth on public.profili

@@ -5466,6 +5466,8 @@
                 if (expAllBtn) { await exportOutputZipAll(); return; }
                 const wipeBtn = e.target.closest('[data-action="open-output-wipe"]');
                 if (wipeBtn) { openOutputWipeModal(); }
+                const bulkDelBtn = e.target.closest('[data-action="open-bulk-delete-output"]');
+                if (bulkDelBtn) { openBulkDeleteOutputModal(); }
             });
 
             // Mappa id → ragione sociale per la legenda
@@ -6338,6 +6340,10 @@
                     + '<button type="button" class="btn btn-primary" id="btnExportOutputZip" data-action="export-output-zip"'
                     + ' data-azienda-id="' + attrEsc(aziendaId) + '" style="font-size:12px;"'
                     + ' title="Scarica tutti i documenti in ZIP, ordinati per categoria catalogo">Esporta ZIP</button>'
+                    + (canDelete
+                        ? '<button type="button" class="btn" data-action="open-bulk-delete-output" style="font-size:12px;color:var(--sp-error,#e53);border-color:var(--sp-error,#e53);"'
+                        + ' title="Seleziona ed elimina più file dal bucket di questa azienda">Eliminazione multipla</button>'
+                        : '')
                     + '<span id="outCount" style="font-size:12px;color:var(--sp-text-secondary,#aaa);margin-left:auto;"></span>'
                     + '</div>';
 
@@ -6466,6 +6472,111 @@
                     btn.disabled = false;
                     btn.textContent = 'Esporta ZIP — tutte le aziende';
                 }
+            }
+        }
+
+        function openBulkDeleteOutputModal() {
+            if (!hasRequiredRole('rspp')) { showToast('Permesso negato', 'error'); return; }
+            const ctx = window._outputExportCtx;
+            if (!ctx?.aziendaId || !ctx.items?.length) {
+                showToast('Nessun documento da eliminare per questa azienda', 'warning');
+                return;
+            }
+            if (document.getElementById('bulkDeleteOutputModal')) closeModal('bulkDeleteOutputModal');
+
+            const rows = ctx.items.map(item => {
+                const sizeKb = item.size ? (item.size / 1024).toFixed(0) + ' KB' : '';
+                return '<label class="bulk-del-row" style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid var(--sp-border);cursor:pointer;">'
+                    + '<input type="checkbox" name="bulkDelFile" value="' + attrEsc(item.name) + '" style="margin-top:3px;">'
+                    + '<span style="flex:1;min-width:0;">'
+                    + '<span style="font-family:monospace;font-size:12px;display:block;">' + esc(item.name) + '</span>'
+                    + '<span style="font-size:11px;color:var(--sp-text-secondary);">'
+                    + esc(item.codice) + ' · ' + esc(item.label) + (sizeKb ? ' · ' + esc(sizeKb) : '')
+                    + '</span></span></label>';
+            }).join('');
+
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.id = 'bulkDeleteOutputModal';
+            modal.innerHTML =
+                '<div class="modal" onclick="event.stopPropagation()" style="max-width:640px;">'
+                + '<div class="modal-header">'
+                + '<div class="modal-title" style="color:var(--sp-error,#e53);">Eliminazione multipla</div>'
+                + '<button class="icon-btn" onclick="closeModal(\'bulkDeleteOutputModal\')">✕</button>'
+                + '</div>'
+                + '<div class="modal-body">'
+                + '<p style="font-size:13px;margin-bottom:12px;">'
+                + 'Azienda: <strong>' + esc(ctx.aziendaNome || ctx.aziendaId) + '</strong> — '
+                + esc(String(ctx.items.length)) + ' file nel bucket <code>output/' + esc(ctx.aziendaId) + '/</code>'
+                + '</p>'
+                + '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'
+                + '<button type="button" class="btn" style="font-size:12px;" onclick="bulkDeleteOutputSetAll(true)">Seleziona tutti</button>'
+                + '<button type="button" class="btn" style="font-size:12px;" onclick="bulkDeleteOutputSetAll(false)">Deseleziona tutti</button>'
+                + '<span id="bulkDeleteOutputSelCount" style="font-size:12px;color:var(--sp-text-secondary);margin-left:auto;align-self:center;">0 selezionati</span>'
+                + '</div>'
+                + '<div id="bulkDeleteOutputList" style="max-height:360px;overflow:auto;">' + rows + '</div>'
+                + '</div>'
+                + '<div class="modal-footer">'
+                + '<button class="btn" onclick="closeModal(\'bulkDeleteOutputModal\')">Annulla</button>'
+                + '<button type="button" class="btn" id="btnConfirmBulkDeleteOutput" onclick="confirmBulkDeleteOutput()" '
+                + 'style="background:var(--sp-error,#e53);color:#fff;border-color:var(--sp-error,#e53);">Elimina selezionati</button>'
+                + '</div></div>';
+            document.body.appendChild(modal);
+            STATE._bulkDeleteOutputCtx = { aziendaId: ctx.aziendaId };
+            setTimeout(() => modal.classList.add('show'), 10);
+            modal.onclick = () => closeModal('bulkDeleteOutputModal');
+            document.getElementById('bulkDeleteOutputList')?.addEventListener('change', updateBulkDeleteOutputSelCount);
+            updateBulkDeleteOutputSelCount();
+        }
+
+        function bulkDeleteOutputSetAll(checked) {
+            document.querySelectorAll('#bulkDeleteOutputList input[name="bulkDelFile"]').forEach(cb => {
+                cb.checked = !!checked;
+            });
+            updateBulkDeleteOutputSelCount();
+        }
+
+        function updateBulkDeleteOutputSelCount() {
+            const n = document.querySelectorAll('#bulkDeleteOutputList input[name="bulkDelFile"]:checked').length;
+            const el = document.getElementById('bulkDeleteOutputSelCount');
+            if (el) el.textContent = n + ' selezionat' + (n === 1 ? 'o' : 'i');
+            const btn = document.getElementById('btnConfirmBulkDeleteOutput');
+            if (btn) btn.disabled = n === 0;
+        }
+
+        async function confirmBulkDeleteOutput() {
+            if (!hasRequiredRole('rspp')) { showToast('Permesso negato', 'error'); return; }
+            const aziendaId = STATE._bulkDeleteOutputCtx?.aziendaId
+                || window._outputExportCtx?.aziendaId;
+            if (!aziendaId) return;
+
+            const names = [...document.querySelectorAll('#bulkDeleteOutputList input[name="bulkDelFile"]:checked')]
+                .map(cb => cb.value)
+                .filter(Boolean);
+            if (!names.length) {
+                showToast('Seleziona almeno un file', 'warning');
+                return;
+            }
+            if (!confirm('Eliminare definitivamente ' + names.length + ' file dal bucket?')) return;
+
+            const btn = document.getElementById('btnConfirmBulkDeleteOutput');
+            if (btn) { btn.disabled = true; btn.textContent = 'Eliminazione…'; }
+            try {
+                const paths = names.map(n => aziendaId + '/' + n);
+                const { error } = await supabaseClient.storage.from(CONFIG.storage.output).remove(paths);
+                if (error) throw error;
+                closeModal('bulkDeleteOutputModal');
+                STATE._bulkDeleteOutputCtx = null;
+                showToast('Eliminati ' + names.length + ' file', 'success');
+                await loadOutputDocumenti();
+                _refreshStorageChart();
+                if (document.getElementById('generazioneAziendaSelect')?.value === aziendaId) {
+                    loadGenerazioneDocumenti();
+                }
+            } catch (err) {
+                showToast('Errore eliminazione: ' + err.message, 'error');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = 'Elimina selezionati'; }
             }
         }
 

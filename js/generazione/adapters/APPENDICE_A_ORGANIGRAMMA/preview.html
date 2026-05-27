@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Appendice A (organigramma)</title>
+<script src="adapter.js?v=20260601c"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2.5cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; font-weight: 600; background: #fdecea; padding: 2px 6px; border-radius: 3px; }
+  .wizard-block { margin: 14px 0; padding: 12px 14px; background: #f8f9fa; border: 1px solid #dde2e6; border-radius: 4px; }
+  .wizard-block label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 11pt; }
+  .wizard-block select,
+  .wizard-block input[type="text"] { width: 100%; max-width: 620px; padding: 6px 8px; font-size: 11pt; }
+  .wizard-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+  .wizard-field { margin: 0; }
+  .wizard-field small { display: block; margin-top: 4px; color: #666; }
+  .hidden { display: none !important; }
+  p { margin-bottom: 8px; line-height: 1.45; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">APPENDICE_A_ORGANIGRAMMA</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Appendice A — Organigramma / mansionario</h1>
+      <p class="hint-str" style="margin-bottom:14px;">
+        Template: <code>modelli/APPENDICE_A_ORGANIGRAMMA.docx</code> · Logo: <code>{%LOGO%}</code>
+      </p>
+
+      <div class="wizard-block">
+        <label for="selStatoOrganigramma">§1 Premessa — organigramma funzionale della sicurezza</label>
+        <select id="selStatoOrganigramma" onchange="setStatoOrganigramma(this.value)">
+          <option value="da_formalizzare">Dovrà formalizzare</option>
+          <option value="gia_formalizzato">Ha già formalizzato</option>
+        </select>
+        <p id="previewFraseOrganigramma" class="hint-str" style="margin-top:10px;"></p>
+      </div>
+
+      <div class="wizard-block">
+        <label for="selOrgDatorePreposto">§5.1 — Struttura organizzativa</label>
+        <select id="selOrgDatorePreposto" onchange="setOrgDatorePreposto(this.value)">
+          <option value="unico">Datore di Lavoro coincide con Preposto (Opzione 1)</option>
+          <option value="distinto">Datore di Lavoro distinto dal Preposto (Opzione 2)</option>
+        </select>
+        <p id="previewOrgOption" class="hint-str" style="margin-top:8px;"></p>
+
+        <label for="selOrgMcPrevisto" style="margin-top:12px;">Medico competente previsto</label>
+        <select id="selOrgMcPrevisto" onchange="setOrgMcPrevisto(this.value)">
+          <option value="si">Sì, previsto</option>
+          <option value="no">No, non previsto</option>
+        </select>
+        <p id="previewOrgMcFrase" class="hint-str" style="margin-top:8px;"></p>
+
+        <div class="wizard-grid">
+          <p class="wizard-field">
+            <label for="inpOrgRefPersonale">Referente affari del personale</label>
+            <input id="inpOrgRefPersonale" type="text" oninput="setWizardText('org_ref_personale', this.value)" placeholder="Nome e cognome / ruolo">
+          </p>
+          <p class="wizard-field">
+            <label for="inpOrgRefServizi">Referente servizi tecnici</label>
+            <input id="inpOrgRefServizi" type="text" oninput="setWizardText('org_ref_servizi_tecnici', this.value)" placeholder="Nome e cognome / ruolo">
+          </p>
+          <p class="wizard-field">
+            <label for="inpOrgRefAcquisti">Referente acquisti/appalti</label>
+            <input id="inpOrgRefAcquisti" type="text" oninput="setWizardText('org_ref_acquisti_appalti', this.value)" placeholder="Nome e cognome / ruolo">
+          </p>
+          <p class="wizard-field" id="wrapOrgPreposto">
+            <label for="inpOrgPreposto">Preposto alla sicurezza (solo Opzione 2)</label>
+            <input id="inpOrgPreposto" type="text" oninput="setWizardText('org_preposto_sicurezza', this.value)" placeholder="Nome e cognome">
+          </p>
+          <p class="wizard-field" id="wrapOrgDirigenti">
+            <label for="inpOrgDirigenti">Dirigenti per la sicurezza (solo Opzione 2)</label>
+            <input id="inpOrgDirigenti" type="text" oninput="setWizardText('org_dirigenti_testo', this.value)" placeholder="Default: POSSONO NON ESSERE NOMINATI">
+          </p>
+          <p class="wizard-field" id="wrapOrgPrepostiNota">
+            <label for="inpOrgPrepostiNota">Nota preposti (solo Opzione 2)</label>
+            <input id="inpOrgPrepostiNota" type="text" oninput="setWizardText('org_preposti_nota', this.value)" placeholder="Default: SE NON SI AUTONOMINA IL DATORE DI LAVORO DEVONO ESSERE NOMINATI">
+          </p>
+          <p class="wizard-field">
+            <label for="inpOrgSquadre">Squadre di emergenza</label>
+            <input id="inpOrgSquadre" type="text" oninput="setWizardText('org_squadre_emergenza', this.value)" placeholder="Default: Si rimanda alla documentazione specifica per la gestione delle emergenze">
+          </p>
+        </div>
+      </div>
+
+      <h2 class="doc-section">Dati automatici</h2>
+      <p><strong>Azienda</strong>: <span id="pAzienda" class="field-auto">—</span></p>
+      <p><strong>Sede operativa</strong>: <span id="pSede" class="field-auto">—</span></p>
+      <p><strong>Data emissione</strong>: <span id="pData" class="field-auto">—</span></p>
+      <p><strong>Logo</strong> <span id="pLogo" class="field-auto" style="display:inline-block;margin-left:8px;">—</span></p>
+      <p><strong>Profili associati</strong>: <span id="pProfili" class="field-auto">—</span></p>
+      <p><strong>Datore di lavoro</strong>: <span id="pDatore" class="field-auto">—</span></p>
+      <p><strong>RSPP</strong>: <span id="pRspp" class="field-auto">—</span></p>
+      <p><strong>Medico competente</strong>: <span id="pMedico" class="field-auto">—</span></p>
+      <p><strong>RLS</strong>: <span id="pRls" class="field-auto">—</span></p>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx">
+  <div id="docxPreviewHost"></div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  let DATA = {};
+  let WIZARD = {
+    stato_formalizzazione_organigramma: 'da_formalizzare',
+    organigramma_datore_preposto_unico: true,
+    organigramma_mc_previsto: true,
+    org_ref_personale: '',
+    org_ref_servizi_tecnici: '',
+    org_ref_acquisti_appalti: '',
+    org_preposto_sicurezza: '',
+    org_dirigenti_testo: '',
+    org_preposti_nota: '',
+    org_squadre_emergenza: '',
+  };
+  let activeView = 'compile';
+  const ADAPTER = window.GEN_ADAPTERS?.APPENDICE_A_ORGANIGRAMMA;
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function fraseOrganigrammaPreview() {
+    const rs = DATA.RAGIONE_SOCIALE || '…';
+    const verbo = WIZARD.stato_formalizzazione_organigramma === 'gia_formalizzato'
+      ? 'ha formalizzato'
+      : 'dovrà formalizzare';
+    return 'La ' + rs + ' ' + verbo + ' un organigramma funzionale della sicurezza al fine di:';
+  }
+
+  function renderFraseOrganigramma() {
+    const el = document.getElementById('previewFraseOrganigramma');
+    if (el) el.textContent = fraseOrganigrammaPreview();
+    const sel = document.getElementById('selStatoOrganigramma');
+    if (sel) sel.value = WIZARD.stato_formalizzazione_organigramma || 'da_formalizzare';
+  }
+
+  function renderSezione51Preview() {
+    const unico = WIZARD.organigramma_datore_preposto_unico !== false;
+    const mcPrevisto = WIZARD.organigramma_mc_previsto !== false;
+    const opt = document.getElementById('previewOrgOption');
+    const mc = document.getElementById('previewOrgMcFrase');
+    const wrapPreposto = document.getElementById('wrapOrgPreposto');
+    const wrapDirigenti = document.getElementById('wrapOrgDirigenti');
+    const wrapPrepostiNota = document.getElementById('wrapOrgPrepostiNota');
+    if (opt) {
+      opt.textContent = unico
+        ? 'Opzione 1 attiva: riga unica «Datore di Lavoro e Preposto alla sicurezza».'
+        : 'Opzione 2 attiva: righe separate «Datore di Lavoro» + «Preposto alla sicurezza».';
+    }
+    if (mc) {
+      mc.textContent = mcPrevisto
+        ? 'Frase esterni: «... RSPP e Medico Competente». Tabella: riga Medico Competente inclusa.'
+        : 'Frase esterni: «... RSPP». Tabella: riga Medico Competente esclusa.';
+    }
+    if (wrapPreposto) wrapPreposto.classList.toggle('hidden', unico);
+    if (wrapDirigenti) wrapDirigenti.classList.toggle('hidden', unico);
+    if (wrapPrepostiNota) wrapPrepostiNota.classList.toggle('hidden', unico);
+    const selOpt = document.getElementById('selOrgDatorePreposto');
+    if (selOpt) selOpt.value = unico ? 'unico' : 'distinto';
+    const selMc = document.getElementById('selOrgMcPrevisto');
+    if (selMc) selMc.value = mcPrevisto ? 'si' : 'no';
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML = '<img src="' + esc(url) + '" alt="logo" style="max-height:40px;vertical-align:middle;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.textContent = 'Logo caricato (visibile nel Word generato)';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = '— (carica logo in Loghi)';
+    el.className = 'field-missing';
+  }
+
+  function buildMerged() {
+    if (!ADAPTER?.applyWizard) return { ...DATA };
+    return ADAPTER.applyWizard(DATA, WIZARD);
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', !errors.length);
+    document.getElementById('btnGenera').disabled = !!errors.length;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+  }
+
+  window.setStatoOrganigramma = function (val) {
+    WIZARD.stato_formalizzazione_organigramma = val === 'gia_formalizzato' ? 'gia_formalizzato' : 'da_formalizzare';
+    renderFraseOrganigramma();
+    sendUpdate();
+  };
+
+  window.setOrgDatorePreposto = function (val) {
+    WIZARD.organigramma_datore_preposto_unico = val !== 'distinto';
+    renderSezione51Preview();
+    sendUpdate();
+  };
+
+  window.setOrgMcPrevisto = function (val) {
+    WIZARD.organigramma_mc_previsto = val !== 'no';
+    renderSezione51Preview();
+    sendUpdate();
+  };
+
+  window.setWizardText = function (key, val) {
+    WIZARD[key] = String(val || '');
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    activeView = view;
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'APPENDICE_A_ORGANIGRAMMA — Compila' : 'APPENDICE_A_ORGANIGRAMMA — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    if (!DATA) return;
+    if (DATA._stato_formalizzazione_organigramma) {
+      WIZARD.stato_formalizzazione_organigramma = DATA._stato_formalizzazione_organigramma;
+    } else if (DATA.ORGANIGRAMMA_GIA_FORMALIZZATO) {
+      WIZARD.stato_formalizzazione_organigramma = 'gia_formalizzato';
+    } else {
+      WIZARD.stato_formalizzazione_organigramma = 'da_formalizzare';
+    }
+    WIZARD.organigramma_datore_preposto_unico = DATA.ORG_OPT_DATORE_DISTINTO_DA_PREPOSTO ? false : true;
+    WIZARD.organigramma_mc_previsto = DATA.ORG_MC_PREVISTO !== false;
+    WIZARD.org_ref_personale = DATA.ORG_SOGG_REF_PERSONALE || '';
+    WIZARD.org_ref_servizi_tecnici = DATA.ORG_SOGG_REF_SERVIZI_TEC || '';
+    WIZARD.org_ref_acquisti_appalti = DATA.ORG_SOGG_REF_ACQUISTI || '';
+    WIZARD.org_preposto_sicurezza = DATA.ORG_SOGG_PREPOSTO || '';
+    WIZARD.org_dirigenti_testo = DATA.ORG_SOGG_DIRIGENTI || '';
+    WIZARD.org_preposti_nota = DATA.ORG_SOGG_PREPOSTI_NOTA || '';
+    WIZARD.org_squadre_emergenza = DATA.ORG_SOGG_SQUADRE_EMERGENZA || '';
+
+    document.getElementById('inpOrgRefPersonale').value = WIZARD.org_ref_personale;
+    document.getElementById('inpOrgRefServizi').value = WIZARD.org_ref_servizi_tecnici;
+    document.getElementById('inpOrgRefAcquisti').value = WIZARD.org_ref_acquisti_appalti;
+    document.getElementById('inpOrgPreposto').value = WIZARD.org_preposto_sicurezza;
+    document.getElementById('inpOrgDirigenti').value = WIZARD.org_dirigenti_testo;
+    document.getElementById('inpOrgPrepostiNota').value = WIZARD.org_preposti_nota;
+    document.getElementById('inpOrgSquadre').value = WIZARD.org_squadre_emergenza;
+
+    document.getElementById('pAzienda').textContent = DATA.RAGIONE_SOCIALE || '—';
+    document.getElementById('pSede').textContent = DATA.SEDE_OPERATIVA || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    const nomi = Array.isArray(DATA._profili_nomi) ? DATA._profili_nomi : [];
+    document.getElementById('pProfili').textContent = nomi.length ? nomi.join(', ') : '—';
+    document.getElementById('pDatore').textContent = DATA.ORG_SOGG_DATORE_SOLO || DATA.ORG_SOGG_DATORE_PREPOSTO || '—';
+    document.getElementById('pRspp').textContent = DATA.ORG_SOGG_RSPP || '—';
+    document.getElementById('pMedico').textContent = DATA.ORG_SOGG_MC || '—';
+    document.getElementById('pRls').textContent = DATA.ORG_SOGG_RLS || '—';
+    renderLogoPreview();
+    renderFraseOrganigramma();
+    renderSezione51Preview();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      renderDocxBlob(e.data.buffer);
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message) + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    window.parent.postMessage({ type: 'GENERATE', data: buildMerged() }, '*');
+  });
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

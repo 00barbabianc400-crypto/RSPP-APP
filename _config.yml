@@ -13,3 +13,4 @@ exclude:
   - js/generazione/adapters/VADEMECUM_AGGRESSIONI/fields-map.md
   - js/generazione/adapters/VADEMECUM_ANTIRAPINA/fields-map.md
   - js/generazione/adapters/NOTA_ANTINCENDIO/fields-map.md
+  - js/generazione/adapters/APPENDICE_A_ORGANIGRAMMA/fields-map.md

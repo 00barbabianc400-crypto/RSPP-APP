@@ -590,25 +590,25 @@
     const selezione = data._appendice_b1_selezione_rischi  || {};
     const profiliTab = profiliSrc;
     const startR = TABLE_PROFILI_DATA_START_ROW;
+    // Svuota usando getCell() diretto + null (evita problemi con rich-text residuo)
     for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
       const r = startR + i;
-      const rowObj = wsScheda.getRow(r);
-      rowObj.getCell(1).value = '';
-      rowObj.getCell(2).value = '';
-      rowObj.getCell(3).value = '';
-      rowObj.getCell(4).value = '';
+      wsScheda.getCell('A' + r).value = null;
+      wsScheda.getCell('B' + r).value = null;
+      wsScheda.getCell('C' + r).value = null;
+      wsScheda.getCell('D' + r).value = null;
     }
     profiliTab.forEach((p, idx) => {
       const row = startR + idx;
-      const rowObj = wsScheda.getRow(row);
       const pid = String(p.id || '');
-      rowObj.getCell(1).value = String(p.nome || '').trim();
-      rowObj.getCell(2).value = fasiLavoroVirgola(p.fasi_lavoro);
-      rowObj.getCell(3).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
-      rowObj.getCell(4).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
-      [1, 2, 3, 4].forEach((colNum) => {
-        rowObj.getCell(colNum).alignment = ALIGN_WRAP_TOP;
-      });
+      wsScheda.getCell('A' + row).value = String(p.nome || '').trim();
+      wsScheda.getCell('A' + row).alignment = ALIGN_WRAP_TOP;
+      wsScheda.getCell('B' + row).value = fasiLavoroVirgola(p.fasi_lavoro);
+      wsScheda.getCell('B' + row).alignment = ALIGN_WRAP_TOP;
+      wsScheda.getCell('C' + row).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
+      wsScheda.getCell('C' + row).alignment = ALIGN_WRAP_TOP;
+      wsScheda.getCell('D' + row).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
+      wsScheda.getCell('D' + row).alignment = ALIGN_WRAP_TOP;
     });
 
     // Logo
@@ -624,9 +624,11 @@
       } catch (e) {
         throw new Error('Inserimento logo fallito: ' + (e.message || String(e)));
       }
+      // Ancora il logo alla cella mergeata A2:C4 (0-based: col 0-3, row 1-4)
       wsScheda.addImage(imageId, {
-        tl: { col: 3, row: 3 },
-        ext: { width: 220, height: 90 },
+        tl: { col: 0, row: 1, nativeColOff: 0, nativeRowOff: 0 },
+        br: { col: 3, row: 4, nativeColOff: 0, nativeRowOff: 0 },
+        editAs: 'twoCell',
       });
     }
 
@@ -667,7 +669,10 @@
       try { wb.removeWorksheet(wsTmpl.id); } catch (e) { /* se fallisce lascialo */ }
     }
 
-    return wb.xlsx.writeBuffer({ type: 'arraybuffer', compression: true });
+    const raw = await wb.xlsx.writeBuffer();
+    // ExcelJS in browser può restituire un Buffer-like anziché un ArrayBuffer puro;
+    // lo convertiamo per garantire il trasferimento via postMessage([buffer]).
+    return raw instanceof ArrayBuffer ? raw : new Uint8Array(raw).buffer;
   }
 
   const TABLE_PROFILI_DATA_START_ROW = 13;

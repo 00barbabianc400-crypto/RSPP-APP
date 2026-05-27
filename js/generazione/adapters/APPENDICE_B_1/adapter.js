@@ -576,8 +576,10 @@
     wsScheda.getCell('D2').value = ' Emissione del ' + dataStr;
     wsScheda.getCell('E2').value = null;
 
-    wsScheda.getCell('A7').value =
-      PREFIX_DESCRIZIONE_CICLO + String(data.descrizione_ciclo_produttivo || '').trim();
+    const cellA7 = wsScheda.getCell('A7');
+    cellA7.value = PREFIX_DESCRIZIONE_CICLO + String(data.descrizione_ciclo_produttivo || '').trim();
+    const fontA7 = cellA7.font || {};
+    cellA7.font = { name: fontA7.name || 'Calibri', size: fontA7.size || 11, bold: false };
 
     const profiliSrc = resolveProfiliAzienda(data);
     wsScheda.getCell('A9').value = schedaCellaA9Testo(profiliSrc);
@@ -589,26 +591,27 @@
     const byProfilo = data._appendice_b1_rischi_by_profilo || {};
     const selezione = data._appendice_b1_selezione_rischi  || {};
     const profiliTab = profiliSrc;
-    const startR = TABLE_PROFILI_DATA_START_ROW;
-    // Svuota usando getCell() diretto + null (evita problemi con rich-text residuo)
+    const startR = findSchedaTabellaDataStartRow(wsScheda);
+    unmergeSchedaTabellaArea(wsScheda, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
     for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
       const r = startR + i;
-      wsScheda.getCell('A' + r).value = null;
-      wsScheda.getCell('B' + r).value = null;
-      wsScheda.getCell('C' + r).value = null;
-      wsScheda.getCell('D' + r).value = null;
+      wsScheda.getCell('A' + r).value = '';
+      wsScheda.getCell('B' + r).value = '';
+      wsScheda.getCell('C' + r).value = '';
+      wsScheda.getCell('D' + r).value = '';
     }
     profiliTab.forEach((p, idx) => {
       const row = startR + idx;
       const pid = String(p.id || '');
-      wsScheda.getCell('A' + row).value = String(p.nome || '').trim();
-      wsScheda.getCell('A' + row).alignment = ALIGN_WRAP_TOP;
-      wsScheda.getCell('B' + row).value = fasiLavoroVirgola(p.fasi_lavoro);
-      wsScheda.getCell('B' + row).alignment = ALIGN_WRAP_TOP;
-      wsScheda.getCell('C' + row).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
-      wsScheda.getCell('C' + row).alignment = ALIGN_WRAP_TOP;
-      wsScheda.getCell('D' + row).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
-      wsScheda.getCell('D' + row).alignment = ALIGN_WRAP_TOP;
+      const rowObj = wsScheda.getRow(row);
+      rowObj.getCell(1).value = String(p.nome || '').trim();
+      rowObj.getCell(2).value = fasiLavoroVirgola(p.fasi_lavoro);
+      rowObj.getCell(3).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
+      rowObj.getCell(4).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
+      [1, 2, 3, 4].forEach((colNum) => {
+        rowObj.getCell(colNum).alignment = ALIGN_WRAP_TOP;
+      });
+      try { rowObj.commit(); } catch (e) { /* skip */ }
     });
 
     // Logo
@@ -624,10 +627,10 @@
       } catch (e) {
         throw new Error('Inserimento logo fallito: ' + (e.message || String(e)));
       }
-      // Ancora il logo alla cella mergeata A2:C4 (0-based: col 0-3, row 1-4)
+      // Area logo: cella D4 (layout scheda-azienda-layout.md), ancorata con riempimento cella
       wsScheda.addImage(imageId, {
-        tl: { col: 0, row: 1, nativeColOff: 0, nativeRowOff: 0 },
-        br: { col: 3, row: 4, nativeColOff: 0, nativeRowOff: 0 },
+        tl: { col: 3, row: 3 },
+        br: { col: 4, row: 4 },
         editAs: 'twoCell',
       });
     }
@@ -684,6 +687,39 @@
   function resolveProfiliAzienda(data) {
     const raw = data?._profili_azienda ?? data?.profili_azienda ?? [];
     return profiliSchedaSorted(Array.isArray(raw) ? raw : []);
+  }
+
+  /** Trova la prima riga dati sotto l'intestazione «Mansione» (di solito 13). */
+  function findSchedaTabellaDataStartRow(ws) {
+    for (let r = 8; r <= 25; r++) {
+      const label = String(ws.getCell('A' + r).value || '').trim().toLowerCase();
+      if (label === 'mansione' || label.startsWith('mansione')) return r + 1;
+    }
+    return TABLE_PROFILI_DATA_START_ROW;
+  }
+
+  function colLettersToNum(letters) {
+    let n = 0;
+    const s = String(letters || '').toUpperCase();
+    for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
+    return n;
+  }
+
+  /** Rimuove merge su A:D nella zona tabella (solo se presenti; nel template attuale non ce ne sono dalla riga 13). */
+  function unmergeSchedaTabellaArea(ws, startRow, rowCount) {
+    const endRow = startRow + rowCount - 1;
+    const merges = ws.model?.merges ? [...ws.model.merges] : [];
+    merges.forEach((ref) => {
+      const m = String(ref).match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+      if (!m) return;
+      const r1 = parseInt(m[2], 10);
+      const r2 = parseInt(m[4], 10);
+      const c1 = colLettersToNum(m[1]);
+      const c2 = colLettersToNum(m[3]);
+      if (r2 < startRow || r1 > endRow) return;
+      if (c2 < 1 || c1 > 4) return;
+      try { ws.unMergeCells(ref); } catch (e) { /* skip */ }
+    });
   }
 
   // ─── Export ──────────────────────────────────────────────────────────────────

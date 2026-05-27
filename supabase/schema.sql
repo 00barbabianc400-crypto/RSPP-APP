@@ -132,6 +132,8 @@ create table if not exists public.profili (
   misure_gen_generali text,
   dpi_base text,
   dpi_collettivi text,
+  fasi_lavoro text[] not null default '{}',
+  rischi_mansione text[] not null default '{}',
   protocollo_sor_san boolean,
   attivo boolean not null default true,
   azienda_proprietaria_id uuid references public.aziende(id) on delete set null,
@@ -140,6 +142,12 @@ create table if not exists public.profili (
   updated_at timestamptz not null default timezone('utc', now()),
   unique (nome_profilo, tipo_profilo, azienda_proprietaria_id)
 );
+
+alter table public.profili
+  add column if not exists fasi_lavoro text[] not null default '{}';
+
+alter table public.profili
+  add column if not exists rischi_mansione text[] not null default '{}';
 
 create table if not exists public.aziende_profili (
   id uuid primary key default gen_random_uuid(),

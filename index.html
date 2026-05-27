@@ -1154,6 +1154,42 @@
             btn?.closest('.sede-extra-row')?.remove();
         }
 
+        function renderProfiloArrayInputs(values, inputName, placeholder) {
+            const list = Array.isArray(values) ? values : [];
+            return list.map((s) => ''
+                + '<div class="profilo-array-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;">'
+                + '<textarea name="' + inputName + '" rows="2" style="flex:1;" placeholder="' + attrEsc(placeholder) + '">'
+                + esc(s || '') + '</textarea>'
+                + '<button type="button" class="icon-btn danger" title="Rimuovi elemento" onclick="removeProfiloArrayRow(this)">🗑</button>'
+                + '</div>').join('');
+        }
+
+        function addProfiloArrayRow(containerId, inputName, placeholder) {
+            const list = document.getElementById(containerId);
+            if (!list) return;
+            const row = document.createElement('div');
+            row.className = 'profilo-array-row';
+            row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;';
+            row.innerHTML = ''
+                + '<textarea name="' + inputName + '" rows="2" style="flex:1;" placeholder="' + attrEsc(placeholder) + '"></textarea>'
+                + '<button type="button" class="icon-btn danger" title="Rimuovi elemento" onclick="removeProfiloArrayRow(this)">🗑</button>';
+            list.appendChild(row);
+            row.querySelector('textarea')?.focus();
+        }
+
+        function removeProfiloArrayRow(btn) {
+            btn?.closest('.profilo-array-row')?.remove();
+        }
+
+        function profiloArrayFromForm(form, inputName) {
+            const out = [];
+            form.querySelectorAll('[name="' + inputName + '"]').forEach((inp) => {
+                const t = (inp.value || '').trim();
+                if (t && !out.includes(t)) out.push(t);
+            });
+            return out;
+        }
+
         function updateGenerazioneSedeSelect() {
             const aziendaId = document.getElementById('generazioneAziendaSelect')?.value || '';
             const field = document.getElementById('generazioneSedeField');
@@ -1972,6 +2008,8 @@
                     DPICollettivi: row.dpi_collettivi,
                     ProtocolloSorSan: row.protocollo_sor_san,
                     Attivo: row.attivo,
+                    FasiLavoro: Array.isArray(row.fasi_lavoro) ? row.fasi_lavoro : [],
+                    RischiMansione: Array.isArray(row.rischi_mansione) ? row.rischi_mansione : [],
                     AziendaProprietariaId: row.azienda_proprietaria_id,
                     AziendaProprietariaNome: row.azienda_proprietaria?.ragione_sociale || ''
                 }
@@ -2022,6 +2060,8 @@
                 dpi_collettivi: data.DPICollettivi,
                 protocollo_sor_san: data.ProtocolloSorSan,
                 attivo: data.Attivo,
+                fasi_lavoro: data.FasiLavoro || [],
+                rischi_mansione: data.RischiMansione || [],
                 azienda_proprietaria_id: data.TipoProfilo === 'Custom' ? (data.AziendaProprietariaId || null) : null
             };
         }
@@ -2367,6 +2407,26 @@
                                     </select>
                                 </div>
                                 <div class="form-field full">
+                                    <label>Fasi di lavoro</label>
+                                    <div id="profiloFasiLavoroList">
+                                        ${renderProfiloArrayInputs(f.FasiLavoro || [], 'fasi_lavoro_item', 'Descrivi una fase di lavoro')}
+                                    </div>
+                                    <button type="button" class="btn" style="margin-top:8px;"
+                                            onclick="addProfiloArrayRow('profiloFasiLavoroList', 'fasi_lavoro_item', 'Descrivi una fase di lavoro')">
+                                        + Aggiungi fase
+                                    </button>
+                                </div>
+                                <div class="form-field full">
+                                    <label>Rischi lavorativi connessi allo svolgimento della mansione</label>
+                                    <div id="profiloRischiMansioneList">
+                                        ${renderProfiloArrayInputs(f.RischiMansione || [], 'rischi_mansione_item', 'Descrivi un rischio lavorativo connesso')}
+                                    </div>
+                                    <button type="button" class="btn" style="margin-top:8px;"
+                                            onclick="addProfiloArrayRow('profiloRischiMansioneList', 'rischi_mansione_item', 'Descrivi un rischio lavorativo connesso')">
+                                        + Aggiungi rischio
+                                    </button>
+                                </div>
+                                <div class="form-field full">
                                     <label>Descrizione Attivita</label>
                                     <textarea name="DescrizioneAttivita">${esc(f.DescrizioneAttivita || '')}</textarea>
                                 </div>
@@ -2438,6 +2498,8 @@
                 }
             }
 
+            data.FasiLavoro = profiloArrayFromForm(event.target, 'fasi_lavoro_item');
+            data.RischiMansione = profiloArrayFromForm(event.target, 'rischi_mansione_item');
             const payload = profiloPayloadFromForm(data);
             if (payload.tipo_profilo === 'Custom' && !payload.azienda_proprietaria_id) {
                 showToast('Per un profilo Custom devi selezionare Azienda Proprietaria', 'warning');

@@ -592,6 +592,21 @@
     const selezione = data._appendice_b1_selezione_rischi  || {};
     const profiliTab = profiliSrc;
     const startR = findSchedaTabellaDataStartRow(wsScheda);
+    const dbg = debugAppendiceB1Payload('generateXlsx → scrittura tabella Scheda', data);
+    console.log('[APPENDICE_B1] riga dati startR=', startR, '| righe da scrivere=', profiliTab.length);
+    profiliTab.forEach((p, idx) => {
+      const row = startR + idx;
+      const pid = String(p.id || '');
+      console.log('[APPENDICE_B1]   riga', row, {
+        A: String(p.nome || '').trim(),
+        B: fasiLavoroVirgola(p.fasi_lavoro).slice(0, 60),
+        C_len: nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza').length,
+        D_len: nomiRischiSelezione(byProfilo, selezione, pid, 'igiene').length,
+      });
+    });
+    if (!profiliTab.length) {
+      console.warn('[APPENDICE_B1] ATTENZIONE: profiliTab vuoto — tabella righe 13+ resterà vuota');
+    }
     unmergeSchedaTabellaArea(wsScheda, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
     for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
       const r = startR + i;
@@ -722,6 +737,36 @@
     });
   }
 
+  /** Log diagnostico payload wizard → adapter (solo in console, non in UI). */
+  function debugAppendiceB1Payload(label, data) {
+    const profili = resolveProfiliAzienda(data);
+    const tabella = profili.map((p) => {
+      const pid = String(p.id || '');
+      const sel = data?._appendice_b1_selezione_rischi?.[pid] || [];
+      const rischi = data?._appendice_b1_rischi_by_profilo?.[pid] || [];
+      return {
+        id: pid,
+        nome: String(p.nome || '').trim(),
+        fasi: normalizzaFasiLavoro(p.fasi_lavoro),
+        rischi_catalogo: rischi.length,
+        rischi_selezionati: sel.length,
+      };
+    });
+    console.group('[APPENDICE_B1] ' + label);
+    console.log('Payload keys:', data ? Object.keys(data).sort() : []);
+    console.log('_profili_azienda:', Array.isArray(data?._profili_azienda)
+      ? data._profili_azienda.length + ' elementi'
+      : data?._profili_azienda);
+    console.log('profili risolti (tabella scheda):', tabella.length, tabella);
+    console.log('descrizione_ciclo_produttivo:', String(data?.descrizione_ciclo_produttivo || '').slice(0, 80));
+    console.log('logo buffer:', data?._logo_buffer?.byteLength
+      ? data._logo_buffer.byteLength + ' bytes'
+      : 'assente');
+    console.log('selezione_rischi profili:', Object.keys(data?._appendice_b1_selezione_rischi || {}).length);
+    console.groupEnd();
+    return { profiliCount: tabella.length, tabella };
+  }
+
   // ─── Export ──────────────────────────────────────────────────────────────────
   window.GEN_ADAPTERS = window.GEN_ADAPTERS || {};
   window.GEN_ADAPTERS[CODICE] = {
@@ -738,5 +783,6 @@
     schedaCellaC9Testo,
     macroVersoColonnaSicIgiene,
     buildRischiByProfilo,
+    debugAppendiceB1Payload,
   };
 })();

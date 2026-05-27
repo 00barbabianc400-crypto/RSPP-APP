@@ -5877,7 +5877,7 @@
                 NOTA_LAVORATRICI_MADRI: '20260528d',
                 NOTA_ANTINCENDIO: '20260601b',
                 APPENDICE_A_ORGANIGRAMMA: '20260601c',
-                APPENDICE_B1_PROFILI: '20260207k',
+                APPENDICE_B1_PROFILI: '20260207l',
             };
             return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -6084,6 +6084,12 @@
                     const genPayload = codice === 'APPENDICE_B1_PROFILI'
                         ? mergeAppendiceB1GenPayload(e.data.data, initialData)
                         : e.data.data;
+                    if (codice === 'APPENDICE_B1_PROFILI') {
+                        const ad = window.GEN_ADAPTERS?.APPENDICE_B1_PROFILI;
+                        if (ad?.debugAppendiceB1Payload) {
+                            ad.debugAppendiceB1Payload('postMessage GENERATE (dopo merge initialData)', genPayload);
+                        }
+                    }
                     triggerGeneration(codice, aziendaId, genPayload);
                 }
                 if (e.data.type === 'PREVIEW_DOCX' || e.data.type === 'PREVIEW_XLSX') {
@@ -6177,7 +6183,7 @@
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260601c'
-                : codice === 'APPENDICE_B1_PROFILI' ? '20260207k'
+                : codice === 'APPENDICE_B1_PROFILI' ? '20260207l'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);
@@ -6242,6 +6248,10 @@
         async function triggerGeneration(codice, aziendaId, data) {
             const adapter = window.GEN_ADAPTERS?.[codice];
             if (!adapter) { showToast('Adapter non caricato', 'error'); return; }
+
+            if (codice === 'APPENDICE_B1_PROFILI' && typeof adapter.debugAppendiceB1Payload === 'function') {
+                adapter.debugAppendiceB1Payload('index parent → triggerGeneration → generateXlsx', data);
+            }
 
             const errors = adapter.validate(data);
             if (errors.length) {

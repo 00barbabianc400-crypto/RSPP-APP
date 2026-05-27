@@ -897,6 +897,10 @@
                     <span class="nav-icon">🔐</span>
                     <span>Admin Utenti</span>
                 </div>
+                <div class="nav-item" onclick="navigateTo('monitoraggio')" data-page="monitoraggio" data-min-role="admin">
+                    <span class="nav-icon">📊</span>
+                    <span>Monitoraggio</span>
+                </div>
                 
                 <div class="nav-section" data-min-role="editor">Modelli documenti</div>
                 <div class="nav-item" onclick="navigateTo('modelli')" data-page="modelli" data-min-role="rspp">
@@ -1333,7 +1337,8 @@
             generazione: 'viewer',
             modelli: 'rspp',
             loghi: 'editor',
-            admin: 'admin'
+            admin: 'admin',
+            monitoraggio: 'admin'
         };
 
         function hasRequiredRole(requiredRole, currentRole = STATE.role) {
@@ -1456,6 +1461,7 @@
                     case 'modelli': await renderModelli(); break;
                     case 'loghi': await renderLoghi(); break;
                     case 'admin': await renderAdminUsers(); break;
+                    case 'monitoraggio': await renderMonitoraggio(); break;
                     default: main.innerHTML = '<p>Pagina non trovata</p>';
                 }
             } catch (error) {
@@ -7625,6 +7631,51 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             }
             showToast('Tipo rilevamento eliminato', 'success');
             await renderTipiRilevamento();
+        }
+
+        async function renderMonitoraggio() {
+            const main = document.getElementById('mainContent');
+            if (!hasRequiredRole('admin')) {
+                await renderAccessPending(false);
+                return;
+            }
+            await loadScriptOnce('js/monitoraggio/dashboard.js?v=20260528a');
+            main.innerHTML = `
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Monitoraggio</h1>
+                        <p class="page-subtitle">Aggregati di sistema — una sola query, solo admin</p>
+                    </div>
+                    <button type="button" class="btn btn-primary" id="monitorRefreshBtn">Aggiorna</button>
+                </div>
+                <div id="monitorDashboardRoot">
+                    <div class="loading"><div class="spinner"></div>Caricamento statistiche...</div>
+                </div>
+            `;
+            document.getElementById('monitorRefreshBtn')?.addEventListener('click', () => refreshMonitoraggioDashboard());
+            await refreshMonitoraggioDashboard();
+        }
+
+        async function refreshMonitoraggioDashboard() {
+            const root = document.getElementById('monitorDashboardRoot');
+            if (!root) return;
+            root.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento statistiche...</div>';
+            const t0 = performance.now();
+            const { data, error } = await supabaseClient.rpc('fn_statistiche_monitoraggio');
+            const elapsedMs = Math.round(performance.now() - t0);
+            if (error) {
+                root.innerHTML = `<div class="card"><div class="card-body" style="color:var(--sp-error);">
+                    <strong>Errore:</strong> ${esc(error.message)}
+                    <p class="hint" style="margin-top:8px;">Esegui la migration <code>20260528_monitoraggio.sql</code> su Supabase.</p>
+                </div></div>`;
+                return;
+            }
+            const payloadKb = (JSON.stringify(data || {}).length / 1024).toFixed(1);
+            if (window.MONITORAGGIO_DASH) {
+                MONITORAGGIO_DASH.render(root, data, { elapsedMs, payloadKb });
+            } else {
+                root.innerHTML = '<pre style="font-size:11px;overflow:auto;">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
+            }
         }
 
         async function renderAdminUsers() {

@@ -5877,7 +5877,7 @@
                 NOTA_LAVORATRICI_MADRI: '20260528d',
                 NOTA_ANTINCENDIO: '20260601b',
                 APPENDICE_A_ORGANIGRAMMA: '20260601c',
-                APPENDICE_B1_PROFILI: '20260207m',
+                APPENDICE_B1_PROFILI: '20260207n',
             };
             return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -6183,7 +6183,7 @@
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260601c'
-                : codice === 'APPENDICE_B1_PROFILI' ? '20260207m'
+                : codice === 'APPENDICE_B1_PROFILI' ? '20260207n'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);

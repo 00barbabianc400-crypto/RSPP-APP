@@ -584,58 +584,15 @@
     const profiliSrc = resolveProfiliAzienda(data);
     wsScheda.getCell('A9').value = schedaCellaA9Testo(profiliSrc);
     wsScheda.getCell('A9').alignment = ALIGN_SCHEDA_ELENCO;
+    ensureSchedaCellVisible(wsScheda.getCell('A9'));
     wsScheda.getCell('C9').value = schedaCellaC9Testo(profiliSrc);
     wsScheda.getCell('C9').alignment = ALIGN_SCHEDA_ELENCO;
+    ensureSchedaCellVisible(wsScheda.getCell('C9'));
 
-    // Tabella profili rischio (righe 13+)
     const byProfilo = data._appendice_b1_rischi_by_profilo || {};
     const selezione = data._appendice_b1_selezione_rischi  || {};
     const profiliTab = profiliSrc;
     const startR = findSchedaTabellaDataStartRow(wsScheda);
-    debugAppendiceB1Payload('generateXlsx → scrittura tabella Scheda', data);
-    console.log('[APPENDICE_B1] riga dati startR=', startR, '| righe da scrivere=', profiliTab.length);
-    profiliTab.forEach((p, idx) => {
-      const row = startR + idx;
-      const pid = String(p.id || '');
-      console.log('[APPENDICE_B1]   riga', row, {
-        A: String(p.nome || '').trim(),
-        B: fasiLavoroVirgola(p.fasi_lavoro).slice(0, 60),
-        C_len: nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza').length,
-        D_len: nomiRischiSelezione(byProfilo, selezione, pid, 'igiene').length,
-      });
-    });
-    if (!profiliTab.length) {
-      console.warn('[APPENDICE_B1] ATTENZIONE: profiliTab vuoto — righe dati 13+ resteranno vuote');
-    }
-    const mergeLog = unmergeSchedaIntervalloDati(wsScheda, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
-    if (mergeLog.unmerged.length) {
-      console.log('[APPENDICE_B1] unmerge intervalli A:D righe dati:', mergeLog.unmerged);
-    }
-    if (mergeLog.remaining.length) {
-      console.warn('[APPENDICE_B1] merge ancora attivi (scrittura può fallire):', mergeLog.remaining);
-    }
-    writeSchedaProfiliIntervallo(wsScheda, startR, profiliTab, byProfilo, selezione);
-
-    // Logo
-    const buf = data._logo_buffer;
-    if (buf && buf.byteLength) {
-      const ext = imageExtensionFromBuffer(buf, data._logo_path);
-      let imageId;
-      try {
-        imageId = wb.addImage({
-          buffer: new Uint8Array(buf),
-          extension: ext === 'jpeg' ? 'jpeg' : 'png',
-        });
-      } catch (e) {
-        throw new Error('Inserimento logo fallito: ' + (e.message || String(e)));
-      }
-      // Area logo: cella D4 (layout scheda-azienda-layout.md), ancorata con riempimento cella
-      wsScheda.addImage(imageId, {
-        tl: { col: 3, row: 3 },
-        br: { col: 4, row: 4 },
-        editAs: 'twoCell',
-      });
-    }
 
     // ── Fogli profilo (uno per ogni gruppo omogeneo) ──
     const livelliBy    = data._appendice_b1_livelli_by_profilo || {};
@@ -674,6 +631,29 @@
       try { wb.removeWorksheet(wsTmpl.id); } catch (e) { /* se fallisce lascialo */ }
     }
 
+    // Righe Mansione/Tipologia/Sicurezza/Igiene: dopo i fogli profilo, con font leggibile
+    writeSchedaProfiliIntervallo(wsScheda, startR, profiliTab, byProfilo, selezione);
+    logSchedaProfiliReadback(wsScheda, startR, profiliTab.length);
+
+    const buf = data._logo_buffer;
+    if (buf && buf.byteLength) {
+      const ext = imageExtensionFromBuffer(buf, data._logo_path);
+      let imageId;
+      try {
+        imageId = wb.addImage({
+          buffer: new Uint8Array(buf),
+          extension: ext === 'jpeg' ? 'jpeg' : 'png',
+        });
+      } catch (e) {
+        throw new Error('Inserimento logo fallito: ' + (e.message || String(e)));
+      }
+      wsScheda.addImage(imageId, {
+        tl: { col: 3, row: 3 },
+        br: { col: 4, row: 4 },
+        editAs: 'twoCell',
+      });
+    }
+
     const raw = await wb.xlsx.writeBuffer();
     // ExcelJS in browser può restituire un Buffer-like anziché un ArrayBuffer puro;
     // lo convertiamo per garantire il trasferimento via postMessage([buffer]).
@@ -694,10 +674,40 @@
   /** Trova la prima riga dati sotto l'intestazione «Mansione» (di solito 13). */
   function findSchedaTabellaDataStartRow(ws) {
     for (let r = 8; r <= 25; r++) {
-      const label = String(ws.getCell('A' + r).value || '').trim().toLowerCase();
-      if (label === 'mansione' || label.startsWith('mansione')) return r + 1;
+      for (const col of ['A', 'B', 'C', 'D']) {
+        const label = String(ws.getCell(col + r).value || '').trim().toLowerCase();
+        if (label === 'mansione' || label.startsWith('mansione')) return r + 1;
+      }
     }
     return TABLE_PROFILI_DATA_START_ROW;
+  }
+
+  /** Il template può avere fonte bianca/chiara sulle righe dati: forza testo nero leggibile. */
+  function ensureSchedaCellVisible(cell) {
+    if (!cell) return;
+    const f = cell.font || {};
+    cell.font = {
+      name: f.name || 'Calibri',
+      size: f.size || 11,
+      bold: f.bold || false,
+      italic: f.italic || false,
+      underline: f.underline || false,
+      color: { argb: 'FF000000' },
+    };
+  }
+
+  function logSchedaProfiliReadback(ws, startR, count) {
+    const rows = [];
+    for (let i = 0; i < count; i++) {
+      const r = startR + i;
+      const a = ws.getCell('A' + r);
+      rows.push({
+        r,
+        A: String(a.value ?? '').slice(0, 40),
+        fontArgb: a.font?.color?.argb || a.font?.color?.theme || '(default)',
+      });
+    }
+    console.log('[APPENDICE_B1] readback in memoria prima di writeBuffer:', rows);
   }
 
   function colLettersToNum(letters) {
@@ -781,24 +791,39 @@
     };
   }
 
-  /** Scrive Mansione/Tipologia/Sicurezza/Igiene con getCell (dopo unmerge). */
+  /** Scrive Mansione/Tipologia/Sicurezza/Igiene (celle classiche A:D, senza merge). */
   function writeSchedaProfiliIntervallo(ws, startR, profiliTab, byProfilo, selezione) {
     const cols = ['A', 'B', 'C', 'D'];
+    unmergeSchedaIntervalloDati(ws, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
     for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
       const r = startR + i;
-      cols.forEach((c) => { ws.getCell(c + r).value = null; });
+      cols.forEach((c) => {
+        const cell = ws.getCell(c + r);
+        cell.value = '';
+      });
     }
     profiliTab.forEach((p, idx) => {
       const r = startR + idx;
       const pid = String(p.id || '');
-      ws.getCell('A' + r).value = String(p.nome || '').trim();
-      ws.getCell('B' + r).value = fasiLavoroVirgola(p.fasi_lavoro);
-      ws.getCell('C' + r).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
-      ws.getCell('D' + r).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
-      cols.forEach((c) => {
-        ws.getCell(c + r).alignment = ALIGN_WRAP_TOP;
+      const vals = [
+        String(p.nome || '').trim(),
+        fasiLavoroVirgola(p.fasi_lavoro),
+        nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza'),
+        nomiRischiSelezione(byProfilo, selezione, pid, 'igiene'),
+      ];
+      cols.forEach((c, ci) => {
+        const cell = ws.getCell(c + r);
+        cell.value = vals[ci];
+        cell.alignment = ALIGN_WRAP_TOP;
+        ensureSchedaCellVisible(cell);
       });
+      try {
+        const rowObj = ws.getRow(r);
+        rowObj.hidden = false;
+        rowObj.commit();
+      } catch (e) { /* skip */ }
     });
+    console.log('[APPENDICE_B1] scritte', profiliTab.length, 'righe da riga', startR);
   }
 
   /** Log diagnostico payload wizard → adapter (solo in console, non in UI). */

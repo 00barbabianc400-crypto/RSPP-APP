@@ -11,7 +11,7 @@ Foglio: **`Scheda Azienda`**
 | **C9** | **Fasi di lavoro**: per ogni profilo nella stessa riga ordine di A9, gli elementi di `profili.fasi_lavoro` (**text[]**) come `• fase1, • fase2, …`; se vuoto → `• —` e la generazione viene bloccata in validazione |
 | **Riga 11** | Intestazioni di sezione (merge **A11:B11** e **C11:D11**) |
 | **Riga 12** | Intestazioni colonne: Mansione, Tipologia, Sicurezza, Igiene — **celle separate, senza merge** |
-| **Righe ≥ 13** (col. **A–D**) | Dati profilo: **nessun merge** (A, B, C, D indipendenti). Una riga per gruppo omogeneo (**A** = nome; **B** = fasi in virgola; **C** / **D** = rischi selezionati). Fonte: `valutazioni_rischio` + wizard selezione. **C** = `Rischi per la Sicurezza`; **D** = `Rischi per la Salute` o `Rischi Psicosociali e Trasversali` |
+| **Righe ≥ 13** (col. **A–D**) | Dati profilo: **non** sono tabelle Excel (`ListObject`), ma **intervalli di celle** (nel modello spesso con merge per riga, es. `A13:D13`). In generazione il codice **rimuove i merge** su quelle righe e scrive A/B/C/D separati. Una riga per gruppo omogeneo. **C** / **D** = rischi selezionati (Sicurezza / Igiene). |
 
 Codice catalogo: **`APPENDICE_B1_PROFILI`** · cartella sorgente: `js/generazione/adapters/APPENDICE_B_1/`
 

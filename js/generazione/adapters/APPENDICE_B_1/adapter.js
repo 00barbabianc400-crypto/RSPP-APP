@@ -592,7 +592,7 @@
     const selezione = data._appendice_b1_selezione_rischi  || {};
     const profiliTab = profiliSrc;
     const startR = findSchedaTabellaDataStartRow(wsScheda);
-    const dbg = debugAppendiceB1Payload('generateXlsx → scrittura tabella Scheda', data);
+    debugAppendiceB1Payload('generateXlsx → scrittura tabella Scheda', data);
     console.log('[APPENDICE_B1] riga dati startR=', startR, '| righe da scrivere=', profiliTab.length);
     profiliTab.forEach((p, idx) => {
       const row = startR + idx;
@@ -605,29 +605,16 @@
       });
     });
     if (!profiliTab.length) {
-      console.warn('[APPENDICE_B1] ATTENZIONE: profiliTab vuoto — tabella righe 13+ resterà vuota');
+      console.warn('[APPENDICE_B1] ATTENZIONE: profiliTab vuoto — righe dati 13+ resteranno vuote');
     }
-    unmergeSchedaTabellaArea(wsScheda, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
-    for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
-      const r = startR + i;
-      wsScheda.getCell('A' + r).value = '';
-      wsScheda.getCell('B' + r).value = '';
-      wsScheda.getCell('C' + r).value = '';
-      wsScheda.getCell('D' + r).value = '';
+    const mergeLog = unmergeSchedaIntervalloDati(wsScheda, startR, TABLE_PROFILI_CLEAR_ROW_COUNT);
+    if (mergeLog.unmerged.length) {
+      console.log('[APPENDICE_B1] unmerge intervalli A:D righe dati:', mergeLog.unmerged);
     }
-    profiliTab.forEach((p, idx) => {
-      const row = startR + idx;
-      const pid = String(p.id || '');
-      const rowObj = wsScheda.getRow(row);
-      rowObj.getCell(1).value = String(p.nome || '').trim();
-      rowObj.getCell(2).value = fasiLavoroVirgola(p.fasi_lavoro);
-      rowObj.getCell(3).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
-      rowObj.getCell(4).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
-      [1, 2, 3, 4].forEach((colNum) => {
-        rowObj.getCell(colNum).alignment = ALIGN_WRAP_TOP;
-      });
-      try { rowObj.commit(); } catch (e) { /* skip */ }
-    });
+    if (mergeLog.remaining.length) {
+      console.warn('[APPENDICE_B1] merge ancora attivi (scrittura può fallire):', mergeLog.remaining);
+    }
+    writeSchedaProfiliIntervallo(wsScheda, startR, profiliTab, byProfilo, selezione);
 
     // Logo
     const buf = data._logo_buffer;
@@ -715,25 +702,102 @@
 
   function colLettersToNum(letters) {
     let n = 0;
-    const s = String(letters || '').toUpperCase();
+    const s = String(letters || '').toUpperCase().replace(/\$/g, '');
     for (let i = 0; i < s.length; i++) n = n * 26 + (s.charCodeAt(i) - 64);
     return n;
   }
 
-  /** Rimuove merge su A:D nella zona tabella (solo se presenti; nel template attuale non ce ne sono dalla riga 13). */
-  function unmergeSchedaTabellaArea(ws, startRow, rowCount) {
+  function colNumToLetters(n) {
+    let s = '';
+    let x = n;
+    while (x > 0) {
+      const r = (x - 1) % 26;
+      s = String.fromCharCode(65 + r) + s;
+      x = Math.floor((x - 1) / 26);
+    }
+    return s;
+  }
+
+  /** Tutti i merge (intervalli classici A:D) che toccano le righe dati profilo. */
+  function collectMergeRefsInSchedaRows(ws, startRow, endRow) {
+    const refs = new Set();
+    const norm = (ref) => String(ref || '').replace(/\$/g, '').trim();
+    (ws.model?.merges || []).forEach((ref) => {
+      const s = norm(ref);
+      if (s) refs.add(s);
+    });
+    Object.keys(ws._merges || {}).forEach((addr) => {
+      const merge = ws._merges[addr];
+      const m = merge?.model;
+      if (m && m.top != null) {
+        refs.add(colNumToLetters(m.left) + m.top + ':' + colNumToLetters(m.right) + m.bottom);
+      } else {
+        const s = norm(addr);
+        if (s) refs.add(s);
+      }
+    });
+    const out = [];
+    refs.forEach((ref) => {
+      const parsed = parseMergeRef(ref);
+      if (!parsed) return;
+      if (parsed.r2 < startRow || parsed.r1 > endRow) return;
+      if (parsed.c2 < 1 || parsed.c1 > 4) return;
+      out.push(ref);
+    });
+    return out;
+  }
+
+  function parseMergeRef(ref) {
+    const m = String(ref).replace(/\$/g, '').match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+    if (!m) return null;
+    return {
+      c1: colLettersToNum(m[1]),
+      r1: parseInt(m[2], 10),
+      c2: colLettersToNum(m[3]),
+      r2: parseInt(m[4], 10),
+    };
+  }
+
+  /**
+   * Rimuove i merge classici (es. A13:D13) sull'intervallo righe dati.
+   * ExcelJS non popola B/C/D se la riga è ancora unita in un solo blocco.
+   */
+  function unmergeSchedaIntervalloDati(ws, startRow, rowCount) {
     const endRow = startRow + rowCount - 1;
-    const merges = ws.model?.merges ? [...ws.model.merges] : [];
-    merges.forEach((ref) => {
-      const m = String(ref).match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
-      if (!m) return;
-      const r1 = parseInt(m[2], 10);
-      const r2 = parseInt(m[4], 10);
-      const c1 = colLettersToNum(m[1]);
-      const c2 = colLettersToNum(m[3]);
-      if (r2 < startRow || r1 > endRow) return;
-      if (c2 < 1 || c1 > 4) return;
-      try { ws.unMergeCells(ref); } catch (e) { /* skip */ }
+    const unmerged = [];
+    for (let pass = 0; pass < 20; pass++) {
+      const batch = collectMergeRefsInSchedaRows(ws, startRow, endRow);
+      if (!batch.length) break;
+      batch.forEach((ref) => {
+        try {
+          ws.unMergeCells(ref);
+          unmerged.push(ref);
+        } catch (e) { /* skip */ }
+      });
+    }
+    return {
+      unmerged,
+      remaining: collectMergeRefsInSchedaRows(ws, startRow, endRow),
+    };
+  }
+
+  /** Scrive Mansione/Tipologia/Sicurezza/Igiene con getCell (dopo unmerge). */
+  function writeSchedaProfiliIntervallo(ws, startR, profiliTab, byProfilo, selezione) {
+    const cols = ['A', 'B', 'C', 'D'];
+    for (let i = 0; i < TABLE_PROFILI_CLEAR_ROW_COUNT; i++) {
+      const r = startR + i;
+      cols.forEach((c) => { ws.getCell(c + r).value = null; });
+    }
+    profiliTab.forEach((p, idx) => {
+      const r = startR + idx;
+      const pid = String(p.id || '');
+      ws.getCell('A' + r).value = String(p.nome || '').trim();
+      ws.getCell('B' + r).value = fasiLavoroVirgola(p.fasi_lavoro);
+      ws.getCell('C' + r).value = nomiRischiSelezione(byProfilo, selezione, pid, 'sicurezza');
+      ws.getCell('D' + r).value = nomiRischiSelezione(byProfilo, selezione, pid, 'igiene');
+      cols.forEach((c) => {
+        ws.getCell(c + r).alignment = ALIGN_WRAP_TOP;
+      });
     });
   }
 

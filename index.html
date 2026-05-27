@@ -5958,16 +5958,30 @@
                 .filter((p) => p.id && p.nome);
 
             let valutazioniAppendiceB1 = [];
+            let faseProfiliAppendiceB1 = [];
             if (codice === 'APPENDICE_B1_PROFILI') {
+                // Valutazioni: include profilo_fase_id (null = livello profilo, uuid = livello fase)
                 const { data: vRows, error: vErr } = await supabaseClient
                     .from(CONFIG.tables.valutazioniRischio)
                     .select(
-                        'profilo_id, rischio_id, rischio_associato, livello_rischio, rischio:rischio_id(id, id_rischio, nome_rischio, macro_categoria, ordine)'
+                        'profilo_id, profilo_fase_id, rischio_id, rischio_associato, livello_rischio, rischio:rischio_id(id, id_rischio, nome_rischio, macro_categoria, ordine)'
                     )
                     .eq('azienda_id', aziendaId)
                     .eq('rischio_associato', true);
                 if (vErr) console.warn('[APPENDICE_B1] valutazioni_rischio', vErr);
                 valutazioniAppendiceB1 = vRows || [];
+
+                // Fasi da profilo_fasi (id stabile) per tutti i profili associati all'azienda
+                const profiloIds = profiliAzienda.map(p => p.id).filter(Boolean);
+                if (profiloIds.length) {
+                    const { data: fasiRows, error: fasiErr } = await supabaseClient
+                        .from('profilo_fasi')
+                        .select('id, profilo_id, nome, ordine')
+                        .in('profilo_id', profiloIds)
+                        .order('ordine');
+                    if (fasiErr) console.warn('[APPENDICE_B1] profilo_fasi', fasiErr);
+                    faseProfiliAppendiceB1 = fasiRows || [];
+                }
             }
 
             // Recupera numero modulo dal catalogo
@@ -5986,7 +6000,10 @@
                     profili_nomi:  profiliNomi,
                     profili_azienda: profiliAzienda,
                     ...(codice === 'APPENDICE_B1_PROFILI'
-                        ? { valutazioni_appendice_b1: valutazioniAppendiceB1 }
+                        ? {
+                            valutazioni_appendice_b1: valutazioniAppendiceB1,
+                            profilo_fasi_appendice_b1: faseProfiliAppendiceB1,
+                          }
                         : {}),
                 }
             );
@@ -6035,6 +6052,12 @@
                 }
                 if (!out._appendice_b1_livelli_by_profilo && init._appendice_b1_livelli_by_profilo) {
                     out._appendice_b1_livelli_by_profilo = init._appendice_b1_livelli_by_profilo;
+                }
+                if (!out._appendice_b1_livelli_by_fase && init._appendice_b1_livelli_by_fase) {
+                    out._appendice_b1_livelli_by_fase = init._appendice_b1_livelli_by_fase;
+                }
+                if (!out._appendice_b1_fasi_by_profilo && init._appendice_b1_fasi_by_profilo) {
+                    out._appendice_b1_fasi_by_profilo = init._appendice_b1_fasi_by_profilo;
                 }
                 if (
                     !out._appendice_b1_selezione_rischi ||

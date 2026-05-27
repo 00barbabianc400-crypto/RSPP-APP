@@ -11,6 +11,7 @@ alter table public.valutazioni_rischio enable row level security;
 alter table public.rilevamenti_ambientali enable row level security;
 alter table public.documenti_catalogo enable row level security;
 alter table public.aziende_documenti enable row level security;
+alter table public.profilo_fasi enable row level security;
 
 create or replace function public.app_is_internal_user()
 returns boolean
@@ -123,6 +124,17 @@ using (public.app_is_active_user());
 
 drop policy if exists aziende_write_internal on public.aziende;
 create policy aziende_write_internal on public.aziende
+for all to authenticated
+using (public.app_is_internal_user())
+with check (public.app_is_internal_user());
+
+drop policy if exists profilo_fasi_read_auth on public.profilo_fasi;
+create policy profilo_fasi_read_auth on public.profilo_fasi
+for select to authenticated
+using (public.app_is_active_user());
+
+drop policy if exists profilo_fasi_write_internal on public.profilo_fasi;
+create policy profilo_fasi_write_internal on public.profilo_fasi
 for all to authenticated
 using (public.app_is_internal_user())
 with check (public.app_is_internal_user());

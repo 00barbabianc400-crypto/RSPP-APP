@@ -178,24 +178,60 @@
     return out.join(', ');
   }
 
-  // ─── Livelli per profilo (fogli profilo) ─────────────────────────────────────
-  /** @returns { [profiloId]: { [id_rischio_code]: livello_string } } */
-  function buildLivelliByProfilo(valutazioni, profiliIdsSet) {
-    const by = {};
-    profiliIdsSet.forEach((id) => { by[id] = {}; });
+  // ─── Livelli per profilo/fase ────────────────────────────────────────────────
+  /**
+   * Costruisce la mappa livelli usata dal foglio profilo (colonne C–S).
+   *
+   * Priorità (dal più specifico al meno):
+   *   1. valutazione con profilo_fase_id = id della fase (se disponibile)
+   *   2. valutazione con profilo_fase_id = null (livello profilo, fallback)
+   *
+   * @returns {
+   *   byProfilo: { [profiloId]: { [id_rischio_code]: livello_string } },
+   *   byFase:    { [faseId]:    { [id_rischio_code]: livello_string } }
+   * }
+   */
+  function buildLivelliMaps(valutazioni, profiliIdsSet) {
+    const byProfilo = {};
+    const byFase = {};
+    profiliIdsSet.forEach((id) => { byProfilo[id] = {}; });
+
     (valutazioni || []).forEach((row) => {
       if (row.rischio_associato === false) return;
-      const pid = String(row.profilo_id || '');
-      if (!pid || !profiliIdsSet.has(pid)) return;
-      const r = row.rischio;
-      const code = r?.id_rischio ? String(r.id_rischio) : null;
-      if (!code) return;
-      if (!by[pid]) by[pid] = {};
-      if (!by[pid][code]) {
-        by[pid][code] = row.livello_rischio || 'Trascurabile';
+      const pid  = String(row.profilo_id || '');
+      const code = row.rischio?.id_rischio ? String(row.rischio.id_rischio) : null;
+      if (!pid || !code) return;
+      if (!profiliIdsSet.has(pid)) return;
+
+      const lvl = row.livello_rischio || 'Trascurabile';
+
+      if (row.profilo_fase_id) {
+        const fid = String(row.profilo_fase_id);
+        if (!byFase[fid]) byFase[fid] = {};
+        if (!byFase[fid][code]) byFase[fid][code] = lvl;
+      } else {
+        if (!byProfilo[pid]) byProfilo[pid] = {};
+        if (!byProfilo[pid][code]) byProfilo[pid][code] = lvl;
       }
     });
-    return by;
+
+    return { byProfilo, byFase };
+  }
+
+  /**
+   * Ritorna la mappa livelli per una singola fase.
+   * Se la fase non ha valutazioni proprie, cade back sul livello profilo.
+   */
+  function livelliPerFase(faseId, profiloId, mapsObj) {
+    const faseLvl = faseId ? (mapsObj.byFase[faseId] || {}) : {};
+    const profLvl = mapsObj.byProfilo[String(profiloId)] || {};
+    // Merge: la valutazione per fase sovrascrive quella di profilo
+    return Object.assign({}, profLvl, faseLvl);
+  }
+
+  /** @deprecated usa buildLivelliMaps */
+  function buildLivelliByProfilo(valutazioni, profiliIdsSet) {
+    return buildLivelliMaps(valutazioni, profiliIdsSet).byProfilo;
   }
 
   /** Calcola la media aritmetica dei livelli per una colonna (usa la mappa livelli del profilo). */
@@ -358,14 +394,27 @@
   }
 
   // ─── Popola un foglio profilo ─────────────────────────────────────────────────
-  function populateProfiloSheet(ws, profilo, livelliMap, misurePerFase, dpiPerFase) {
+  /**
+   * @param {object} ws           - ExcelJS worksheet
+   * @param {object} profilo      - oggetto profilo (id, nome, fasi_lavoro, …)
+   * @param {object} livelliMap   - { [id_rischio_code]: livello_string } livello profilo (fallback)
+   * @param {Array}  misurePerFase - testi wizard T per indice fase
+   * @param {Array}  dpiPerFase    - testi wizard U per indice fase
+   * @param {object} mapsObj      - { byProfilo, byFase } da buildLivelliMaps (opzionale)
+   * @param {Array}  fasiEntita   - [{id, nome, ordine}] da profilo_fasi (opzionale)
+   */
+  function populateProfiloSheet(ws, profilo, livelliMap, misurePerFase, dpiPerFase, mapsObj, fasiEntita) {
     const wrapTop = { vertical: 'top', wrapText: true };
     const centerMid = { horizontal: 'center', vertical: 'middle', wrapText: false };
 
     // D2: nome profilo (celle D2:U2 già unite nel template)
     ws.getCell('D2').value = String(profilo.nome || '').trim();
 
-    const fasi = normalizzaFasiLavoro(profilo.fasi_lavoro);
+    // Usa fasiEntita (da profilo_fasi) se disponibili, altrimenti cade back sull'array di stringhe
+    const hasFasiEntita = Array.isArray(fasiEntita) && fasiEntita.length > 0;
+    const fasi = hasFasiEntita
+      ? fasiEntita.map((f) => f.nome)
+      : normalizzaFasiLavoro(profilo.fasi_lavoro);
     const N = fasi.length;
     const tmplN = TMPL_DATA_COUNT; // 5
 
@@ -378,13 +427,21 @@
       const row = ws.getRow(r);
       row.height = DATA_ROW_HEIGHT;
 
+      // Determina la mappa livelli per questa fase specifica
+      // Se mapsObj disponibile e la fase ha un id, usa livelli per fase con fallback profilo
+      let livelliPerQestaFase = livelliMap;
+      if (mapsObj) {
+        const faseId = hasFasiEntita ? (fasiEntita[idx]?.id || null) : null;
+        livelliPerQestaFase = livelliPerFase(faseId, profilo.id, mapsObj);
+      }
+
       // A: descrizione fase
       ws.getCell('A' + r).value = fase;
       ws.getCell('A' + r).alignment = wrapTop;
 
-      // C–S: valori numerici (stessa media per ogni riga, variante per colonna)
+      // C–S: media livelli per questa fase
       COLONNE_RISCHI.forEach(({ col, ids }) => {
-        const media = computeMediaColonna(livelliMap, ids);
+        const media = computeMediaColonna(livelliPerQestaFase, ids);
         const rounded = media !== null ? Math.round(media) : null;
         const cell = ws.getCell(col + r);
         cell.value = rounded;
@@ -469,10 +526,23 @@
     const profili = Array.isArray(w.profili_azienda) ? w.profili_azienda : [];
     const profiliIdsSet = new Set(profili.map((p) => String(p?.id || '')).filter(Boolean));
     const rischiRows = Array.isArray(w.valutazioni_appendice_b1) ? w.valutazioni_appendice_b1 : [];
+    const fasiRows   = Array.isArray(w.profilo_fasi_appendice_b1) ? w.profilo_fasi_appendice_b1 : [];
 
     const byProfilo  = buildRischiByProfilo(rischiRows, profiliIdsSet);
     const defSel     = defaultSelezioneRischi(byProfilo);
-    const livelliBy  = buildLivelliByProfilo(rischiRows, profiliIdsSet);
+    const livelliMaps = buildLivelliMaps(rischiRows, profiliIdsSet);
+
+    // Mappa fasi per profilo: { [profiloId]: [{id, nome, ordine}, ...] }
+    const fasiByProfilo = {};
+    fasiRows.forEach((f) => {
+      const pid = String(f.profilo_id || '');
+      if (!pid) return;
+      if (!fasiByProfilo[pid]) fasiByProfilo[pid] = [];
+      fasiByProfilo[pid].push({ id: f.id, nome: f.nome, ordine: f.ordine ?? 0 });
+    });
+    Object.keys(fasiByProfilo).forEach((pid) => {
+      fasiByProfilo[pid].sort((a, b) => a.ordine - b.ordine);
+    });
 
     return {
       DATA_EMISSIONE: now.toLocaleDateString('it-IT', {
@@ -488,11 +558,13 @@
       descrizione_ciclo_produttivo: w.descrizione_ciclo_produttivo != null
         ? String(w.descrizione_ciclo_produttivo)
         : '',
-      _appendice_b1_rischi_by_profilo: byProfilo,
-      _appendice_b1_selezione_rischi:  defSel,
-      _appendice_b1_livelli_by_profilo: livelliBy,
-      _appendice_b1_misure_per_fase:   w.appendice_b1_misure_per_fase  || {},
-      _appendice_b1_dpi_per_fase:      w.appendice_b1_dpi_per_fase     || {},
+      _appendice_b1_rischi_by_profilo:  byProfilo,
+      _appendice_b1_selezione_rischi:   defSel,
+      _appendice_b1_livelli_by_profilo: livelliMaps.byProfilo,
+      _appendice_b1_livelli_by_fase:    livelliMaps.byFase,
+      _appendice_b1_fasi_by_profilo:    fasiByProfilo,
+      _appendice_b1_misure_per_fase:    w.appendice_b1_misure_per_fase  || {},
+      _appendice_b1_dpi_per_fase:       w.appendice_b1_dpi_per_fase     || {},
     };
   }
 
@@ -589,26 +661,28 @@
     wsScheda.getCell('C9').alignment = ALIGN_SCHEDA_ELENCO;
     ensureSchedaCellVisible(wsScheda.getCell('C9'));
 
-    const byProfilo = data._appendice_b1_rischi_by_profilo || {};
-    const selezione = data._appendice_b1_selezione_rischi  || {};
+    const byProfilo  = data._appendice_b1_rischi_by_profilo || {};
+    const selezione  = data._appendice_b1_selezione_rischi  || {};
     const profiliTab = profiliSrc;
-    const startR = findSchedaTabellaDataStartRow(wsScheda);
+    const startR     = findSchedaTabellaDataStartRow(wsScheda);
 
     // ── Fogli profilo (uno per ogni gruppo omogeneo) ──
     const livelliBy    = data._appendice_b1_livelli_by_profilo || {};
+    const livelliByFase = data._appendice_b1_livelli_by_fase   || {};
+    const fasiByProfilo = data._appendice_b1_fasi_by_profilo   || {};
     const misureByProf = data._appendice_b1_misure_per_fase    || {};
     const dpiByProf    = data._appendice_b1_dpi_per_fase       || {};
 
+    // mapsObj ricostruito per livelliPerFase()
+    const mapsObj = { byProfilo: livelliBy, byFase: livelliByFase };
+
     if (profiliTab.length > 0) {
-      // Verifica che il foglio template esista
       const wsTmpl = wb.getWorksheet(TEMPLATE_SHEET);
       if (!wsTmpl) throw new Error('Foglio template "' + TEMPLATE_SHEET + '" non trovato');
 
-      // Crea un foglio per ogni profilo clonando il template
       const sheetNames = new Set();
       for (const profilo of profiliTab) {
         let sheetName = sanitizeSheetName(profilo.nome);
-        // Evita nomi duplicati
         let attempt = sheetName;
         let counter = 2;
         while (sheetNames.has(attempt.toLowerCase())) {
@@ -623,11 +697,12 @@
           profilo,
           livelliBy[profilo.id] || {},
           misureByProf[profilo.id] || [],
-          dpiByProf[profilo.id]   || []
+          dpiByProf[profilo.id]   || [],
+          mapsObj,
+          fasiByProfilo[profilo.id] || null
         );
       }
 
-      // Rimuovi il foglio template (ora sostituito dai fogli specifici)
       try { wb.removeWorksheet(wsTmpl.id); } catch (e) { /* se fallisce lascialo */ }
     }
 

@@ -90,7 +90,7 @@ begin
     p_user_id
   from public.catalogo_rischi cr
   where cr.attivo = true
-  on conflict (azienda_id, profilo_id, rischio_id) where (profilo_fase_id is null)
+  on conflict (azienda_id, profilo_id, rischio_id)
   do nothing;
 end;
 $$;
@@ -179,7 +179,6 @@ declare
   v_associazione_id uuid;
   v_partita_iva     text;
   v_existing_count  integer;
-  v_fase            record;
 begin
   if not public.app_is_internal_user() then
     raise exception 'Permessi insufficienti';
@@ -215,19 +214,6 @@ begin
     p_azienda_id, p_profilo_id, v_partita_iva, p_user_id
   );
 
-  -- 2. Valutazioni per ogni fase già definita sul profilo
-  for v_fase in
-    select id, nome
-    from public.profilo_fasi
-    where profilo_id = p_profilo_id
-    order by ordine
-  loop
-    perform public._fn_crea_valutazioni_fase(
-      p_azienda_id, p_profilo_id, v_fase.id, v_fase.nome,
-      v_partita_iva, p_user_id
-    );
-  end loop;
-
   return v_associazione_id;
 end;
 $$;
@@ -253,8 +239,6 @@ as $$
 declare
   v_fase_id     uuid;
   v_ordine_max  integer;
-  v_az          record;
-  v_partita_iva text;
 begin
   if not public.app_is_internal_user() then
     raise exception 'Permessi insufficienti';
@@ -277,19 +261,6 @@ begin
   insert into public.profilo_fasi (profilo_id, nome, ordine)
   values (p_profilo_id, trim(p_nome_fase), v_ordine_max)
   returning id into v_fase_id;
-
-  -- Clona valutazioni per ogni azienda associata al profilo
-  for v_az in
-    select ap.azienda_id, az.partita_iva
-    from public.aziende_profili ap
-    join public.aziende az on az.id = ap.azienda_id
-    where ap.profilo_id = p_profilo_id
-  loop
-    perform public._fn_crea_valutazioni_fase(
-      v_az.azienda_id, p_profilo_id, v_fase_id, trim(p_nome_fase),
-      v_az.partita_iva, p_user_id
-    );
-  end loop;
 
   return v_fase_id;
 end;
@@ -331,7 +302,7 @@ $$;
 revoke all on function public.fn_rinomina_fase_profilo(uuid, text, uuid) from public;
 grant execute on function public.fn_rinomina_fase_profilo(uuid, text, uuid) to authenticated;
 
--- ── Rimuovi una fase (CASCADE DELETE valutazioni legate) ─────────────────────
+-- ── Rimuovi una fase ──────────────────────────────────────────────────────────
 create or replace function public.fn_rimuovi_fase_profilo(
   p_fase_id uuid,
   p_user_id uuid default auth.uid()
@@ -346,8 +317,6 @@ begin
     raise exception 'Permessi insufficienti';
   end if;
 
-  -- Il CASCADE su profilo_fasi.id → valutazioni_rischio.profilo_fase_id
-  -- elimina automaticamente le valutazioni legate alla fase.
   delete from public.profilo_fasi
   where id = p_fase_id;
 
@@ -360,7 +329,7 @@ $$;
 revoke all on function public.fn_rimuovi_fase_profilo(uuid, uuid) from public;
 grant execute on function public.fn_rimuovi_fase_profilo(uuid, uuid) to authenticated;
 
--- ── Sync profili.fasi_lavoro[] → profilo_fasi (+ valutazioni per fasi nuove) ─
+-- ── Sync profili.fasi_lavoro[] → profilo_fasi ────────────────────────────────
 create or replace function public.fn_sincronizza_fasi_da_array(
   p_profilo_id uuid,
   p_user_id    uuid default auth.uid()
@@ -374,9 +343,7 @@ declare
   v_fase      text;
   v_ord       integer;
   v_fase_id   uuid;
-  v_is_new    boolean;
   v_nomi      text[] := '{}';
-  v_az        record;
 begin
   if not public.app_is_internal_user() then
     raise exception 'Permessi insufficienti';
@@ -395,7 +362,7 @@ begin
     where p.id = p_profilo_id
   ) s;
 
-  -- Rimuove fasi non più nell'array (CASCADE sulle valutazioni per fase)
+  -- Rimuove fasi non più nell'array
   delete from public.profilo_fasi pf
   where pf.profilo_id = p_profilo_id
     and not (pf.nome = any (v_nomi));
@@ -403,8 +370,6 @@ begin
   v_ord := 0;
   foreach v_fase in array v_nomi loop
     v_ord := v_ord + 1;
-    v_is_new := false;
-
     select id into v_fase_id
     from public.profilo_fasi
     where profilo_id = p_profilo_id and nome = v_fase;
@@ -413,25 +378,10 @@ begin
       insert into public.profilo_fasi (profilo_id, nome, ordine)
       values (p_profilo_id, v_fase, v_ord)
       returning id into v_fase_id;
-      v_is_new := true;
     else
       update public.profilo_fasi
       set ordine = v_ord
       where id = v_fase_id;
-    end if;
-
-    if v_is_new then
-      for v_az in
-        select ap.azienda_id, az.partita_iva
-        from public.aziende_profili ap
-        join public.aziende az on az.id = ap.azienda_id
-        where ap.profilo_id = p_profilo_id
-      loop
-        perform public._fn_crea_valutazioni_fase(
-          v_az.azienda_id, p_profilo_id, v_fase_id, v_fase,
-          v_az.partita_iva, p_user_id
-        );
-      end loop;
     end if;
   end loop;
 end;
@@ -521,15 +471,8 @@ begin
 
   select count(*)::bigint into v_actual from public.valutazioni_rischio;
 
-  select coalesce(sum(
-    v_rischi * (1 + coalesce(f.cnt, 0))
-  ), 0)::bigint into v_teorico
-  from public.aziende_profili ap
-  left join (
-    select profilo_id, count(*)::int as cnt
-    from public.profilo_fasi
-    group by profilo_id
-  ) f on f.profilo_id = ap.profilo_id;
+  select (count(*)::bigint * v_rischi)::bigint into v_teorico
+  from public.aziende_profili;
 
   return jsonb_build_object(
     'generato_il', to_jsonb(now() at time zone 'utc'),
@@ -555,13 +498,7 @@ begin
         select round(avg(fc.cnt)::numeric, 1)
         from (select count(*)::numeric as cnt from public.profilo_fasi group by profilo_id) fc
       ), 0),
-      'fattore_espansione_fasi', case when v_actual > 0 and (select count(*) from public.valutazioni_rischio where profilo_fase_id is null) > 0
-        then round(
-          (select count(*)::numeric from public.valutazioni_rischio where profilo_fase_id is not null)
-          / nullif((select count(*) from public.valutazioni_rischio where profilo_fase_id is null), 0),
-          2
-        )
-        else 0 end
+      'fattore_espansione_fasi', 0
     ),
     'db', jsonb_build_object(
       'database_bytes', pg_database_size(current_database()),

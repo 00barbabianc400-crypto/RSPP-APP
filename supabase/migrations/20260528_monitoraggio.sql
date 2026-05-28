@@ -20,15 +20,8 @@ begin
 
   select count(*)::bigint into v_actual from public.valutazioni_rischio;
 
-  select coalesce(sum(
-    v_rischi * (1 + coalesce(f.cnt, 0))
-  ), 0)::bigint into v_teorico
-  from public.aziende_profili ap
-  left join (
-    select profilo_id, count(*)::int as cnt
-    from public.profilo_fasi
-    group by profilo_id
-  ) f on f.profilo_id = ap.profilo_id;
+  select (count(*)::bigint * v_rischi)::bigint into v_teorico
+  from public.aziende_profili;
 
   return jsonb_build_object(
     'generato_il', to_jsonb(now() at time zone 'utc'),
@@ -54,13 +47,7 @@ begin
         select round(avg(fc.cnt)::numeric, 1)
         from (select count(*)::numeric as cnt from public.profilo_fasi group by profilo_id) fc
       ), 0),
-      'fattore_espansione_fasi', case when v_actual > 0 and (select count(*) from public.valutazioni_rischio where profilo_fase_id is null) > 0
-        then round(
-          (select count(*)::numeric from public.valutazioni_rischio where profilo_fase_id is not null)
-          / nullif((select count(*) from public.valutazioni_rischio where profilo_fase_id is null), 0),
-          2
-        )
-        else 0 end
+      'fattore_espansione_fasi', 0
     ),
     'db', jsonb_build_object(
       'database_bytes', pg_database_size(current_database()),

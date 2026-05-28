@@ -104,8 +104,12 @@
         level: delta > 0 ? 'warn' : 'info',
         text: delta > 0
           ? `+${fmtNum(delta)} valutazioni oltre la stima teorica (possibili duplicati o profili legacy).`
-          : `${fmtNum(Math.abs(delta))} valutazioni mancanti rispetto alla stima (sync catalogo/fasi consigliato).`
+          : `${fmtNum(Math.abs(delta))} valutazioni mancanti rispetto alla stima (sync catalogo consigliato).`
       });
+    }
+    const valFase = Number(c.valutazioni_fase) || 0;
+    if (valFase > 0) {
+      alerts.push({ level: 'warn', text: `${fmtNum(valFase)} valutazioni fase residue (atteso 0 nel modello corrente).` });
     }
     if ((a.aziende_senza_profili || 0) > 0) {
       alerts.push({ level: 'info', text: `${a.aziende_senza_profili} aziende senza profili associati.` });
@@ -130,7 +134,7 @@
     el.textContent = `
       .mon-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:18px;}
       .mon-kpi{background:var(--sp-bg-secondary,#1e1e1e);border:1px solid var(--sp-border,#333);border-radius:6px;padding:14px 12px;}
-      .mon-kpi-val{font-size:22px;font-weight:700;color:var(--sp-text,#f0f0f0);line-height:1.1;}
+      .mon-kpi-val{font-size:22px;font-weight:700;color:#ffffff !important;line-height:1.1;}
       .mon-kpi-label{font-size:11px;color:var(--sp-text-secondary,#999);margin-top:4px;}
       .mon-kpi-sub{font-size:10px;color:#666;margin-top:2px;}
       .mon-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
@@ -158,7 +162,7 @@
 
     const donutSegs = [
       { label: 'Livello profilo', value: valProf, color: '#3498db' },
-      { label: 'Per fase', value: valFase, color: '#2ecc71' }
+      { label: 'Fase (atteso 0)', value: valFase, color: '#2ecc71' }
     ].filter(x => x.value > 0);
 
     const genAt = stats.generato_il
@@ -180,13 +184,13 @@
       </div>
       <div class="mon-cols">
         <div class="card"><div class="card-body">
-          <h3 style="margin:0 0 12px;font-size:14px;">Valutazioni: profilo vs fase</h3>
+          <h3 style="margin:0 0 12px;font-size:14px;">Valutazioni: controllo profilo/fase</h3>
           <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
             ${donutSegs.length ? donut(donutSegs, fmtNum(totVal), 'righe totali') : '<p style="color:#888;font-size:12px;">Nessuna valutazione.</p>'}
             <div style="flex:1;min-width:140px;font-size:11px;color:#aaa;">
               <div>Livello profilo: <strong style="color:#ccc;">${fmtNum(valProf)}</strong></div>
-              <div>Per fase: <strong style="color:#ccc;">${fmtNum(valFase)}</strong></div>
-              <div style="margin-top:8px;">Fattore fasi: <strong style="color:#ccc;">${s.fattore_espansione_fasi ?? 0}×</strong> (righe fase / profilo)</div>
+              <div>Valutazioni fase (atteso 0): <strong style="color:#ccc;">${fmtNum(valFase)}</strong></div>
+              <div style="margin-top:8px;">Fattore fasi: <strong style="color:#ccc;">${s.fattore_espansione_fasi ?? 0}×</strong> (disattivato)</div>
               <div>Stima teorica: <strong style="color:#ccc;">${fmtNum(s.righe_teoriche)}</strong> · Δ ${fmtNum(s.delta_righe)}</div>
             </div>
           </div>

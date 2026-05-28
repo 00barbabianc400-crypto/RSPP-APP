@@ -16,36 +16,12 @@
   const MACRO_SALUTE    = 'Rischi per la Salute';
   const MACRO_PSICO     = 'Rischi Psicosociali e Trasversali';
 
-  // Template layout
-  const TMPL_DATA_START   = 6;   // prima riga dati (fasi)
-  const TMPL_DATA_COUNT   = 5;   // righe dati nel template (6-10)
-  const TMPL_GAP_ROWS     = 1;   // riga vuota tra dati e blocco statico
-  const TMPL_DATA_COL_END = 21;  // colonna U
-  const DATA_ROW_HEIGHT   = 127.5;
+  // Template layout (nuovo template 2023)
+  const RISCHI_HEADER_ROW = 6;   // nomi rischi (A:AO)
+  const RECAP_VALUES_ROW  = 7;   // valori recap rischi (A:AO)
+  const RISCHI_COL_START  = 1;   // A
+  const RISCHI_COL_END    = 41;  // AO
   const STATIC_ROW_HEIGHTS = [102, 75, 112.5, 68.25];
-
-  // ─── Mappatura colonna Excel (lettera) → id_rischio (catalogo seed) ──────────
-  // Nuove lettere colonne dopo rimozione H (Esplosione) e I (Agenti fisici) dal vecchio template.
-  // La media viene calcolata su livello_rischio (Trascurabile=1, Basso=2, Medio=3, Alto=4).
-  const COLONNE_RISCHI = [
-    { col: 'C', ids: ['P03','P04','P05','P06','P07','P08','P09','E04','S10','S11'] },
-    { col: 'D', ids: ['S02','S03'] },
-    { col: 'E', ids: ['S03'] },
-    { col: 'F', ids: ['C01','C02','C03','C04','C05','S06'] },
-    { col: 'G', ids: ['S01','S05'] },
-    { col: 'H', ids: ['S09'] },
-    { col: 'I', ids: ['S07','S04','S06','S11'] },
-    { col: 'J', ids: ['F01'] },
-    { col: 'K', ids: ['F02','F03'] },
-    { col: 'L', ids: ['F04'] },
-    { col: 'M', ids: ['F05','F06'] },
-    { col: 'N', ids: ['C01','C02','C03','C04','C05','S06'] },
-    { col: 'O', ids: ['B01','B02','B03','S08'] },
-    { col: 'P', ids: ['F07','E03'] },
-    { col: 'Q', ids: ['F08','E03'] },
-    { col: 'R', ids: ['E01','E02'] },
-    { col: 'S', ids: ['P01','P02','P03','P04','P05','P06','P07','P08','P09','P10'] },
-  ];
 
   const LIVELLO_TO_NUM = {
     'Trascurabile': 1,
@@ -178,95 +154,49 @@
     return out.join(', ');
   }
 
-  // ─── Livelli per profilo/fase ────────────────────────────────────────────────
-  /**
-   * Costruisce la mappa livelli usata dal foglio profilo (colonne C–S).
-   *
-   * Priorità (dal più specifico al meno):
-   *   1. valutazione con profilo_fase_id = id della fase (se disponibile)
-   *   2. valutazione con profilo_fase_id = null (livello profilo, fallback)
-   *
-   * @returns {
-   *   byProfilo: { [profiloId]: { [id_rischio_code]: livello_string } },
-   *   byFase:    { [faseId]:    { [id_rischio_code]: livello_string } }
-   * }
-   */
-  function buildLivelliMaps(valutazioni, profiliIdsSet) {
-    const byProfilo = {};
-    const byFase = {};
-    profiliIdsSet.forEach((id) => { byProfilo[id] = {}; });
+  function normalizeRiskName(name) {
+    return String(name || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  }
 
+  /**
+   * Mappa livelli per profilo:
+   * { [profiloId]: { [nomeRischioNormalizzato]: livello } }
+   */
+  function buildLivelliByProfiloName(valutazioni, profiliIdsSet) {
+    const out = {};
+    profiliIdsSet.forEach((id) => { out[id] = {}; });
     (valutazioni || []).forEach((row) => {
-      if (row.rischio_associato === false) return;
-      const pid  = String(row.profilo_id || '');
-      const code = row.rischio?.id_rischio ? String(row.rischio.id_rischio) : null;
-      if (!pid || !code) return;
-      if (!profiliIdsSet.has(pid)) return;
-
-      const lvl = row.livello_rischio || 'Trascurabile';
-
-      if (row.profilo_fase_id) {
-        const fid = String(row.profilo_fase_id);
-        if (!byFase[fid]) byFase[fid] = {};
-        if (!byFase[fid][code]) byFase[fid][code] = lvl;
-      } else {
-        if (!byProfilo[pid]) byProfilo[pid] = {};
-        if (!byProfilo[pid][code]) byProfilo[pid][code] = lvl;
-      }
+      const pid = String(row.profilo_id || '');
+      if (!pid || !profiliIdsSet.has(pid)) return;
+      const nome = row.rischio?.nome_rischio;
+      const key = normalizeRiskName(nome);
+      if (!key) return;
+      out[pid][key] = row.livello_rischio || 'Trascurabile';
     });
-
-    return { byProfilo, byFase };
-  }
-
-  /**
-   * Ritorna la mappa livelli per una singola fase.
-   * Se la fase non ha valutazioni proprie, cade back sul livello profilo.
-   */
-  function livelliPerFase(faseId, profiloId, mapsObj) {
-    const faseLvl = faseId ? (mapsObj.byFase[faseId] || {}) : {};
-    const profLvl = mapsObj.byProfilo[String(profiloId)] || {};
-    // Merge: la valutazione per fase sovrascrive quella di profilo
-    return Object.assign({}, profLvl, faseLvl);
-  }
-
-  /** @deprecated usa buildLivelliMaps */
-  function buildLivelliByProfilo(valutazioni, profiliIdsSet) {
-    return buildLivelliMaps(valutazioni, profiliIdsSet).byProfilo;
-  }
-
-  /** Calcola la media aritmetica dei livelli per una colonna (usa la mappa livelli del profilo). */
-  function computeMediaColonna(livelliMap, idRischiCodes) {
-    const nums = idRischiCodes
-      .map((code) => {
-        const l = livelliMap[code];
-        return l != null ? (LIVELLO_TO_NUM[l] ?? null) : null;
-      })
-      .filter((n) => n !== null);
-    if (!nums.length) return null;
-    return nums.reduce((a, b) => a + b, 0) / nums.length;
+    return out;
   }
 
   // ─── ColorScale interpolation ────────────────────────────────────────────────
   /** Restituisce argb hex (FF......) per la colorScale 1=verde, 2=giallo, 4=rosso. */
-  function colorForMedia(media) {
-    if (media === null || media === undefined) return null;
-    const v = Number(media);
-    const GREEN  = [0x92, 0xD0, 0x50]; // #92D050
-    const YELLOW = [0xFF, 0xFF, 0x00]; // #FFFF00
-    const RED    = [0xFF, 0x00, 0x00]; // #FF0000
-    const lerp = (a, b, t) => [
-      Math.round(a[0] + (b[0] - a[0]) * t),
-      Math.round(a[1] + (b[1] - a[1]) * t),
-      Math.round(a[2] + (b[2] - a[2]) * t),
-    ];
-    let rgb;
-    if      (v <= 1) rgb = GREEN;
-    else if (v < 2)  rgb = lerp(GREEN, YELLOW, v - 1);
-    else if (v <= 2) rgb = YELLOW;
-    else if (v < 4)  rgb = lerp(YELLOW, RED, (v - 2) / 2);
-    else             rgb = RED;
-    const h = (n) => n.toString(16).padStart(2, '0').toUpperCase();
-    return 'FF' + h(rgb[0]) + h(rgb[1]) + h(rgb[2]);
+  function livelloToTemplateValue(lvl) {
+    if (!lvl || lvl === 'Trascurabile') return '-';
+    return LIVELLO_TO_NUM[lvl] ?? '-';
+  }
+
+  function buildTemplateRiskColumns(ws) {
+    const cols = [];
+    for (let c = RISCHI_COL_START; c <= RISCHI_COL_END; c++) {
+      const header = ws.getRow(RISCHI_HEADER_ROW).getCell(c).value;
+      const nome = String(header || '').trim();
+      if (!nome) continue;
+      cols.push({ colNum: c, key: normalizeRiskName(nome) });
+    }
+    return cols;
   }
 
   // ─── ExcelJS clone worksheet ─────────────────────────────────────────────────
@@ -294,34 +224,6 @@
   }
 
   /** Aggiorna il ref della colorScale (C..S) in base al numero di fasi. */
-  function updateMatrixColorScaleRange(ws, fasiCount) {
-    if (!ws.conditionalFormattings?.length || fasiCount < 1) return;
-    const endRow = TMPL_DATA_START + fasiCount - 1;
-    const sqref = 'C' + TMPL_DATA_START + ':S' + endRow;
-    ws.conditionalFormattings.forEach((cf) => { cf.ref = sqref; });
-  }
-
-  /**
-   * Adatta il numero di righe fasi: inserimento con stile copiato da riga 6,
-   * rimozione con spliceRows (solo righe in eccesso).
-   */
-  function adjustFasiRowCount(ws, N, tmplN) {
-    const modelSnap = snapshotRowStyles(ws, TMPL_DATA_START, TMPL_DATA_COL_END);
-    if (N > tmplN) {
-      const extra = N - tmplN;
-      const insertAt = TMPL_DATA_START + tmplN;
-      ws.spliceRows(insertAt, 0, ...Array(extra).fill([]));
-      for (let i = 0; i < extra; i++) {
-        const r = insertAt + i;
-        applyRowStyleSnapshot(ws, r, modelSnap, TMPL_DATA_COL_END);
-        try { ws.mergeCells('A' + r + ':B' + r); } catch (e) { /* skip */ }
-      }
-    } else if (N < tmplN) {
-      ws.spliceRows(TMPL_DATA_START + N, tmplN - N);
-    }
-    updateMatrixColorScaleRange(ws, N);
-  }
-
   /**
    * Clona il foglio srcName in un nuovo foglio destName.
    * Copia: dimensioni colonne/righe, valori+stili celle, merge, page setup,
@@ -397,77 +299,27 @@
   /**
    * @param {object} ws           - ExcelJS worksheet
    * @param {object} profilo      - oggetto profilo (id, nome, fasi_lavoro, …)
-   * @param {object} livelliMap   - { [id_rischio_code]: livello_string } livello profilo (fallback)
-   * @param {Array}  misurePerFase - testi wizard T per indice fase
-   * @param {Array}  dpiPerFase    - testi wizard U per indice fase
-   * @param {object} mapsObj      - { byProfilo, byFase } da buildLivelliMaps (opzionale)
-   * @param {Array}  fasiEntita   - [{id, nome, ordine}] da profilo_fasi (opzionale)
+   * @param {object} livelliByNome - { [nomeRischioNormalizzato]: livello }
    */
-  function populateProfiloSheet(ws, profilo, livelliMap, misurePerFase, dpiPerFase, mapsObj, fasiEntita) {
+  function populateProfiloSheet(ws, profilo, livelliByNome) {
     const wrapTop = { vertical: 'top', wrapText: true };
-    const centerMid = { horizontal: 'center', vertical: 'middle', wrapText: false };
+    const centerMid = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
     // D2: nome profilo (celle D2:U2 già unite nel template)
     ws.getCell('D2').value = String(profilo.nome || '').trim();
 
-    // Usa fasiEntita (da profilo_fasi) se disponibili, altrimenti cade back sull'array di stringhe
-    const hasFasiEntita = Array.isArray(fasiEntita) && fasiEntita.length > 0;
-    const fasi = hasFasiEntita
-      ? fasiEntita.map((f) => f.nome)
-      : normalizzaFasiLavoro(profilo.fasi_lavoro);
-    const N = fasi.length;
-    const tmplN = TMPL_DATA_COUNT; // 5
-
-    // ── Adattamento righe se N ≠ tmplN (stile da riga-modello 6) ──
-    adjustFasiRowCount(ws, N, tmplN);
-
-    // ── Scrivi righe fasi ──
-    fasi.forEach((fase, idx) => {
-      const r = TMPL_DATA_START + idx;
-      const row = ws.getRow(r);
-      row.height = DATA_ROW_HEIGHT;
-
-      // Determina la mappa livelli per questa fase specifica
-      // Se mapsObj disponibile e la fase ha un id, usa livelli per fase con fallback profilo
-      let livelliPerQestaFase = livelliMap;
-      if (mapsObj) {
-        const faseId = hasFasiEntita ? (fasiEntita[idx]?.id || null) : null;
-        livelliPerQestaFase = livelliPerFase(faseId, profilo.id, mapsObj);
-      }
-
-      // A: descrizione fase
-      ws.getCell('A' + r).value = fase;
-      ws.getCell('A' + r).alignment = wrapTop;
-
-      // C–S: media livelli per questa fase
-      COLONNE_RISCHI.forEach(({ col, ids }) => {
-        const media = computeMediaColonna(livelliPerQestaFase, ids);
-        const rounded = media !== null ? Math.round(media) : null;
-        const cell = ws.getCell(col + r);
-        cell.value = rounded;
-        if (rounded !== null) {
-          const argb = colorForMedia(media);
-          if (argb) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
-          }
-          cell.alignment = centerMid;
-        }
-      });
-
-      // T: Misure specifiche per fase (wizard)
-      const misure = misurePerFase && misurePerFase[idx] != null ? String(misurePerFase[idx]) : '';
-      ws.getCell('T' + r).value = misure;
-      ws.getCell('T' + r).alignment = wrapTop;
-
-      // U: DPI specifici per fase (wizard)
-      const dpi = dpiPerFase && dpiPerFase[idx] != null ? String(dpiPerFase[idx]) : '';
-      ws.getCell('U' + r).value = dpi;
-      ws.getCell('U' + r).alignment = wrapTop;
+    // RIGA RECAP RISCHI (A7:AO7): tutti i rischi del template in mappa 1:1
+    const riskCols = buildTemplateRiskColumns(ws);
+    riskCols.forEach((r) => {
+      const lvl = livelliByNome?.[r.key] || 'Trascurabile';
+      const cell = ws.getRow(RECAP_VALUES_ROW).getCell(r.colNum);
+      cell.value = livelloToTemplateValue(lvl);
+      cell.alignment = centerMid;
     });
 
     // ── Blocco statico (Misure gen., DPI base, DPC, Protocollo) ──
-    // Posizione dinamica: TMPL_DATA_START + N + TMPL_GAP_ROWS
-    const R0 = TMPL_DATA_START + N + TMPL_GAP_ROWS;
+    // Posizione fissa nel nuovo template: righe 9..12
+    const R0 = 9;
     const labelFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF99' } };
 
     const staticRows = [
@@ -526,23 +378,9 @@
     const profili = Array.isArray(w.profili_azienda) ? w.profili_azienda : [];
     const profiliIdsSet = new Set(profili.map((p) => String(p?.id || '')).filter(Boolean));
     const rischiRows = Array.isArray(w.valutazioni_appendice_b1) ? w.valutazioni_appendice_b1 : [];
-    const fasiRows   = Array.isArray(w.profilo_fasi_appendice_b1) ? w.profilo_fasi_appendice_b1 : [];
-
     const byProfilo  = buildRischiByProfilo(rischiRows, profiliIdsSet);
     const defSel     = defaultSelezioneRischi(byProfilo);
-    const livelliMaps = buildLivelliMaps(rischiRows, profiliIdsSet);
-
-    // Mappa fasi per profilo: { [profiloId]: [{id, nome, ordine}, ...] }
-    const fasiByProfilo = {};
-    fasiRows.forEach((f) => {
-      const pid = String(f.profilo_id || '');
-      if (!pid) return;
-      if (!fasiByProfilo[pid]) fasiByProfilo[pid] = [];
-      fasiByProfilo[pid].push({ id: f.id, nome: f.nome, ordine: f.ordine ?? 0 });
-    });
-    Object.keys(fasiByProfilo).forEach((pid) => {
-      fasiByProfilo[pid].sort((a, b) => a.ordine - b.ordine);
-    });
+    const livelliByNome = buildLivelliByProfiloName(rischiRows, profiliIdsSet);
 
     return {
       DATA_EMISSIONE: now.toLocaleDateString('it-IT', {
@@ -560,11 +398,7 @@
         : '',
       _appendice_b1_rischi_by_profilo:  byProfilo,
       _appendice_b1_selezione_rischi:   defSel,
-      _appendice_b1_livelli_by_profilo: livelliMaps.byProfilo,
-      _appendice_b1_livelli_by_fase:    livelliMaps.byFase,
-      _appendice_b1_fasi_by_profilo:    fasiByProfilo,
-      _appendice_b1_misure_per_fase:    w.appendice_b1_misure_per_fase  || {},
-      _appendice_b1_dpi_per_fase:       w.appendice_b1_dpi_per_fase     || {},
+      _appendice_b1_livelli_by_nome:    livelliByNome,
     };
   }
 
@@ -573,15 +407,6 @@
     const merged = { ...(base || {}) };
     if (wizard && wizard.descrizione_ciclo_produttivo !== undefined) {
       merged.descrizione_ciclo_produttivo = String(wizard.descrizione_ciclo_produttivo || '');
-    }
-    if (wizard?.appendice_b1_selezione_rischi != null) {
-      merged._appendice_b1_selezione_rischi = deepCloneObj(wizard.appendice_b1_selezione_rischi);
-    }
-    if (wizard?.appendice_b1_misure_per_fase != null) {
-      merged._appendice_b1_misure_per_fase = deepCloneObj(wizard.appendice_b1_misure_per_fase);
-    }
-    if (wizard?.appendice_b1_dpi_per_fase != null) {
-      merged._appendice_b1_dpi_per_fase = deepCloneObj(wizard.appendice_b1_dpi_per_fase);
     }
     return merged;
   }
@@ -596,11 +421,6 @@
     if (!sorted.length) {
       errors.push('Nessun profilo associato all\'azienda (serve almeno un gruppo omogeneo)');
     }
-    sorted.forEach((p) => {
-      if (!normalizzaFasiLavoro(p.fasi_lavoro).length) {
-        errors.push('Profilo «' + String(p.nome).trim() + '»: compilare «Fasi di lavoro» nell\'anagrafica');
-      }
-    });
     if (!data?._logo_buffer?.byteLength) {
       errors.push('Logo azienda mancante (carica PNG/JPEG in Loghi)');
     }
@@ -667,14 +487,7 @@
     const startR     = findSchedaTabellaDataStartRow(wsScheda);
 
     // ── Fogli profilo (uno per ogni gruppo omogeneo) ──
-    const livelliBy    = data._appendice_b1_livelli_by_profilo || {};
-    const livelliByFase = data._appendice_b1_livelli_by_fase   || {};
-    const fasiByProfilo = data._appendice_b1_fasi_by_profilo   || {};
-    const misureByProf = data._appendice_b1_misure_per_fase    || {};
-    const dpiByProf    = data._appendice_b1_dpi_per_fase       || {};
-
-    // mapsObj ricostruito per livelliPerFase()
-    const mapsObj = { byProfilo: livelliBy, byFase: livelliByFase };
+    const livelliByNome = data._appendice_b1_livelli_by_nome || {};
 
     if (profiliTab.length > 0) {
       const wsTmpl = wb.getWorksheet(TEMPLATE_SHEET);
@@ -695,11 +508,7 @@
         populateProfiloSheet(
           wsP,
           profilo,
-          livelliBy[profilo.id] || {},
-          misureByProf[profilo.id] || [],
-          dpiByProf[profilo.id]   || [],
-          mapsObj,
-          fasiByProfilo[profilo.id] || null
+          livelliByNome[profilo.id] || {}
         );
       }
 
@@ -941,7 +750,6 @@
       return {
         id: pid,
         nome: String(p.nome || '').trim(),
-        fasi: normalizzaFasiLavoro(p.fasi_lavoro),
         rischi_catalogo: rischi.length,
         rischi_selezionati: sel.length,
       };

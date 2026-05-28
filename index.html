@@ -2726,15 +2726,6 @@
             STATE.data.profiloFasi = fasiData || [];
         }
 
-        const VALUTAZIONI_FASE_GENERALE = '__generale__';
-
-        function getProfiloFasiForProfilo(profiloId) {
-            if (!profiloId) return [];
-            return (STATE.data.profiloFasi || [])
-                .filter((f) => f.profilo_id === profiloId)
-                .sort((a, b) => (a.ordine ?? 0) - (b.ordine ?? 0));
-        }
-
         async function renderValutazioni() {
             const main = document.getElementById('mainContent');
             await loadValutazioniData();
@@ -2753,7 +2744,7 @@
                 <div class="card">
                     <div class="card-body">
                         <form id="valutazioniFilterForm" onsubmit="event.preventDefault();loadValutazioniByFilters();">
-                            <div class="form-grid cols-4">
+                            <div class="form-grid cols-3">
                                 <div class="form-field">
                                     <label>Azienda</label>
                                     <select id="valutazioniAziendaFilter" onchange="updateValutazioniProfiloFilter();loadValutazioniByFilters()">
@@ -2763,15 +2754,9 @@
                                 </div>
                                 <div class="form-field">
                                     <label>Profilo</label>
-                                    <select id="valutazioniProfiloFilter" onchange="updateValutazioniFaseFilter();loadValutazioniByFilters()">
+                                    <select id="valutazioniProfiloFilter" onchange="loadValutazioniByFilters()">
                                         <option value="">— Tutti i profili —</option>
                                         ${profili.map(p => `<option value="${p.id}">${esc(p.fields.NomeProfilo || '')}</option>`).join('')}
-                                    </select>
-                                </div>
-                                <div class="form-field">
-                                    <label>Fase di lavoro</label>
-                                    <select id="valutazioniFaseFilter" onchange="loadValutazioniByFilters()" disabled>
-                                        <option value="">— Seleziona profilo —</option>
                                     </select>
                                 </div>
                                 <div class="form-field">
@@ -2834,31 +2819,6 @@
             } else {
                 profiloSelect.value = '';
             }
-            updateValutazioniFaseFilter();
-        }
-
-        function updateValutazioniFaseFilter() {
-            const profiloId = document.getElementById('valutazioniProfiloFilter')?.value || '';
-            const faseSelect = document.getElementById('valutazioniFaseFilter');
-            if (!faseSelect) return;
-            const current = faseSelect.value || '';
-            if (!profiloId) {
-                faseSelect.disabled = true;
-                faseSelect.innerHTML = '<option value="">— Seleziona profilo —</option>';
-                return;
-            }
-            faseSelect.disabled = false;
-            const fasi = getProfiloFasiForProfilo(profiloId);
-            faseSelect.innerHTML = `
-                <option value="">— Tutte le voci —</option>
-                <option value="${VALUTAZIONI_FASE_GENERALE}">Livello profilo (generale)</option>
-                ${fasi.map(f => `<option value="${f.id}">${esc(f.nome)}</option>`).join('')}
-            `;
-            if (current && [...faseSelect.options].some(o => o.value === current)) {
-                faseSelect.value = current;
-            } else {
-                faseSelect.value = '';
-            }
         }
 
         async function syncNuovoRischioCatalogoValutazioni(rischioUuid) {
@@ -2901,7 +2861,7 @@
             const profiloIds = [...new Set(targetProfili.map(ap => ap.profilo_id).filter(Boolean))];
             if (!profiloIds.length) return;
 
-            const [{ data: az }, { data: rischi, error: rischiErr }, { data: existing, error: existingErr }, { data: fasiRows, error: fasiErr }] = await Promise.all([
+            const [{ data: az }, { data: rischi, error: rischiErr }, { data: existing, error: existingErr }] = await Promise.all([
                 supabaseClient
                     .from(CONFIG.tables.aziende)
                     .select('partita_iva')
@@ -2913,12 +2873,8 @@
                     .eq('attivo', true),
                 supabaseClient
                     .from(CONFIG.tables.valutazioniRischio)
-                    .select('profilo_id, profilo_fase_id, rischio_id')
+                    .select('profilo_id, rischio_id')
                     .eq('azienda_id', aziendaId)
-                    .in('profilo_id', profiloIds),
-                supabaseClient
-                    .from('profilo_fasi')
-                    .select('id, profilo_id, nome')
                     .in('profilo_id', profiloIds)
             ]);
 
@@ -2928,37 +2884,24 @@
                 }
                 return;
             }
-            if (fasiErr) console.warn('[Valutazioni] profilo_fasi sync', fasiErr);
-
             let riskList = (rischi || []).filter(r => r?.id && r?.id_rischio);
             if (rischioUuidFilter) {
                 riskList = riskList.filter(r => r.id === rischioUuidFilter);
             }
             if (!riskList.length) return;
 
-            const existingSet = new Set((existing || []).map(v =>
-                `${v.profilo_id}|${v.profilo_fase_id || ''}|${v.rischio_id}`
-            ));
-            const fasiByProfilo = {};
-            (fasiRows || []).forEach((f) => {
-                if (!fasiByProfilo[f.profilo_id]) fasiByProfilo[f.profilo_id] = [];
-                fasiByProfilo[f.profilo_id].push(f);
-            });
+            const existingSet = new Set((existing || []).map(v => `${v.profilo_id}|${v.rischio_id}`));
 
             const testoDefault = "Rischio non rilevato per il profilo professionale. Le caratteristiche dell'attivita e dell'ambiente di lavoro non comportano esposizione a tale tipologia di rischio.";
             const missingRows = [];
 
-            const pushMissing = (profiloId, faseId, idRischio, rischioUuid) => {
-                const key = `${profiloId}|${faseId || ''}|${rischioUuid}`;
+            const pushMissing = (profiloId, idRischio, rischioUuid) => {
+                const key = `${profiloId}|${rischioUuid}`;
                 if (existingSet.has(key)) return;
-                const chiave = faseId
-                    ? `${az.partita_iva}_${profiloId}_${faseId}_${idRischio}`
-                    : `${az.partita_iva}_${profiloId}_${idRischio}`;
                 missingRows.push({
-                    chiave_valutazione: chiave,
+                    chiave_valutazione: `${az.partita_iva}_${profiloId}_${idRischio}`,
                     azienda_id: aziendaId,
                     profilo_id: profiloId,
-                    profilo_fase_id: faseId || null,
                     rischio_id: rischioUuid,
                     rischio_associato: true,
                     stato: 'Trascurabile',
@@ -2971,12 +2914,7 @@
 
             profiloIds.forEach((profiloId) => {
                 riskList.forEach((r) => {
-                    pushMissing(profiloId, null, r.id_rischio, r.id);
-                });
-                (fasiByProfilo[profiloId] || []).forEach((fase) => {
-                    riskList.forEach((r) => {
-                        pushMissing(profiloId, fase.id, r.id_rischio, r.id);
-                    });
+                    pushMissing(profiloId, r.id_rischio, r.id);
                 });
             });
 
@@ -3000,7 +2938,6 @@
             const canWrite = canMutateData();
             const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value;
             const profiloId = document.getElementById('valutazioniProfiloFilter')?.value || '';
-            const faseFilter = document.getElementById('valutazioniFaseFilter')?.value || '';
             const viewMode = document.getElementById('valutazioniViewMode')?.value || 'perAzienda';
             if (!aziendaId) {
                 container.innerHTML = `
@@ -3034,8 +2971,7 @@
                     *,
                     rischio:rischio_id(id, id_rischio, nome_rischio, categoria, macro_categoria),
                     testo_dvr:testo_dvr_id(id, titolo_testo, livello),
-                    profilo:profilo_id(id, nome_profilo),
-                    profilo_fase:profilo_fase_id(id, nome, ordine)
+                    profilo:profilo_id(id, nome_profilo)
                 `)
                 .eq('azienda_id', aziendaId);
             const { data, error } = await query.order('created_at', { ascending: true });
@@ -3047,11 +2983,6 @@
             let rows = data || [];
             if (profiloId) {
                 rows = rows.filter(v => v.profilo_id === profiloId);
-            }
-            if (profiloId && faseFilter === VALUTAZIONI_FASE_GENERALE) {
-                rows = rows.filter(v => !v.profilo_fase_id);
-            } else if (profiloId && faseFilter) {
-                rows = rows.filter(v => v.profilo_fase_id === faseFilter);
             }
 
             // Ordinamento prioritario: prima i rischi "Presenti", poi indice più alto.
@@ -3084,13 +3015,9 @@
                     rows.forEach(v => {
                         const macro = v.rischio?.macro_categoria || 'Altro';
                         const prof = v.profilo?.nome_profilo || 'Senza profilo';
-                        const faseLabel = v.profilo_fase?.nome
-                            ? v.profilo_fase.nome
-                            : 'Livello profilo';
-                        const key = prof + ' · ' + faseLabel;
                         groups[macro] = groups[macro] || {};
-                        groups[macro][key] = groups[macro][key] || [];
-                        groups[macro][key].push(v);
+                        groups[macro][prof] = groups[macro][prof] || [];
+                        groups[macro][prof].push(v);
                     });
                     return Object.entries(groups).map(([macro, byProf]) => `
                         <tr><td colspan="11"><strong>${esc(macro)}</strong></td></tr>
@@ -3116,9 +3043,6 @@
             };
 
             function renderValutazioneRow(v, allowEdit) {
-                const faseLabel = v.profilo_fase?.nome
-                    ? esc(v.profilo_fase.nome)
-                    : '<span class="hint-str">Profilo</span>';
                 const editBtn = allowEdit
                     ? `<button class="icon-btn" onclick="openValutazioneModal('${v.id}')" title="Compila">✏️</button>`
                     : '';
@@ -3127,7 +3051,6 @@
                         <td>${esc(v.rischio?.id_rischio || '—')}</td>
                         <td>${esc(v.rischio?.nome_rischio || '—')}</td>
                         <td>${esc(v.profilo?.nome_profilo || '—')}</td>
-                        <td>${faseLabel}</td>
                         <td><span class="badge ${v.stato === 'Presente' ? 'warning' : 'info'}">${esc(v.stato || '—')}</span></td>
                         <td>${v.probabilita ?? '—'}</td>
                         <td>${v.gravita ?? '—'}</td>
@@ -3146,7 +3069,6 @@
                             <th>ID</th>
                             <th>Rischio</th>
                             <th>Profilo</th>
-                            <th>Fase</th>
                             <th>Stato</th>
                             <th>P</th>
                             <th>G</th>
@@ -3166,11 +3088,9 @@
         function clearValutazioniFilters() {
             const a = document.getElementById('valutazioniAziendaFilter');
             const p = document.getElementById('valutazioniProfiloFilter');
-            const f = document.getElementById('valutazioniFaseFilter');
             const v = document.getElementById('valutazioniViewMode');
             if (a) a.value = '';
             if (p) p.value = '';
-            if (f) { f.value = ''; f.disabled = true; }
             if (v) v.value = 'perAzienda';
             updateValutazioniProfiloFilter();
             const container = document.getElementById('valutazioniListContainer');
@@ -3268,10 +3188,7 @@
             if (!item) return;
             const rischioId = item.rischio_id;
             const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value || '';
-            const faseTitolo = item.profilo_fase?.nome
-                ? ` · Fase: ${item.profilo_fase.nome}`
-                : ' · Livello profilo';
-            const sottotitolo = `${item.profilo?.nome_profilo || '—'}${faseTitolo} — ${item.rischio?.id_rischio || ''} ${item.rischio?.nome_rischio || ''}`;
+            const sottotitolo = `${item.profilo?.nome_profilo || '—'} — ${item.rischio?.id_rischio || ''} ${item.rischio?.nome_rischio || ''}`;
 
             const modal = document.createElement('div');
             modal.className = 'modal-overlay';
@@ -6107,30 +6024,16 @@
                 .filter((p) => p.id && p.nome);
 
             let valutazioniAppendiceB1 = [];
-            let faseProfiliAppendiceB1 = [];
             if (codice === 'APPENDICE_B1_PROFILI') {
-                // Valutazioni: include profilo_fase_id (null = livello profilo, uuid = livello fase)
                 const { data: vRows, error: vErr } = await supabaseClient
                     .from(CONFIG.tables.valutazioniRischio)
                     .select(
-                        'profilo_id, profilo_fase_id, rischio_id, rischio_associato, livello_rischio, rischio:rischio_id(id, id_rischio, nome_rischio, macro_categoria, ordine)'
+                        'profilo_id, rischio_id, rischio_associato, livello_rischio, rischio:rischio_id(id, id_rischio, nome_rischio, macro_categoria, ordine)'
                     )
                     .eq('azienda_id', aziendaId)
                     .eq('rischio_associato', true);
                 if (vErr) console.warn('[APPENDICE_B1] valutazioni_rischio', vErr);
                 valutazioniAppendiceB1 = vRows || [];
-
-                // Fasi da profilo_fasi (id stabile) per tutti i profili associati all'azienda
-                const profiloIds = profiliAzienda.map(p => p.id).filter(Boolean);
-                if (profiloIds.length) {
-                    const { data: fasiRows, error: fasiErr } = await supabaseClient
-                        .from('profilo_fasi')
-                        .select('id, profilo_id, nome, ordine')
-                        .in('profilo_id', profiloIds)
-                        .order('ordine');
-                    if (fasiErr) console.warn('[APPENDICE_B1] profilo_fasi', fasiErr);
-                    faseProfiliAppendiceB1 = fasiRows || [];
-                }
             }
 
             // Recupera numero modulo dal catalogo
@@ -6151,7 +6054,6 @@
                     ...(codice === 'APPENDICE_B1_PROFILI'
                         ? {
                             valutazioni_appendice_b1: valutazioniAppendiceB1,
-                            profilo_fasi_appendice_b1: faseProfiliAppendiceB1,
                           }
                         : {}),
                 }
@@ -6199,14 +6101,8 @@
                 if (!out._appendice_b1_rischi_by_profilo && init._appendice_b1_rischi_by_profilo) {
                     out._appendice_b1_rischi_by_profilo = init._appendice_b1_rischi_by_profilo;
                 }
-                if (!out._appendice_b1_livelli_by_profilo && init._appendice_b1_livelli_by_profilo) {
-                    out._appendice_b1_livelli_by_profilo = init._appendice_b1_livelli_by_profilo;
-                }
-                if (!out._appendice_b1_livelli_by_fase && init._appendice_b1_livelli_by_fase) {
-                    out._appendice_b1_livelli_by_fase = init._appendice_b1_livelli_by_fase;
-                }
-                if (!out._appendice_b1_fasi_by_profilo && init._appendice_b1_fasi_by_profilo) {
-                    out._appendice_b1_fasi_by_profilo = init._appendice_b1_fasi_by_profilo;
+                if (!out._appendice_b1_livelli_by_nome && init._appendice_b1_livelli_by_nome) {
+                    out._appendice_b1_livelli_by_nome = init._appendice_b1_livelli_by_nome;
                 }
                 if (
                     !out._appendice_b1_selezione_rischi ||
@@ -6355,7 +6251,7 @@
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260601c'
-                : codice === 'APPENDICE_B1_PROFILI' ? '20260207o'
+                : codice === 'APPENDICE_B1_PROFILI' ? '20260528b'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);

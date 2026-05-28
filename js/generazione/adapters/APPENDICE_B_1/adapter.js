@@ -253,9 +253,17 @@
     // Footer intestazione
     if (src.headerFooter) dest.headerFooter = deepCloneObj(src.headerFooter);
 
-    // ColorScale matrice rischi (C6:S…)
-    if (src.conditionalFormattings?.length) {
-      dest.conditionalFormattings = deepCloneObj(src.conditionalFormattings);
+    // Formattazione condizionale:
+    // evitare assegnazione diretta del model (può produrre XML invalido su template complessi).
+    if (src.conditionalFormattings?.length && typeof dest.addConditionalFormatting === 'function') {
+      src.conditionalFormattings.forEach((cf) => {
+        try {
+          dest.addConditionalFormatting(deepCloneObj(cf));
+        } catch (e) {
+          // Se una regola non è serializzabile, non blocca la generazione del file.
+          console.warn('[APPENDICE_B1] Conditional formatting skip:', e?.message || e);
+        }
+      });
     }
 
     // Column widths

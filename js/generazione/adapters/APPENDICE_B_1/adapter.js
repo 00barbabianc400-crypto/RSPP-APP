@@ -188,6 +188,26 @@
     return LIVELLO_TO_NUM[lvl] ?? '-';
   }
 
+  function styleRecapCell(cell, rawValue) {
+    const v = String(rawValue ?? '');
+    // Template rule equivalente: "-" grigio.
+    if (v === '-') {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+      cell.font = Object.assign({}, cell.font || {}, { color: { argb: 'FF333333' } });
+      return;
+    }
+    const n = Number(v);
+    if (!Number.isFinite(n)) return;
+    // Mappa colore stabile (come scala 1→verde, 2→giallo, 4→rosso).
+    const argb =
+      n <= 1 ? 'FF92D050'
+      : n <= 2 ? 'FFFFFF00'
+      : n <= 3 ? 'FFFFA500'
+      : 'FFFF0000';
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
+    cell.font = Object.assign({}, cell.font || {}, { color: { argb: 'FF000000' } });
+  }
+
   function buildTemplateRiskColumns(ws) {
     const cols = [];
     for (let c = RISCHI_COL_START; c <= RISCHI_COL_END; c++) {
@@ -253,18 +273,10 @@
     // Footer intestazione
     if (src.headerFooter) dest.headerFooter = deepCloneObj(src.headerFooter);
 
-    // Formattazione condizionale:
-    // evitare assegnazione diretta del model (può produrre XML invalido su template complessi).
-    if (src.conditionalFormattings?.length && typeof dest.addConditionalFormatting === 'function') {
-      src.conditionalFormattings.forEach((cf) => {
-        try {
-          dest.addConditionalFormatting(deepCloneObj(cf));
-        } catch (e) {
-          // Se una regola non è serializzabile, non blocca la generazione del file.
-          console.warn('[APPENDICE_B1] Conditional formatting skip:', e?.message || e);
-        }
-      });
-    }
+    // NOTE:
+    // Con il nuovo template 2023 la clonazione delle regole di formattazione condizionale
+    // genera XML invalido in alcuni casi (Excel rimuove i record al ripristino).
+    // Evitiamo di copiare le CF e applichiamo styling diretto alla riga recap rischi.
 
     // Column widths
     src.columns.forEach((col) => {
@@ -321,8 +333,10 @@
     riskCols.forEach((r) => {
       const lvl = livelliByNome?.[r.key] || 'Trascurabile';
       const cell = ws.getRow(RECAP_VALUES_ROW).getCell(r.colNum);
-      cell.value = livelloToTemplateValue(lvl);
+      const outVal = livelloToTemplateValue(lvl);
+      cell.value = outVal;
       cell.alignment = centerMid;
+      styleRecapCell(cell, outVal);
     });
 
     // ── Blocco statico (Misure gen., DPI base, DPC, Protocollo) ──

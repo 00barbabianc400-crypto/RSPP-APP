@@ -15,7 +15,7 @@
     </script>
     <!-- Runtime ENV (generated from .env) -->
     <script src="./env.js"></script>
-    
+    <script src="js/audit-delete-log.js?v=20260529a"></script>
     <!-- Fluent UI (solo foglio di stile, non modulo JS) -->
     <link rel="stylesheet" href="https://res.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css">
     
@@ -960,6 +960,7 @@
             loghiAllowedExt: ['png', 'jpg', 'jpeg', 'webp', 'svg'],
             n8n: {
                 outputWipeWebhookUrl: RUNTIME_ENV.N8N_OUTPUT_WIPE_WEBHOOK_URL || '',
+                auditDeleteWebhookUrl: RUNTIME_ENV.N8N_AUDIT_DELETE_WEBHOOK_URL || '',
             },
             TESTO_TRASCURABILE: 'Rischio non rilevato per il profilo professionale. Le caratteristiche dell\'attivita e dell\'ambiente di lavoro non comportano esposizione a tale tipologia di rischio.'
         };
@@ -1360,6 +1361,18 @@
 
         function canWipeOutput() {
             return canManageModelli();
+        }
+
+        function logCatalogDelete(entity, record) {
+            if (!record?.id || !window.AUDIT_DELETE_LOG) return;
+            window.AUDIT_DELETE_LOG.notify(CONFIG.n8n.auditDeleteWebhookUrl, {
+                intent: 'catalog_delete',
+                entity,
+                record_id: record.id,
+                deleted_at: new Date().toISOString(),
+                full_name: STATE.profile?.full_name || '',
+                record,
+            });
         }
 
         async function loadCurrentProfile() {
@@ -3723,6 +3736,19 @@
                 return;
             }
             if (!confirm('Confermi eliminazione testo DVR?')) return;
+            const { data: snap, error: fetchErr } = await supabaseClient
+                .from(CONFIG.tables.testiDVR)
+                .select('id, titolo_testo, rischio_id, livello, tipo_testo, testo_valutazione, misure_in_atto, misure_programmate, priorita_intervento')
+                .eq('id', itemId)
+                .maybeSingle();
+            if (fetchErr) {
+                showToast('Errore lettura testo: ' + fetchErr.message, 'error');
+                return;
+            }
+            if (!snap) {
+                showToast('Testo DVR non trovato', 'warning');
+                return;
+            }
             const { error } = await supabaseClient
                 .from(CONFIG.tables.testiDVR)
                 .delete()
@@ -3731,6 +3757,7 @@
                 showToast('Errore eliminazione testo: ' + error.message, 'error');
                 return;
             }
+            logCatalogDelete('testi_dvr', snap);
             showToast('Testo DVR eliminato', 'success');
             await renderTestiDvr();
         }
@@ -7315,6 +7342,19 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                 return;
             }
             if (!confirm('Confermi eliminazione rischio?')) return;
+            const { data: snap, error: fetchErr } = await supabaseClient
+                .from(CONFIG.tables.catalogoRischi)
+                .select('id, id_rischio, nome_rischio, categoria, macro_categoria, titolo_normativo, normativa_rif, descrizione, ordine')
+                .eq('id', itemId)
+                .maybeSingle();
+            if (fetchErr) {
+                showToast('Errore lettura rischio: ' + fetchErr.message, 'error');
+                return;
+            }
+            if (!snap) {
+                showToast('Rischio non trovato', 'warning');
+                return;
+            }
             const { error } = await supabaseClient
                 .from(CONFIG.tables.catalogoRischi)
                 .delete()
@@ -7323,6 +7363,7 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                 showToast('Errore eliminazione rischio: ' + error.message, 'error');
                 return;
             }
+            logCatalogDelete('catalogo_rischi', snap);
             showToast('Rischio eliminato', 'success');
             await renderCatalogoRischi();
         }
@@ -7517,6 +7558,19 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                 return;
             }
             if (!confirm('Confermi eliminazione tipo rilevamento?')) return;
+            const { data: snap, error: fetchErr } = await supabaseClient
+                .from(CONFIG.tables.tipiRilevamento)
+                .select('id, nome_tipo, unita_misura, limite_legge_default, normativa_rif, rischio_collegato_id')
+                .eq('id', itemId)
+                .maybeSingle();
+            if (fetchErr) {
+                showToast('Errore lettura tipo rilevamento: ' + fetchErr.message, 'error');
+                return;
+            }
+            if (!snap) {
+                showToast('Tipo rilevamento non trovato', 'warning');
+                return;
+            }
             const { error } = await supabaseClient
                 .from(CONFIG.tables.tipiRilevamento)
                 .delete()
@@ -7525,6 +7579,7 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                 showToast('Errore eliminazione tipo rilevamento: ' + error.message, 'error');
                 return;
             }
+            logCatalogDelete('tipi_rilevamento', snap);
             showToast('Tipo rilevamento eliminato', 'success');
             await renderTipiRilevamento();
         }

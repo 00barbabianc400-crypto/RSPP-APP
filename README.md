@@ -15,7 +15,7 @@
 
 <br>
 
-*Single-page app senza framework — pronta per deploy statico (GitHub Pages o hosting privato)*
+*Single-page app senza framework — deploy statico (GitHub Pages o hosting privato)*
 
 </div>
 
@@ -23,17 +23,19 @@
 
 ## ✨ Cosa fa
 
-RSPP DVR Suite centralizza l’intero ciclo operativo del DVR: anagrafiche aziende, profili di rischio, valutazioni P×G, rilevamenti ambientali, testi normativi e preparazione alla generazione documentale.
+RSPP DVR Suite centralizza il ciclo operativo del DVR: anagrafiche, valutazioni P×G, rilevamenti ambientali, testi normativi e **generazione documentale** da template Word/Excel con output su cloud.
 
 | Area | Funzionalità |
 |------|----------------|
-| 🏢 **Anagrafica** | Aziende, profili, associazioni azienda↔profilo |
-| ⚖️ **Valutazioni** | Compilazione rischi, calcolo indice e livello via RPC |
-| 📊 **Rilevamenti** | Misure ambientali con esito automatico |
-| 📝 **Testi DVR** | Catalogo testi per rischio e livello |
-| 📁 **Modelli** | Template DOCX nel bucket `modelli` (admin/RSPP) |
-| 🖼️ **Loghi** | Logo per azienda nel bucket `loghi` (editor+) |
-| 📄 **Generazione** | Documentazione pronta ed esportabile |
+| 🏢 **Anagrafica** | Aziende, profili, fasi di lavoro, associazioni azienda↔profilo, checklist documenti DVR |
+| ⚖️ **Valutazioni** | Matrice rischi per azienda/profilo, calcolo indice e livello via RPC |
+| 📊 **Rilevamenti** | Misure ambientali con esito automatico (anche JSON dedicati per microclima, radon, rumore) |
+| 📝 **Testi DVR** | Catalogo per rischio/livello, import da Excel |
+| 📁 **Modelli** | Upload template nel bucket `modelli` (admin/RSPP) |
+| 🖼️ **Loghi** | Un logo per azienda nel bucket `loghi` (editor+), gestione per singola azienda |
+| 📄 **Generazione** | Wizard con anteprima, compilazione DOCX/XLSX, salvataggio su `output`, export ZIP |
+| 📈 **Monitoraggio** | Statistiche aggregate (admin) |
+| 👤 **Admin** | Gestione ruoli utenti |
 
 ---
 
@@ -41,11 +43,11 @@ RSPP DVR Suite centralizza l’intero ciclo operativo del DVR: anagrafiche azien
 
 | Vantaggio | Dettaglio |
 |-----------|-----------|
-| 🚀 **Zero build** | Tutta l’UI in `index.html` — nessun bundler, deploy immediato |
+| 🚀 **Zero build** | UI in `index.html` + moduli JS caricati on demand — nessun bundler |
 | 🔐 **Sicurezza dati** | Row Level Security + ruoli applicativi |
-| 🏢 **Enterprise login** | OAuth Microsoft tramite Supabase Auth |
-| 📦 **Storage organizzato** | Bucket dedicati per modelli, loghi e output futuro |
-| 🧩 **Modulo generazione** | Cartella `js/generazione/` pronta per il fill DOCX |
+| 🏢 **Enterprise login** | OAuth Microsoft (Azure) tramite Supabase Auth |
+| 📦 **Storage organizzato** | Bucket `modelli`, `loghi`, `output` |
+| 🧩 **Adapter documentali** | Un adapter per codice catalogo in `js/generazione/adapters/` |
 
 ---
 
@@ -56,6 +58,7 @@ flowchart TB
     subgraph client["🌐 Browser"]
         SPA["index.html<br/><small>SPA vanilla</small>"]
         ENV["env.js<br/><small>runtime config</small>"]
+        GEN["js/generazione/<br/><small>adapter DOCX/XLSX</small>"]
     end
 
     subgraph supabase["☁️ Supabase"]
@@ -65,15 +68,21 @@ flowchart TB
         STG["Storage buckets"]
     end
 
+    subgraph ops["⚙️ Opzionale"]
+        N8N["n8n webhooks<br/><small>wipe output, audit delete</small>"]
+    end
+
     SPA --> ENV
+    SPA --> GEN
     SPA --> AUTH
     SPA --> DB
     SPA --> RPC
     SPA --> STG
+    SPA -.-> N8N
 
     STG --> MOD["📁 modelli"]
     STG --> LOG["🖼️ loghi"]
-    STG --> OUT["📤 output<br/><small>in roadmap</small>"]
+    STG --> OUT["📤 output"]
 ```
 
 ---
@@ -82,35 +91,81 @@ flowchart TB
 
 ```
 RSPP-APP/
-├── index.html              # SPA completa (nav, CRUD, modali, auth)
-├── env.js                  # generato da .env (non committare segreti)
-├── scripts/
-│   └── generate_env_js.py
+├── index.html                 # SPA (navigazione, CRUD, auth, generazione)
+├── env.js                     # Config runtime
+├── _config.yml                # GitHub Pages / esclusioni Jekyll
 ├── js/
-│   └── generazione/        # modulo DOCX (in sviluppo)
-│       ├── docx/           # mapping campi + fill template
-│       └── adapters/       # lettura dati Supabase
+│   ├── generazione/
+│   │   ├── adapters/          # Un modulo per documento (adapter.js, preview.html, …)
+│   │   ├── docx-template-repair.js
+│   │   ├── output-export.js   # Export ZIP documenti generati
+│   │   ├── output-wipe.js     # Richiesta wipe totale output (n8n)
+│   │   └── graphs/            # Grafici utilizzo storage output
+│   ├── monitoraggio/          # Dashboard statistiche admin
+│   ├── audit-delete-log.js    # Log cancellazioni catalogo (webhook n8n)
+│   └── testi-dvr-import-xlsx.js
+├── scripts/                   # Utility (es. template import testi DVR)
+├── n8n-templates/             # Email HTML per flussi n8n
 └── supabase/
-    ├── schema.sql          # tabelle, enum, FK, trigger
-    ├── auth.sql            # sync auth.users → profiles
-    ├── functions.sql       # RPC (associazioni, calcoli rischio)
-    ├── seed.sql            # cataloghi iniziali
-    ├── policies.sql        # RLS
-    └── storage.sql         # bucket + policy storage
+    ├── schema.sql
+    ├── auth.sql
+    ├── functions.sql
+    ├── seed.sql
+    ├── policies.sql
+    ├── storage.sql
+    ├── storage_modelli_policies.sql
+    └── migrations/            # Patch incremental (profilo_fasi, monitoraggio, …)
 ```
+
+---
+
+## 📄 Generazione documenti
+
+Flusso tipico:
+
+1. In **Anagrafica azienda** → seleziona i documenti da produrre (`documenti_catalogo` / `aziende_documenti`).
+2. Carica il template in **Modelli** come `CODICE.docx` o `CODICE.xlsx` (bucket `modelli`).
+3. In **Generazione** → scegli azienda e sede → **Genera** → wizard in anteprima → documento su bucket `output`.
+
+Path output: `{azienda_id}/{CODICE}_YYYYMMDD.docx` (o `.xlsx`).
+
+### Adapter implementati
+
+Ogni adapter espone `window.GEN_ADAPTERS['CODICE']` con `validate`, `generateDocx` e/o `generateXlsx`, più `preview.html` per il wizard.
+
+| Codice | Formato |
+|--------|---------|
+| `APPENDICE_A_ORGANIGRAMMA` | DOCX |
+| `APPENDICE_B1_PROFILI` | XLSX |
+| `MOD_MICROCLIMA` | DOCX |
+| `MOD_VDT_ILLUMINAMENTO` | DOCX |
+| `MOD_STRESS_LC` | DOCX |
+| `MOD_EMERGENZE` | DOCX |
+| `MOD_INCENDIO` | DOCX |
+| `MOD_RUMORE` | DOCX |
+| `MOD_VIBRAZIONI` | DOCX |
+| `MOD_CHIMICO` | DOCX |
+| `MOD_GAS_RADON` | DOCX |
+| `NOTA_ANTINCENDIO` | DOCX |
+| `NOTA_LAVORATRICI_MADRI` | DOCX |
+| `PROC_INFORTUNI_NEARMISS` | DOCX |
+| `VADEMECUM_ANTIRAPINA` | DOCX |
+| `VADEMECUM_AGGRESSIONI` | DOCX |
+
+Il seed in `supabase/seed.sql` elenca **altri codici** nel catalogo (appendici, moduli aggiuntivi, allegati). Per abilitarli: template in `modelli` + nuova cartella sotto `js/generazione/adapters/` seguendo un adapter esistente e `fields-map.md` per i placeholder Word.
 
 ---
 
 ## 👥 Ruoli
 
-| Ruolo | Lettura | Modifica dati | Modelli | Loghi |
-|-------|:-------:|:-------------:|:-------:|:-----:|
-| `viewer` | ✅ | — | — | — |
-| `editor` | ✅ | ✅ | — | ✅ |
-| `rspp` | ✅ | ✅ | ✅ | ✅ |
-| `admin` | ✅ | ✅ | ✅ | ✅ |
+| Ruolo | Lettura | Modifica dati | Modelli | Loghi | Wipe output |
+|-------|:-------:|:-------------:|:-------:|:-----:|:-----------:|
+| `viewer` | ✅ | — | — | — | — |
+| `editor` | ✅ | ✅ | — | ✅ | — |
+| `rspp` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `admin` | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-> Il primo accesso crea il profilo in `public.profiles` con ruolo `viewer`. Promuovi almeno un utente a `admin` o `rspp` per la gestione completa.
+> Il primo accesso crea il profilo in `public.profiles` con ruolo `viewer`. Promuovi almeno un utente a `admin` o `rspp` per gestione completa.
 
 ---
 
@@ -118,9 +173,11 @@ RSPP-APP/
 
 | Bucket | Contenuto | Path tipico |
 |--------|-----------|-------------|
-| `modelli` | Template DVR | `CODICE.docx` |
-| `loghi` | Logo azienda | `{azienda_id}.png` |
-| `output` | Documenti generati | `{azienda_id}/{run_id}/*.docx` |
+| `modelli` | Template DVR | `CODICE.docx` / `CODICE.xlsx` |
+| `loghi` | Logo azienda | `{azienda_id}.png` (o jpg/webp/svg) |
+| `output` | Documenti generati | `{azienda_id}/{CODICE}_YYYYMMDD.ext` |
+
+Bucket privati: lettura/scrittura tramite policy RLS storage + signed URL dove serve.
 
 ---
 
@@ -136,67 +193,21 @@ Esegui in **SQL Editor** (ordine consigliato):
 4. `supabase/seed.sql`
 5. `supabase/policies.sql`
 6. `supabase/storage.sql`
+7. `supabase/storage_modelli_policies.sql` (se separato dal deploy iniziale)
 
-> Se `storage.buckets` non esiste, apri prima la sezione **Storage** nella dashboard Supabase.
+> Se `storage.buckets` non esiste, apri prima **Storage** nella dashboard Supabase.
 
-### 2 · Autenticazione Microsoft
 
-1. **Supabase** → *Authentication* → *Providers* → **Azure (Microsoft)**
-2. Inserisci `Client ID` e `Client Secret`
-3. In **Azure AD** registra il redirect:  
-   `https://<project-ref>.supabase.co/auth/v1/callback`
-4. Promuovi un utente in `public.profiles` → ruolo `admin` o `rspp`
+## 🌐 Utilizzo concorrente
 
-### 3 · Frontend
-
-Crea `.env` in root:
-
-```env
-SUPABASE_URL=https://<project-ref>.supabase.co
-SUPABASE_ANON_KEY=<anon-key>
-```
-
-Genera `env.js`:
-
-```bash
-python scripts/generate_env_js.py
-```
-
-L’app legge i valori da `window.__ENV`.
-
-### 4 · Deploy statico
-
-Checklist:
-
-- [ ] Variabili ambiente configurate in CI o locale
-- [ ] `env.js` generato prima del deploy
-- [ ] Supabase → *Authentication* → *URL Configuration*:
-  - **Site URL** = URL produzione (es. GitHub Pages)
-  - **Additional Redirect URLs** include `.../index.html`
-
----
-
-## 🔒 Sicurezza
-
-- Esporre `SUPABASE_ANON_KEY` nel frontend è **accettabile** solo con **RLS attivo** su tutte le tabelle sensibili.
-- **Non** inserire mai `service_role` nel client.
-- Storage privato: accesso tramite policy + signed URL dove serve.
-
----
-
-## 🗺️ Roadmap
-
-- [ ] Modulo `js/generazione/` — fill DOCX da template + dati DB
-- [ ] Upload risultati su bucket `output`
-- [ ] Sezione **Output** in app (azienda → run → documenti)
-- [ ] Edge Function (opzionale) per generazione lato server
+Deploy su **GitHub Pages** = istanza statica condivisa; ogni utente esegue l’app nel proprio browser. I dati e i file sono centralizzati su Supabase: le query e gli upload sono gestiti dal backend; non c’è locking ottimistico in UI (ultima scrittura vince). Pensato per un team ristretto (ordine di grandezza: pochi utenti interni).
 
 ---
 
 <div align="center">
 
 **Studio Rivelli Consulting** · Sistema RSPP  
-*Migrazione SharePoint → Supabase*
+*Supabase -> N8N*
 
 <br>
 

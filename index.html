@@ -983,6 +983,10 @@
                 aziendeDocumenti: [],
                 modelliStorageByCodice: {},
                 loghiStorageByAziendaId: {}
+            },
+            loghiUi: {
+                soloSenza: false,
+                selectedAziendaId: ''
             }
         };
 
@@ -5503,25 +5507,85 @@
                 + '</tr>';
         }
 
-        async function hydrateLogoPreviews(aziende, byId) {
-            const bucket = CONFIG.storage.loghi;
-            for (const a of aziende) {
-                const file = byId[a.id];
-                if (!file?.name) continue;
-                const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(file.name, 3600);
-                if (error || !data?.signedUrl) continue;
-                const row = document.querySelector('tr[data-azienda-id="' + a.id + '"]');
-                if (!row) continue;
-                const cell = row.querySelector('td:nth-child(3)');
-                if (cell) {
-                    cell.innerHTML = '<img src="' + attrEsc(data.signedUrl) + '" alt="Logo" style="max-height:40px;max-width:120px;object-fit:contain;">';
-                }
+        function getLoghiAziendePerSelect(aziende, byId, soloSenza) {
+            const list = aziende || [];
+            if (!soloSenza) return list;
+            return list.filter(a => !byId[a.id]);
+        }
+
+        function buildLoghiAziendaSelectOptions(candidates, selectedId) {
+            if (!candidates.length) {
+                return '<option value="">— Nessuna azienda in elenco —</option>';
             }
+            let html = '<option value="">— Seleziona azienda —</option>';
+            candidates.forEach(a => {
+                const label = (a.fields?.RagioneSociale || a.id) + (a.fields?.PartitaIVA ? ' · ' + a.fields.PartitaIVA : '');
+                html += '<option value="' + attrEsc(a.id) + '"' + (a.id === selectedId ? ' selected' : '') + '>'
+                    + esc(label) + '</option>';
+            });
+            return html;
+        }
+
+        function loghiTablePlaceholderHtml(message) {
+            return '<tr><td colspan="4"><em>' + esc(message) + '</em></td></tr>';
+        }
+
+        async function refreshLoghiTableRow(aziendaId) {
+            const tbody = document.getElementById('loghiTableBody');
+            if (!tbody || !aziendaId) return;
+            const canManage = canMutateData();
+            const azienda = (STATE.data.aziende || []).find(a => a.id === aziendaId);
+            if (!azienda) {
+                tbody.innerHTML = loghiTablePlaceholderHtml('Azienda non trovata.');
+                return;
+            }
+            const byId = STATE.data.loghiStorageByAziendaId || {};
+            const file = byId[aziendaId];
+            let previewUrl = null;
+            if (file?.name) {
+                tbody.innerHTML = '<tr><td colspan="4"><div class="loading" style="padding:12px;"><div class="spinner"></div> Anteprima…</div></td></tr>';
+                const { data, error } = await supabaseClient.storage
+                    .from(CONFIG.storage.loghi)
+                    .createSignedUrl(file.name, 3600);
+                if (!error && data?.signedUrl) previewUrl = data.signedUrl;
+            }
+            tbody.innerHTML = renderLogoRow(azienda, file, canManage, previewUrl);
+        }
+
+        function onLoghiAziendaChange() {
+            const id = document.getElementById('loghiAziendaSelect')?.value || '';
+            STATE.loghiUi.selectedAziendaId = id;
+            const tbody = document.getElementById('loghiTableBody');
+            if (!tbody) return;
+            if (!id) {
+                tbody.innerHTML = loghiTablePlaceholderHtml('Seleziona un\'azienda per visualizzare o caricare il logo.');
+                return;
+            }
+            refreshLoghiTableRow(id);
+        }
+
+        function toggleLoghiFiltroSenzaLogo() {
+            STATE.loghiUi.soloSenza = !STATE.loghiUi.soloSenza;
+            const byId = STATE.data.loghiStorageByAziendaId || {};
+            const selected = STATE.loghiUi.selectedAziendaId || '';
+            if (STATE.loghiUi.soloSenza && selected && byId[selected]) {
+                STATE.loghiUi.selectedAziendaId = '';
+            }
+            renderLoghi();
         }
 
         async function renderLoghi() {
             const main = document.getElementById('mainContent');
             const canManage = canMutateData();
+            if (!STATE.loghiUi) {
+                STATE.loghiUi = { soloSenza: false, selectedAziendaId: '' };
+            }
+
+            const prevSelect = document.getElementById('loghiAziendaSelect')?.value;
+            if (prevSelect !== undefined && prevSelect !== null) {
+                STATE.loghiUi.selectedAziendaId = prevSelect;
+            }
+
             await ensureAziendeLoaded();
 
             main.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento loghi...</div>';
@@ -5535,29 +5599,61 @@
 
             const aziende = STATE.data.aziende || [];
             const uploaded = aziende.filter(a => !!byId[a.id]).length;
-            const rowsHtml = aziende.length === 0
-                ? '<tr><td colspan="4"><em>Nessuna azienda registrata.</em></td></tr>'
-                : aziende.map(a => renderLogoRow(a, byId[a.id], canManage)).join('');
+            const senzaLogo = aziende.length - uploaded;
+            const candidates = getLoghiAziendePerSelect(aziende, byId, STATE.loghiUi.soloSenza);
+            let selectedId = STATE.loghiUi.selectedAziendaId || '';
+            if (selectedId && !candidates.some(a => a.id === selectedId)) {
+                selectedId = '';
+                STATE.loghiUi.selectedAziendaId = '';
+            }
+
+            const selectOptions = buildLoghiAziendaSelectOptions(candidates, selectedId);
+            const soloSenzaOn = !!STATE.loghiUi.soloSenza;
+            const filterHint = soloSenzaOn
+                ? ('Elenco ristretto: ' + candidates.length + ' aziend' + (candidates.length === 1 ? 'a' : 'e') + ' senza logo.')
+                : 'Seleziona un\'azienda dall\'elenco.';
+
+            const tbodyInitial = !selectedId
+                ? loghiTablePlaceholderHtml(aziende.length === 0
+                    ? 'Nessuna azienda registrata.'
+                    : 'Seleziona un\'azienda per visualizzare o caricare il logo.')
+                : '<tr><td colspan="4"><div class="loading" style="padding:12px;"><div class="spinner"></div> Caricamento…</div></td></tr>';
 
             main.innerHTML = ''
                 + '<div class="page-header"><div>'
                 + '<h1 class="page-title">Loghi aziendali</h1>'
-                + '<p class="page-subtitle">Bucket <code>loghi</code> — ' + uploaded + '/' + aziende.length + ' caricati (path: <code>AZIENDA_ID.ext</code>)</p>'
+                + '<p class="page-subtitle" id="loghiStatsSubtitle">Bucket <code>loghi</code> — '
+                + uploaded + '/' + aziende.length + ' caricati · '
+                + senzaLogo + ' senza logo</p>'
                 + '</div>'
                 + (canManage ? '' : '<span class="badge info">Sola lettura</span>')
                 + '</div>'
                 + '<div class="card"><div class="card-body"><p class="hint">'
-                + 'Un logo per azienda, collegato tramite <code>azienda_id</code> e salvato anche in <code>aziende.logo_azienda_url</code>. '
+                + 'Un logo per azienda (<code>AZIENDA_ID.ext</code>), registrato anche in <code>aziende.logo_azienda_url</code>. '
                 + 'Formati: ' + (CONFIG.loghiAllowedExt || []).join(', ') + '. '
+                + filterHint + ' '
                 + (canManage ? 'Editor, RSPP e admin possono caricare o sostituire.' : 'Solo utenti con permesso di modifica possono caricare.')
                 + '</p></div>'
                 + '<div class="card-body" style="padding-top:0;">'
+                + '<div class="form-grid cols-2" style="margin-bottom:16px;align-items:end;">'
+                + '<div class="form-field">'
+                + '<label for="loghiAziendaSelect">Azienda</label>'
+                + '<select id="loghiAziendaSelect" onchange="onLoghiAziendaChange()">' + selectOptions + '</select>'
+                + '</div>'
+                + '<div class="form-field" style="align-self:end;">'
+                + '<button type="button" class="btn' + (soloSenzaOn ? ' btn-primary' : '') + '" id="loghiSoloSenzaBtn"'
+                + ' aria-pressed="' + (soloSenzaOn ? 'true' : 'false') + '" onclick="toggleLoghiFiltroSenzaLogo()">'
+                + 'Solo senza logo</button>'
+                + '</div>'
+                + '</div>'
                 + '<table class="data-table" id="loghiTable">'
                 + '<thead><tr><th>Azienda</th><th>P.IVA</th><th>Anteprima</th><th></th></tr></thead>'
-                + '<tbody id="loghiTableBody">' + rowsHtml + '</tbody>'
+                + '<tbody id="loghiTableBody">' + tbodyInitial + '</tbody>'
                 + '</table></div></div>';
 
-            if (aziende.length) await hydrateLogoPreviews(aziende, byId);
+            if (selectedId) {
+                await refreshLoghiTableRow(selectedId);
+            }
         }
 
         async function uploadLogoAzienda(aziendaId, inputEl) {
@@ -5595,6 +5691,11 @@
                 if (dbErr) throw dbErr;
 
                 showToast('Logo caricato', 'success');
+                if (STATE.loghiUi?.soloSenza) {
+                    STATE.loghiUi.selectedAziendaId = '';
+                } else {
+                    STATE.loghiUi.selectedAziendaId = aziendaId;
+                }
                 await renderLoghi();
             } catch (error) {
                 console.error(error);
@@ -5625,6 +5726,7 @@
                     .eq('id', aziendaId);
                 if (dbErr) throw dbErr;
                 showToast('Logo eliminato', 'success');
+                STATE.loghiUi.selectedAziendaId = aziendaId;
                 await renderLoghi();
             } catch (error) {
                 console.error(error);

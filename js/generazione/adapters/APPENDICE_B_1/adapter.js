@@ -140,11 +140,26 @@
     right:  { style: 'thin' },
   };
   const ALIGN_PROFILO_DATI = { horizontal: 'center', vertical: 'middle', wrapText: true };
+  const FONT_FASE_CONTENUTO = {
+    name: 'Calibri',
+    size: 11,
+    bold: false,
+    italic: false,
+    color: { argb: 'FF000000' },
+  };
 
   function applyProfiloDatiCellStyle(cell, alignment) {
     if (!cell) return;
     ensureCellReadable(cell);
     cell.alignment = alignment || ALIGN_PROFILO_DATI;
+    cell.border = BORDER_THIN_ALL;
+  }
+
+  /** Solo righe dati fase (non intestazioni né blocco statico). */
+  function applyProfiloFaseCellStyle(cell) {
+    if (!cell) return;
+    cell.font = FONT_FASE_CONTENUTO;
+    cell.alignment = ALIGN_PROFILO_DATI;
     cell.border = BORDER_THIN_ALL;
   }
 
@@ -204,15 +219,15 @@
 
       const cellA = ws.getCell('A' + r);
       cellA.value = fase.nome || '';
-      applyProfiloDatiCellStyle(cellA);
+      applyProfiloFaseCellStyle(cellA);
 
       const cellC = ws.getCell('C' + r);
       cellC.value = fase.misure_specifiche || '';
-      applyProfiloDatiCellStyle(cellC);
+      applyProfiloFaseCellStyle(cellC);
 
       const cellD = ws.getCell('D' + r);
       cellD.value = fase.dpi_specifici || '';
-      applyProfiloDatiCellStyle(cellD);
+      applyProfiloFaseCellStyle(cellD);
 
       const h = estimatePhaseRowHeight(ws, r);
       if (h) ws.getRow(r).height = h;

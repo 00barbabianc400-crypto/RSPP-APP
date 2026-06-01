@@ -18,7 +18,7 @@
     <script src="js/audit-delete-log.js?v=20260529a"></script>
     <script src="js/rischio-accertamento-matrice.js?v=20260603a"></script>
     <script src="js/profilo-modal.js?v=20260603e"></script>
-    <script src="js/azienda-sedi-modal.js?v=20260603a"></script>
+    <script src="js/azienda-sedi-modal.js?v=20260604b"></script>
     <!-- Fluent UI (solo foglio di stile, non modulo JS) -->
     <link rel="stylesheet" href="https://res.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css">
     
@@ -1070,6 +1070,7 @@
                     SedeOperativa: row.sede_operativa,
                     SediOperative: Array.isArray(row.sedi_operative) ? row.sedi_operative : [],
                     DescrizioniProcessoSedi: Array.isArray(row.descrizioni_processo_sedi) ? row.descrizioni_processo_sedi : [],
+                    DescrizioniSitoSedi: Array.isArray(row.descrizioni_sito_sedi) ? row.descrizioni_sito_sedi : [],
                     SedeLegale: row.sede_legale,
                     OggettoSociale: row.oggetto_sociale,
                     IscrizioneCCIAA: row.iscrizione_cciaa,
@@ -1157,13 +1158,31 @@
             return list;
         }
 
-        function getDescrizioneProcessoPerSede(source, sedeIndirizzo) {
+        function getDescrizionePerSedeIndex(source, sedeIndirizzo, keyFields, keyDb) {
             const sedi = getSediOperativeLista(source);
             const idx = sedi.indexOf(String(sedeIndirizzo || '').trim());
             if (idx < 0) return '';
             const f = source?.fields || source || {};
-            const arr = f.DescrizioniProcessoSedi ?? source?.descrizioni_processo_sedi ?? [];
+            const arr = f[keyFields] ?? source?.[keyDb] ?? [];
             return String((Array.isArray(arr) ? arr[idx] : '') || '').trim();
+        }
+
+        function getDescrizioneProcessoPerSede(source, sedeIndirizzo) {
+            return getDescrizionePerSedeIndex(
+                source,
+                sedeIndirizzo,
+                'DescrizioniProcessoSedi',
+                'descrizioni_processo_sedi'
+            );
+        }
+
+        function getDescrizioneSitoPerSede(source, sedeIndirizzo) {
+            return getDescrizionePerSedeIndex(
+                source,
+                sedeIndirizzo,
+                'DescrizioniSitoSedi',
+                'descrizioni_sito_sedi'
+            );
         }
 
         function shortLabelSede(indirizzo) {
@@ -1256,7 +1275,8 @@
                 return {
                     ok: true,
                     sede: sedi[0],
-                    descrizioneProcesso: getDescrizioneProcessoPerSede(azienda, sedi[0])
+                    descrizioneProcesso: getDescrizioneProcessoPerSede(azienda, sedi[0]),
+                    descrizioneSito: getDescrizioneSitoPerSede(azienda, sedi[0]),
                 };
             }
             const sel = document.getElementById('generazioneSedeSelect');
@@ -1266,7 +1286,8 @@
             return {
                 ok: true,
                 sede,
-                descrizioneProcesso: getDescrizioneProcessoPerSede(azienda, sede)
+                descrizioneProcesso: getDescrizioneProcessoPerSede(azienda, sede),
+                descrizioneSito: getDescrizioneSitoPerSede(azienda, sede),
             };
         }
 
@@ -1974,6 +1995,7 @@
             payload.sede_operativa = sediPayload.sede_operativa || '';
             payload.sedi_operative = sediPayload.sedi_operative || [];
             payload.descrizioni_processo_sedi = sediPayload.descrizioni_processo_sedi || [];
+            payload.descrizioni_sito_sedi = sediPayload.descrizioni_sito_sedi || [];
 
             try {
                 const submitBtn = document.querySelector('#aziendaModal .btn-primary');
@@ -2303,7 +2325,7 @@
             if (!force && sediOk) return;
             const { data, error } = await supabaseClient
                 .from(CONFIG.tables.aziende)
-                .select('id, ragione_sociale, partita_iva, sede_operativa, sedi_operative, descrizioni_processo_sedi')
+                .select('id, ragione_sociale, partita_iva, sede_operativa, sedi_operative, descrizioni_processo_sedi, descrizioni_sito_sedi')
                 .order('ragione_sociale', { ascending: true });
             if (error) throw error;
             STATE.data.aziende = (data || []).map(normalizeRow);
@@ -5954,8 +5976,17 @@
 
         // ─── GENERAZIONE DOCX — preview inline + iframe ───────────────────────────
 
+        function isAppendiceProfiliXlsx(codice) {
+            return codice === 'APPENDICE_B1_PROFILI';
+        }
+
+        function isAppendiceB2Docx(codice) {
+            return codice === 'APPENDICE_B2_MISURE';
+        }
+
         function genAdapterFolder(codice) {
             if (codice === 'APPENDICE_B1_PROFILI') return 'APPENDICE_B_1';
+            if (codice === 'APPENDICE_B2_MISURE') return 'APPENDICE_B_2';
             if (codice === 'APPENDICE_C_SORVEGLIANZA') return 'APPENDICE_C';
             return codice;
         }
@@ -5977,8 +6008,9 @@
                 NOTA_LAVORATRICI_MADRI: '20260528d',
                 NOTA_ANTINCENDIO: '20260601b',
                 APPENDICE_A_ORGANIGRAMMA: '20260602a',
-                APPENDICE_B1_PROFILI: '20260603g',
-                APPENDICE_C_SORVEGLIANZA: '20260603f',
+                APPENDICE_B1_PROFILI: '20260603h',
+                APPENDICE_B2_MISURE: '20260604b',
+                APPENDICE_C_SORVEGLIANZA: '20260603g',
             };
             return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -6012,7 +6044,8 @@
             const az = azRow ? {
                 ...azRow,
                 sede_operativa: sedeResolved.sede,
-                descrizione_processo_produttivo: sedeResolved.descrizioneProcesso || ''
+                descrizione_processo_produttivo: sedeResolved.descrizioneProcesso || '',
+                descrizione_sito: sedeResolved.descrizioneSito || '',
             } : null;
 
             // Logo: download binario per DOCX + URL per anteprima HTML
@@ -6064,12 +6097,12 @@
                 }))
                 .filter((p) => p.id && p.nome);
 
-            if (codice === 'APPENDICE_B1_PROFILI') {
+            if (isAppendiceProfiliXlsx(codice)) {
                 await reloadProfiloFasiDettaglio();
             }
 
             let valutazioniAppendiceB1 = [];
-            if (codice === 'APPENDICE_B1_PROFILI') {
+            if (isAppendiceProfiliXlsx(codice)) {
                 const { data: vRows, error: vErr } = await supabaseClient
                     .from(CONFIG.tables.valutazioniRischio)
                     .select(
@@ -6110,7 +6143,7 @@
                     modulo_numero: moduloNumero,
                     profili_nomi:  profiliNomi,
                     profili_azienda: profiliAzienda,
-                    ...(codice === 'APPENDICE_B1_PROFILI'
+                    ...(isAppendiceProfiliXlsx(codice)
                         ? {
                             valutazioni_appendice_b1: valutazioniAppendiceB1,
                             profilo_fasi_dettaglio: STATE.data.profiloFasiDettaglio || {},
@@ -6134,7 +6167,7 @@
                 + '<span class="hint" style="font-size:12px;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + attrEsc(sedeResolved.sede) + '">Sede: ' + esc(shortLabelSede(sedeResolved.sede)) + '</span>'
                 + '<span id="gen-status-' + attrEsc(codice) + '" class="badge warning">In compilazione…</span>'
                 + '<button class="btn btn-primary" id="gen-btn-' + attrEsc(codice) + '" disabled>'
-                + (codice === 'APPENDICE_B1_PROFILI' ? 'Genera XLSX' : 'Genera DOCX') + '</button>'
+                + (isAppendiceProfiliXlsx(codice) ? 'Genera XLSX' : 'Genera DOCX') + '</button>'
                 + '<button class="btn" onclick="document.getElementById(\'gen-preview-' + attrEsc(codice) + '\')?.remove()">✕ Chiudi</button>'
                 + '</div>'
                 + '<div style="height:700px;overflow:hidden;">'
@@ -6164,6 +6197,20 @@
                 if (!out._appendice_c_gruppi || !Object.keys(out._appendice_c_gruppi).length) {
                     out._appendice_c_gruppi = init._appendice_c_gruppi;
                 }
+                if (!out._logo_buffer?.byteLength && init._logo_buffer?.byteLength) {
+                    out._logo_buffer = init._logo_buffer;
+                    out._logo_path = out._logo_path || init._logo_path;
+                    out.LOGO_PREVIEW_URL = out.LOGO_PREVIEW_URL || init.LOGO_PREVIEW_URL;
+                }
+                return out;
+            }
+
+            function mergeAppendiceB2GenPayload(cur, init) {
+                const out = { ...(cur || {}) };
+                if (!init) return out;
+                ['SEDE_OPERATIVA', 'DESCRIZIONE_SITO', 'DESCRIZIONE_PROCESSO_PRODUTTIVO', 'RAGIONE_SOCIALE'].forEach((k) => {
+                    if (!String(out[k] || '').trim() && String(init[k] || '').trim()) out[k] = init[k];
+                });
                 if (!out._logo_buffer?.byteLength && init._logo_buffer?.byteLength) {
                     out._logo_buffer = init._logo_buffer;
                     out._logo_path = out._logo_path || init._logo_path;
@@ -6213,13 +6260,16 @@
                     iframe.contentWindow.postMessage({ type: 'SET_DATA', data: initialData }, '*');
                 }
                 if (e.data.type === 'DATA_UPDATE') {
-                    currentData = codice === 'APPENDICE_B1_PROFILI'
+                    currentData = isAppendiceProfiliXlsx(codice)
                         ? mergeAppendiceB1GenPayload(e.data.data, initialData)
+                        : isAppendiceB2Docx(codice)
+                        ? mergeAppendiceB2GenPayload(e.data.data, initialData)
                         : codice === 'APPENDICE_C_SORVEGLIANZA'
                         ? mergeAppendiceCGenPayload(e.data.data, initialData)
                         : e.data.data;
                     if (
-                        codice !== 'APPENDICE_B1_PROFILI' &&
+                        !isAppendiceProfiliXlsx(codice) &&
+                        !isAppendiceB2Docx(codice) &&
                         codice !== 'APPENDICE_C_SORVEGLIANZA' &&
                         !currentData?._logo_buffer?.byteLength &&
                         initialData?._logo_buffer?.byteLength
@@ -6242,22 +6292,27 @@
                     }
                 }
                 if (e.data.type === 'GENERATE') {
-                    const genPayload = codice === 'APPENDICE_B1_PROFILI'
+                    const genPayload = isAppendiceProfiliXlsx(codice)
                         ? mergeAppendiceB1GenPayload(e.data.data, initialData)
+                        : isAppendiceB2Docx(codice)
+                        ? mergeAppendiceB2GenPayload(e.data.data, initialData)
                         : codice === 'APPENDICE_C_SORVEGLIANZA'
                         ? mergeAppendiceCGenPayload(e.data.data, initialData)
                         : e.data.data;
-                    if (codice === 'APPENDICE_B1_PROFILI') {
-                        const ad = window.GEN_ADAPTERS?.APPENDICE_B1_PROFILI;
-                        if (ad?.debugAppendiceB1Payload) {
-                            ad.debugAppendiceB1Payload('postMessage GENERATE (dopo merge initialData)', genPayload);
+                    if (isAppendiceProfiliXlsx(codice)) {
+                        const ad = window.GEN_ADAPTERS?.[codice];
+                        const dbg = ad?.debugAppendiceB2Payload || ad?.debugAppendiceB1Payload;
+                        if (typeof dbg === 'function') {
+                            dbg('postMessage GENERATE (dopo merge initialData)', genPayload);
                         }
                     }
                     triggerGeneration(codice, aziendaId, genPayload);
                 }
                 if (e.data.type === 'PREVIEW_DOCX' || e.data.type === 'PREVIEW_XLSX') {
-                    const previewPayload = codice === 'APPENDICE_B1_PROFILI'
+                    const previewPayload = isAppendiceProfiliXlsx(codice)
                         ? mergeAppendiceB1GenPayload(e.data.data, initialData)
+                        : isAppendiceB2Docx(codice)
+                        ? mergeAppendiceB2GenPayload(e.data.data, initialData)
                         : codice === 'APPENDICE_C_SORVEGLIANZA'
                         ? mergeAppendiceCGenPayload(e.data.data, initialData)
                         : e.data.data;
@@ -6268,8 +6323,10 @@
 
             // Genera DOCX dal pulsante del panel padre
             generateBtn.addEventListener('click', () => {
-                const genPayload = codice === 'APPENDICE_B1_PROFILI'
+                const genPayload = isAppendiceProfiliXlsx(codice)
                     ? mergeAppendiceB1GenPayload(currentData, initialData)
+                    : isAppendiceB2Docx(codice)
+                    ? mergeAppendiceB2GenPayload(currentData, initialData)
                     : codice === 'APPENDICE_C_SORVEGLIANZA'
                     ? mergeAppendiceCGenPayload(currentData, initialData)
                     : currentData;
@@ -6306,13 +6363,13 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA', 'PROC_INFORTUNI_NEARMISS', 'NOTA_LAVORATRICI_MADRI', 'NOTA_ANTINCENDIO', 'APPENDICE_A_ORGANIGRAMMA', 'APPENDICE_C_SORVEGLIANZA'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA', 'PROC_INFORTUNI_NEARMISS', 'NOTA_LAVORATRICI_MADRI', 'NOTA_ANTINCENDIO', 'APPENDICE_A_ORGANIGRAMMA', 'APPENDICE_B2_MISURE', 'APPENDICE_C_SORVEGLIANZA'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     const logoVer =
                         codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA' || codice === 'PROC_INFORTUNI_NEARMISS' || codice === 'NOTA_LAVORATRICI_MADRI' || codice === 'NOTA_ANTINCENDIO'
                             ? '20260601c'
-                            : codice === 'APPENDICE_A_ORGANIGRAMMA' || codice === 'APPENDICE_C_SORVEGLIANZA'
+                            : codice === 'APPENDICE_A_ORGANIGRAMMA' || codice === 'APPENDICE_B2_MISURE' || codice === 'APPENDICE_C_SORVEGLIANZA'
                             ? '20260601b'
                             : '20260520d';
                     await loadScriptOnce(base + 'logo-docx.js?v=' + logoVer);
@@ -6321,11 +6378,11 @@
                 }
             }
 
-            if (codice !== 'APPENDICE_B1_PROFILI') {
+            if (!isAppendiceProfiliXlsx(codice)) {
                 await loadScriptOnce('js/generazione/docx-template-repair.js?v=20260528d');
             }
 
-            if (codice === 'APPENDICE_B1_PROFILI') {
+            if (isAppendiceProfiliXlsx(codice)) {
                 await loadScriptOnce('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js');
             }
 
@@ -6350,8 +6407,9 @@
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260602a'
-                : codice === 'APPENDICE_B1_PROFILI' ? '20260603g'
-                : codice === 'APPENDICE_C_SORVEGLIANZA' ? '20260603f'
+                : codice === 'APPENDICE_B1_PROFILI' ? '20260603h'
+                : codice === 'APPENDICE_B2_MISURE' ? '20260604b'
+                : codice === 'APPENDICE_C_SORVEGLIANZA' ? '20260603g'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);
@@ -6373,7 +6431,7 @@
 
         async function downloadModelloTemplate(codice) {
             await loadModelliStorageIndex();
-            const fallbackName = codice === 'APPENDICE_B1_PROFILI' ? (codice + '.xlsx') : (codice + '.docx');
+            const fallbackName = isAppendiceProfiliXlsx(codice) ? (codice + '.xlsx') : (codice + '.docx');
             const path = STATE.data.modelliStorageByCodice?.[codice]?.name || fallbackName;
             const { data, error } = await supabaseClient.storage
                 .from(CONFIG.storage.modelli)
@@ -6423,8 +6481,11 @@
             const adapter = window.GEN_ADAPTERS?.[codice];
             if (!adapter) { showToast('Adapter non caricato', 'error'); return; }
 
-            if (codice === 'APPENDICE_B1_PROFILI' && typeof adapter.debugAppendiceB1Payload === 'function') {
-                adapter.debugAppendiceB1Payload('index parent → triggerGeneration → generateXlsx', data);
+            if (isAppendiceProfiliXlsx(codice)) {
+                const dbg = adapter.debugAppendiceB2Payload || adapter.debugAppendiceB1Payload;
+                if (typeof dbg === 'function') {
+                    dbg('index parent → triggerGeneration → generateXlsx', data);
+                }
             }
 
             const errors = adapter.validate(data);

@@ -1,11 +1,11 @@
 /**
  * Sedi operative azienda: lista card + sotto-modale (indirizzo + descrizione processo).
- * Persistenza: sede_operativa, sedi_operative[], descrizioni_processo_sedi[] allineati.
+ * Persistenza: sede_operativa, sedi_operative[], descrizioni_processo_sedi[], descrizioni_sito_sedi[] allineati.
  */
 (function () {
   'use strict';
 
-  /** @type {{ sedi: Array<{ principale: boolean, indirizzo: string, descrizione_processo: string }> }} */
+  /** @type {{ sedi: Array<{ principale: boolean, indirizzo: string, descrizione_sito: string, descrizione_processo: string }> }} */
   let draft = { sedi: [] };
   let editIndex = null;
 
@@ -21,24 +21,34 @@
     return esc(s).replace(/'/g, '&#39;');
   }
 
-  function splitDescrizioni(fields) {
+  function splitArrayBySede(fields, keyFields, keyDb) {
     const extra = fields?.SediOperative ?? fields?.sedi_operative ?? [];
-    const arr = Array.isArray(fields?.DescrizioniProcessoSedi)
-      ? fields.DescrizioniProcessoSedi
-      : (Array.isArray(fields?.descrizioni_processo_sedi) ? fields.descrizioni_processo_sedi : []);
+    const arr = Array.isArray(fields?.[keyFields])
+      ? fields[keyFields]
+      : (Array.isArray(fields?.[keyDb]) ? fields[keyDb] : []);
     return {
       principale: String(arr[0] || '').trim(),
       extra: (Array.isArray(extra) ? extra : []).map((_, i) => String(arr[i + 1] || '').trim()),
     };
   }
 
+  function splitDescrizioni(fields) {
+    return splitArrayBySede(fields, 'DescrizioniProcessoSedi', 'descrizioni_processo_sedi');
+  }
+
+  function splitDescrizioniSito(fields) {
+    return splitArrayBySede(fields, 'DescrizioniSitoSedi', 'descrizioni_sito_sedi');
+  }
+
   function loadFromFields(f) {
     const fields = f || {};
     const desc = splitDescrizioni(fields);
+    const descSito = splitDescrizioniSito(fields);
     const sedi = [];
     sedi.push({
       principale: true,
       indirizzo: String(fields.SedeOperativa ?? fields.sede_operativa ?? '').trim(),
+      descrizione_sito: descSito.principale,
       descrizione_processo: desc.principale,
     });
     const extra = fields.SediOperative ?? fields.sedi_operative ?? [];
@@ -48,6 +58,7 @@
       sedi.push({
         principale: false,
         indirizzo: t,
+        descrizione_sito: descSito.extra[i] || '',
         descrizione_processo: desc.extra[i] || '',
       });
     });
@@ -56,12 +67,13 @@
   }
 
   function initEmpty() {
-    draft.sedi = [{ principale: true, indirizzo: '', descrizione_processo: '' }];
+    draft.sedi = [{ principale: true, indirizzo: '', descrizione_sito: '', descrizione_processo: '' }];
     editIndex = null;
   }
 
   function sedeSummaryChips(sede) {
     const parts = [];
+    if (sede.descrizione_sito) parts.push('sito');
     if (sede.descrizione_processo) parts.push('processo');
     return parts.length ? parts.join(' · ') : '—';
   }
@@ -121,6 +133,9 @@
       + '<div class="form-field full"><label>Indirizzo sede <span class="required">*</span></label>'
       + '<textarea id="aziendaSedeIndirizzoInput" rows="2" placeholder="Via, CAP, città (prov.)">'
       + esc(sede?.indirizzo || '') + '</textarea></div>'
+      + '<div class="form-field full"><label>Descrizione del sito</label>'
+      + '<textarea id="aziendaSedeSitoInput" rows="3" placeholder="Caratteristiche del sito / locale (Appendici B.2 e B.3)">'
+      + esc(sede?.descrizione_sito || '') + '</textarea></div>'
       + '<div class="form-field full"><label>Descrizione del processo produttivo</label>'
       + '<textarea id="aziendaSedeProcessoInput" rows="4" placeholder="Attività e processi svolti in questa sede">'
       + esc(sede?.descrizione_processo || '') + '</textarea></div>'
@@ -143,7 +158,11 @@
       if (s.principale) return;
       const t = String(s.indirizzo || '').trim();
       if (t && t !== addrPrinc && !extras.some((e) => e.indirizzo === t)) {
-        extras.push({ indirizzo: t, descrizione_processo: String(s.descrizione_processo || '').trim() });
+        extras.push({
+          indirizzo: t,
+          descrizione_sito: String(s.descrizione_sito || '').trim(),
+          descrizione_processo: String(s.descrizione_processo || '').trim(),
+        });
       }
     });
     return { principale, addrPrinc, extras };
@@ -151,14 +170,19 @@
 
   function payloadFromDraft() {
     const { principale, addrPrinc, extras } = normalizeDraftForSave();
-    const descrizioni = [
+    const descrizioniProcesso = [
       String(principale?.descrizione_processo || '').trim(),
       ...extras.map((e) => e.descrizione_processo),
+    ];
+    const descrizioniSito = [
+      String(principale?.descrizione_sito || '').trim(),
+      ...extras.map((e) => e.descrizione_sito),
     ];
     return {
       sede_operativa: addrPrinc,
       sedi_operative: extras.map((e) => e.indirizzo),
-      descrizioni_processo_sedi: descrizioni,
+      descrizioni_processo_sedi: descrizioniProcesso,
+      descrizioni_sito_sedi: descrizioniSito,
     };
   }
 
@@ -208,10 +232,12 @@
         window.showToast?.('Indica l\'indirizzo della sede', 'warning');
         return;
       }
+      const descrizione_sito = document.getElementById('aziendaSedeSitoInput')?.value || '';
       const descrizione_processo = document.getElementById('aziendaSedeProcessoInput')?.value || '';
       const row = {
         principale: editIndex != null ? !!draft.sedi[editIndex]?.principale : false,
         indirizzo,
+        descrizione_sito,
         descrizione_processo,
       };
       if (editIndex != null) draft.sedi[editIndex] = row;

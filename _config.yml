@@ -15,3 +15,4 @@ exclude:
   - js/generazione/adapters/NOTA_ANTINCENDIO/fields-map.md
   - js/generazione/adapters/APPENDICE_A_ORGANIGRAMMA/fields-map.md
   - js/generazione/adapters/APPENDICE_C/fields-map.md
+  - js/generazione/adapters/APPENDICE_B_2/fields-map.md

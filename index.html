@@ -17,7 +17,8 @@
     <script src="./env.js"></script>
     <script src="js/audit-delete-log.js?v=20260529a"></script>
     <script src="js/rischio-accertamento-matrice.js?v=20260603a"></script>
-    <script src="js/profilo-modal.js?v=20260603c"></script>
+    <script src="js/profilo-modal.js?v=20260603e"></script>
+    <script src="js/azienda-sedi-modal.js?v=20260603a"></script>
     <!-- Fluent UI (solo foglio di stile, non modulo JS) -->
     <link rel="stylesheet" href="https://res.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css">
     
@@ -1036,6 +1037,11 @@
             }
         });
 
+        // profilo-modal.js e altri moduli esterni usano window.* (const non è globale)
+        window.STATE = STATE;
+        window.CONFIG = CONFIG;
+        window.supabaseClient = supabaseClient;
+
         async function signIn() {
             const { error } = await supabaseClient.auth.signInWithOAuth({
                 provider: 'azure',
@@ -1151,36 +1157,6 @@
             return list;
         }
 
-        function sediOperativeExtraFromForm(form) {
-            const principale = (form.querySelector('[name="SedeOperativa"]')?.value || '').trim();
-            const out = [];
-            form.querySelectorAll('.sede-extra-row').forEach((row) => {
-                const inp = row.querySelector('[name="sede_operativa_extra"]');
-                const t = (inp?.value || '').trim();
-                if (t && t !== principale && !out.includes(t)) out.push(t);
-            });
-            return out;
-        }
-
-        function splitDescrizioniProcessoPerSedi(fields) {
-            const arr = Array.isArray(fields?.DescrizioniProcessoSedi) ? fields.DescrizioniProcessoSedi : [];
-            const extraSedi = fields?.SediOperative || [];
-            return {
-                principale: String(arr[0] || '').trim(),
-                extra: extraSedi.map((_, i) => String(arr[i + 1] || '').trim())
-            };
-        }
-
-        function descrizioniProcessoSediFromForm(form) {
-            const principale = (form.querySelector('[name="descrizione_processo_sede_principale"]')?.value || '').trim();
-            const extras = [];
-            form.querySelectorAll('.sede-extra-row').forEach((row) => {
-                const t = (row.querySelector('[name="descrizione_processo_sede_extra"]')?.value || '').trim();
-                extras.push(t);
-            });
-            return [principale, ...extras];
-        }
-
         function getDescrizioneProcessoPerSede(source, sedeIndirizzo) {
             const sedi = getSediOperativeLista(source);
             const idx = sedi.indexOf(String(sedeIndirizzo || '').trim());
@@ -1194,39 +1170,6 @@
             const s = String(indirizzo || '').trim();
             if (s.length <= 72) return s;
             return s.slice(0, 69) + '…';
-        }
-
-        function renderSedeExtraRowHtml(sede, descrizioneProcesso) {
-            return ''
-                + '<div class="sede-extra-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;">'
-                + '<div style="flex:1;display:flex;flex-direction:column;gap:6px;">'
-                + '<textarea name="sede_operativa_extra" rows="2" placeholder="Via, CAP, città (prov.)">'
-                + esc(sede || '') + '</textarea>'
-                + '<textarea name="descrizione_processo_sede_extra" rows="2" placeholder="Descrizione del processo produttivo">'
-                + esc(descrizioneProcesso || '') + '</textarea>'
-                + '</div>'
-                + '<button type="button" class="icon-btn danger" title="Rimuovi sede" onclick="removeSedeOperativaExtraRow(this)">🗑</button>'
-                + '</div>';
-        }
-
-        function renderSediOperativeExtraInputs(extraList, descExtraList) {
-            const list = extraList || [];
-            const desc = descExtraList || [];
-            return list.map((s, i) => renderSedeExtraRowHtml(s, desc[i] || '')).join('');
-        }
-
-        function addSedeOperativaExtraRow() {
-            const list = document.getElementById('sediOperativeExtraList');
-            if (!list) return;
-            const wrap = document.createElement('div');
-            wrap.innerHTML = renderSedeExtraRowHtml('', '');
-            const row = wrap.firstElementChild;
-            if (row) list.appendChild(row);
-            row?.querySelector('textarea')?.focus();
-        }
-
-        function removeSedeOperativaExtraRow(btn) {
-            btn?.closest('.sede-extra-row')?.remove();
         }
 
         function renderProfiloArrayInputs(values, inputName, placeholder) {
@@ -1756,7 +1699,6 @@
             const isEdit = itemId !== null;
             const item = isEdit ? STATE.data.aziende.find(a => a.id == itemId) : null;
             const f = item ? item.fields : {};
-            const descProc = splitDescrizioniProcessoPerSedi(f);
             await ensureDocumentiCatalogoLoaded();
             const selections = isEdit ? await loadAziendaDocumentiSelections(itemId) : [];
             const selectedSet = new Set((selections || []).filter(s => s.selezionato).map(s => s.documento_id));
@@ -1791,26 +1733,13 @@
                                     <input type="text" name="CodiceFiscale" value="${esc(f.CodiceFiscale || '')}">
                                 </div>
                                 
+                                <div class="form-section full">Sedi operative</div>
                                 <div class="form-field full">
-                                    <label>Sede operativa principale <span class="required">*</span></label>
-                                    <textarea name="SedeOperativa" required>${esc(f.SedeOperativa || '')}</textarea>
-                                    <span class="hint">Usata nei documenti quando l'azienda ha una sola sede, o come default in anagrafica.</span>
+                                    <span class="hint">Sede principale obbligatoria. Le sedi aggiuntive sono opzionali; in generazione potrai scegliere quale sede usare.</span>
+                                    <div id="aziendaSediCards" style="margin-top:8px;"></div>
+                                    <button type="button" class="btn" style="margin-top:8px;" onclick="AziendaSedi.addSede()">+ Aggiungi sede</button>
                                 </div>
 
-                                <div class="form-field full">
-                                    <label>Descrizione del processo produttivo (sede principale)</label>
-                                    <textarea name="descrizione_processo_sede_principale" rows="3" placeholder="Attività e processi svolti in questa sede">${esc(descProc.principale)}</textarea>
-                                </div>
-
-                                <div class="form-field full">
-                                    <label>Altre sedi operative</label>
-                                    <span class="hint">Opzionale. Per ogni sede aggiungi anche la descrizione del processo produttivo. In generazione potrai scegliere quale sede usare.</span>
-                                    <div id="sediOperativeExtraList" style="margin-top:8px;">
-                                        ${renderSediOperativeExtraInputs(f.SediOperative || [], descProc.extra)}
-                                    </div>
-                                    <button type="button" class="btn" style="margin-top:8px;" onclick="addSedeOperativaExtraRow()">+ Aggiungi sede</button>
-                                </div>
-                                
                                 <div class="form-field full">
                                     <label>Sede Legale (se diversa)</label>
                                     <textarea name="SedeLegale">${esc(f.SedeLegale || '')}</textarea>
@@ -1999,6 +1928,12 @@
             document.body.appendChild(modal);
             setTimeout(() => modal.classList.add('show'), 10);
             modal.onclick = () => closeModal('aziendaModal');
+
+            if (window.AziendaSedi) {
+                if (isEdit) window.AziendaSedi.initFromFields(f);
+                else window.AziendaSedi.initEmpty();
+                window.AziendaSedi.renderList();
+            }
         }
         
         async function saveAzienda(event, itemId) {
@@ -2030,8 +1965,15 @@
                 }
             }
             const payload = aziendaPayloadFromForm(data);
-            payload.sedi_operative = sediOperativeExtraFromForm(form);
-            payload.descrizioni_processo_sedi = descrizioniProcessoSediFromForm(form);
+            const sediMsg = window.AziendaSedi?.validate?.();
+            if (sediMsg) {
+                showToast(sediMsg, 'warning');
+                return;
+            }
+            const sediPayload = window.AziendaSedi?.payloadFromDraft?.() || {};
+            payload.sede_operativa = sediPayload.sede_operativa || '';
+            payload.sedi_operative = sediPayload.sedi_operative || [];
+            payload.descrizioni_processo_sedi = sediPayload.descrizioni_processo_sedi || [];
 
             try {
                 const submitBtn = document.querySelector('#aziendaModal .btn-primary');
@@ -2194,8 +2136,11 @@
                 showToast('Permessi insufficienti: sola lettura', 'warning');
                 return;
             }
-            const item = (STATE.data.profili || []).find((p) => p.id == itemId);
-            if (!item) return;
+            const item = (STATE.data.profili || []).find((p) => String(p.id) === String(itemId));
+            if (!item) {
+                showToast('Profilo non trovato — ricarica la pagina', 'warning');
+                return;
+            }
 
             await reloadProfiloFasiDettaglio();
 
@@ -2239,9 +2184,7 @@
                 nome: String(row.nome || '').trim(),
                 misure_specifiche: row.misure_specifiche || '',
                 dpi_specifici: row.dpi_specifici || '',
-                rischi_lavorativi_ids: (row.rischi || [])
-                    .map((x) => x.rischio_lavorativo_id)
-                    .filter(Boolean),
+                rischi_lavorativi_ids: [],
             })).filter((x) => x.nome);
 
             if (!fasiPayload.length && (f.FasiLavoro || []).length) {
@@ -2304,6 +2247,7 @@
                 azienda_proprietaria_id: data.TipoProfilo === 'Custom' ? (data.AziendaProprietariaId || null) : null
             };
         }
+        window.profiloPayloadFromForm = profiloPayloadFromForm;
 
         async function reloadProfiloFasiDettaglio() {
             const { data, error } = await supabaseClient
@@ -2316,7 +2260,8 @@
             }
             const byProfilo = {};
             (data || []).forEach((row) => {
-                const pid = row.profilo_id;
+                const pid = String(row.profilo_id || '');
+                if (!pid) return;
                 if (!byProfilo[pid]) byProfilo[pid] = [];
                 const rischi = (row.profilo_fase_rischi_lavoro || [])
                     .slice()

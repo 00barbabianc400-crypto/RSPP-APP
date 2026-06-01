@@ -52,13 +52,13 @@
   }
 
   function loadFasiForProfilo(profiloId) {
-    const rows = window.STATE?.data?.profiloFasiDettaglio?.[profiloId] || [];
+    const pid = String(profiloId || '');
+    const rows = window.STATE?.data?.profiloFasiDettaglio?.[pid] || [];
     return rows.map((r) => ({
       id: r.id,
       nome: r.nome || '',
       misure_specifiche: r.misure_specifiche || '',
       dpi_specifici: r.dpi_specifici || '',
-      rischi_lavorativi_ids: (r.rischi || []).map((x) => x.rischio_lavorativo_id).filter(Boolean),
     }));
   }
 
@@ -70,9 +70,7 @@
   }
 
   function faseSummaryChips(fase) {
-    const n = (fase.rischi_lavorativi_ids || []).length;
     const parts = [];
-    if (n) parts.push(n + ' rischi lav.');
     if (fase.misure_specifiche) parts.push('misure');
     if (fase.dpi_specifici) parts.push('DPI');
     return parts.length ? parts.join(' · ') : '—';
@@ -186,22 +184,6 @@
 
   function renderFaseSubModal() {
     const fase = faseEditIndex != null ? draft.fasi[faseEditIndex] : null;
-    const mat = MAT();
-    const rischiIds = fase?.rischi_lavorativi_ids || [];
-
-    let rischiHtml = '';
-    if (mat) {
-      mat.RISCHI_LAVORATIVI.forEach((r) => {
-        const on = rischiIds.includes(r.id);
-        rischiHtml += ''
-          + '<label class="profilo-check-chip">'
-          + '<input type="checkbox" data-fase-rischio="' + attrEsc(r.id) + '"'
-          + (on ? ' checked' : '')
-          + '> '
-          + esc(r.nome)
-          + '</label>';
-      });
-    }
 
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
@@ -215,8 +197,6 @@
       + '<div class="modal-body">'
       + '<div class="form-field full"><label>Descrizione fase di lavoro <span class="required">*</span></label>'
       + '<textarea id="faseNomeInput" rows="3">' + esc(fase?.nome || '') + '</textarea></div>'
-      + '<div class="form-field full"><label>Rischi lavorativi connessi (matrice)</label>'
-      + '<div class="profilo-matrice-rischi">' + rischiHtml + '</div></div>'
       + '<div class="form-field full"><label>Misure specifiche per la fase</label>'
       + '<textarea id="faseMisureInput" rows="4">' + esc(fase?.misure_specifiche || '') + '</textarea></div>'
       + '<div class="form-field full"><label>DPI specifici per la fase</label>'
@@ -240,8 +220,13 @@
     return out;
   }
 
+  function findProfiloInState(profiloId) {
+    const id = String(profiloId || '');
+    return (window.STATE?.data?.profili || []).find((p) => String(p.id) === id) || null;
+  }
+
   function buildFieldsForDuplicate(sourceId) {
-    const item = (window.STATE?.data?.profili || []).find((p) => p.id == sourceId);
+    const item = findProfiloInState(sourceId);
     if (!item) return null;
     const f = item.fields || {};
     const aziendaId =
@@ -269,24 +254,23 @@
   }
 
   function loadFasiDraftFromSource(sourceId) {
-    const rows = window.STATE?.data?.profiloFasiDettaglio?.[sourceId] || [];
+    const pid = String(sourceId || '');
+    const rows = window.STATE?.data?.profiloFasiDettaglio?.[pid] || [];
     if (rows.length) {
       return rows.map((r) => ({
         id: null,
         nome: r.nome || '',
         misure_specifiche: r.misure_specifiche || '',
         dpi_specifici: r.dpi_specifici || '',
-        rischi_lavorativi_ids: (r.rischi || []).map((x) => x.rischio_lavorativo_id).filter(Boolean),
       }));
     }
-    const item = (window.STATE?.data?.profili || []).find((p) => p.id == sourceId);
+    const item = findProfiloInState(sourceId);
     const fasi = item?.fields?.FasiLavoro || [];
     return fasi.map((nome) => ({
       id: null,
       nome: String(nome || '').trim(),
       misure_specifiche: '',
       dpi_specifici: '',
-      rischi_lavorativi_ids: [],
     })).filter((x) => x.nome);
   }
 
@@ -313,8 +297,13 @@
       return;
     }
     const isEdit = itemId != null && !options.prefillFields;
-    const item = isEdit ? (window.STATE?.data?.profili || []).find((p) => p.id == itemId) : null;
+    const item = isEdit ? findProfiloInState(itemId) : null;
     const f = options.prefillFields || (item ? item.fields : {});
+
+    if (isEdit && !item) {
+      window.showToast?.('Profilo non trovato in memoria — ricarica la pagina Profili', 'warning');
+      return;
+    }
 
     initDraftFromFields(f);
     if (isEdit) {
@@ -325,7 +314,6 @@
           nome,
           misure_specifiche: '',
           dpi_specifici: '',
-          rischi_lavorativi_ids: [],
         }));
       }
     } else if (options.copyFasiFromId) {
@@ -480,7 +468,7 @@
       nome: String(x.nome || '').trim(),
       misure_specifiche: x.misure_specifiche || '',
       dpi_specifici: x.dpi_specifici || '',
-      rischi_lavorativi_ids: x.rischi_lavorativi_ids || [],
+      rischi_lavorativi_ids: [],
     }));
 
     try {
@@ -551,16 +539,11 @@
         window.showToast?.('Indica la descrizione della fase', 'warning');
         return;
       }
-      const rischi = [];
-      document.querySelectorAll('#profiloFaseModal [data-fase-rischio]').forEach((inp) => {
-        if (inp.checked) rischi.push(inp.getAttribute('data-fase-rischio'));
-      });
       const row = {
         id: faseEditIndex != null ? draft.fasi[faseEditIndex]?.id || null : null,
         nome,
         misure_specifiche: document.getElementById('faseMisureInput')?.value || '',
         dpi_specifici: document.getElementById('faseDpiInput')?.value || '',
-        rischi_lavorativi_ids: rischi,
       };
       if (faseEditIndex != null) draft.fasi[faseEditIndex] = row;
       else draft.fasi.push(row);

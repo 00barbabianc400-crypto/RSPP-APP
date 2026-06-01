@@ -127,10 +127,33 @@
     cell.font = {
       name: f.name || 'Calibri',
       size: f.size || 11,
-      bold: f.bold || false,
+      bold: false,
       italic: f.italic || false,
       color: { argb: 'FF000000' },
     };
+  }
+
+  const BORDER_THIN_ALL = {
+    top:    { style: 'thin' },
+    left:   { style: 'thin' },
+    bottom: { style: 'thin' },
+    right:  { style: 'thin' },
+  };
+  const ALIGN_PROFILO_DATI = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+  function applyProfiloDatiCellStyle(cell, alignment) {
+    if (!cell) return;
+    ensureCellReadable(cell);
+    cell.alignment = alignment || ALIGN_PROFILO_DATI;
+    cell.border = BORDER_THIN_ALL;
+  }
+
+  function resolveDescrizioneCicloProduttivo(azienda, wizard) {
+    const fromWizard = wizard?.descrizione_ciclo_produttivo;
+    if (fromWizard != null && String(fromWizard).trim()) {
+      return String(fromWizard).trim();
+    }
+    return String(azienda?.descrizione_processo_produttivo || '').trim();
   }
 
   function estimatePhaseRowHeight(ws, rowNum) {
@@ -172,7 +195,7 @@
     }
   }
 
-  function writePhaseDataRows(ws, fasi, wrapTop) {
+  function writePhaseDataRows(ws, fasi) {
     ensurePhaseRowCount(ws, fasi.length);
     fasi.forEach((fase, i) => {
       const r = FASE_FIRST_DATA_ROW + i;
@@ -181,18 +204,15 @@
 
       const cellA = ws.getCell('A' + r);
       cellA.value = fase.nome || '';
-      cellA.alignment = wrapTop;
-      ensureCellReadable(cellA);
+      applyProfiloDatiCellStyle(cellA);
 
       const cellC = ws.getCell('C' + r);
       cellC.value = fase.misure_specifiche || '';
-      cellC.alignment = wrapTop;
-      ensureCellReadable(cellC);
+      applyProfiloDatiCellStyle(cellC);
 
       const cellD = ws.getCell('D' + r);
       cellD.value = fase.dpi_specifici || '';
-      cellD.alignment = wrapTop;
-      ensureCellReadable(cellD);
+      applyProfiloDatiCellStyle(cellD);
 
       const h = estimatePhaseRowHeight(ws, r);
       if (h) ws.getRow(r).height = h;
@@ -431,7 +451,6 @@
    * @param {object} livelliByNome - { [nomeRischioNormalizzato]: livello }
    */
   function populateProfiloSheet(ws, profilo, livelliByNome, sheetData) {
-    const wrapTop = { vertical: 'top', wrapText: true };
     const centerMid = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
     // D2: nome profilo (celle D2:U2 già unite nel template)
@@ -449,7 +468,7 @@
     });
 
     const fasi = getFasiDettaglioProfilo(profilo, sheetData);
-    writePhaseDataRows(ws, fasi, wrapTop);
+    writePhaseDataRows(ws, fasi);
 
     // ── Blocco statico subito dopo le righe fase ──
     const R0 = firstStaticRowNum(fasi.length);
@@ -494,13 +513,12 @@
 
       const cellA = ws.getCell('A' + r);
       cellA.value = label;
-      cellA.fill      = labelFill;
-      cellA.font      = FONT_STATIC_LABEL;
-      cellA.alignment = wrapTop;
+      cellA.fill = labelFill;
+      applyProfiloDatiCellStyle(cellA);
 
       const cellC = ws.getCell('C' + r);
-      cellC.value     = value;
-      cellC.alignment = wrapTop;
+      cellC.value = value;
+      applyProfiloDatiCellStyle(cellC);
     });
   }
 
@@ -526,9 +544,7 @@
       _logo_path:       w.logo_path              || '',
       _profili_nomi:    Array.isArray(w.profili_nomi) ? w.profili_nomi : [],
       _profili_azienda: profili,
-      descrizione_ciclo_produttivo: w.descrizione_ciclo_produttivo != null
-        ? String(w.descrizione_ciclo_produttivo)
-        : '',
+      descrizione_ciclo_produttivo: resolveDescrizioneCicloProduttivo(azienda, w),
       _appendice_b1_rischi_by_profilo:  byProfilo,
       _appendice_b1_selezione_rischi:   defSel,
       _appendice_b1_livelli_by_nome:    livelliByNome,
@@ -540,7 +556,9 @@
   function applyWizard(base, wizard) {
     const merged = { ...(base || {}) };
     if (wizard && wizard.descrizione_ciclo_produttivo !== undefined) {
-      merged.descrizione_ciclo_produttivo = String(wizard.descrizione_ciclo_produttivo || '');
+      const trimmed = String(wizard.descrizione_ciclo_produttivo || '').trim();
+      merged.descrizione_ciclo_produttivo = trimmed
+        || String(merged.descrizione_ciclo_produttivo || merged.descrizione_processo_produttivo || '').trim();
     }
     return merged;
   }
@@ -549,7 +567,7 @@
   function validate(data) {
     const errors = [];
     if (!String(data?.descrizione_ciclo_produttivo || '').trim()) {
-      errors.push('Descrizione sintetica del ciclo produttivo (wizard, cella A7)');
+      errors.push('Descrizione del processo produttivo mancante (anagrafica → sede selezionata, cella A7)');
     }
     const sorted = profiliSchedaSorted(data?._profili_azienda);
     if (!sorted.length) {
@@ -689,9 +707,8 @@
   const SCHEDA_MIN_DATA_ROW_HEIGHT = 72;
   const SCHEDA_MAX_DATA_ROW_HEIGHT = 409;
   const ALIGN_SCHEDA_ELENCO = { vertical: 'middle', horizontal: 'left', wrapText: true };
-  const ALIGN_SCHEDA_MANSIONE = { vertical: 'top', horizontal: 'left', wrapText: true };
-  const ALIGN_SCHEDA_WRAP_COLS = { vertical: 'top', horizontal: 'left', wrapText: true };
-  const FONT_STATIC_LABEL = { name: 'Calibri', size: 26, bold: true };
+  const ALIGN_SCHEDA_MANSIONE = { vertical: 'middle', horizontal: 'left', wrapText: true };
+  const ALIGN_SCHEDA_WRAP_COLS = { vertical: 'middle', horizontal: 'left', wrapText: true };
 
   function resolveProfiliAzienda(data) {
     const raw = data?._profili_azienda ?? data?.profili_azienda ?? [];

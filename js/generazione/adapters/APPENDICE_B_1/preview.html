@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Appendice B.1 (Excel)</title>
-<script src="adapter.js?v=20260528d"></script>
+<script src="adapter.js?v=20260603g"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -78,9 +78,9 @@
         <div id="previewFasiLavoro" class="scheda-preview-bl">—</div>
       </div>
       <div class="wizard-block">
-        <label for="taDescrizioneCiclo">Descrizione sintetica del ciclo produttivo (Scheda Azienda, cella A7)</label>
-        <textarea id="taDescrizioneCiclo" placeholder="Es. La società ha per oggetto l’acquisto, la produzione e la commercializzazione…"
-          oninput="setDescrizioneCiclo(this.value)"></textarea>
+        <label>Descrizione del processo produttivo (Scheda Azienda, cella A7)</label>
+        <p class="hint-str">Recuperata dall’anagrafica azienda → sede selezionata in generazione (campo «Descrizione del processo produttivo» nel modale sedi).</p>
+        <div id="previewDescrizioneProcesso" class="scheda-preview-bl field-auto">—</div>
         <p id="hintA7Prefix" class="hint-str" style="margin-top:8px;"></p>
       </div>
       <div class="wizard-block">
@@ -143,19 +143,18 @@
     return ADAPTER.applyWizard(DATA, WIZARD);
   }
 
-  function renderHintA7() {
-    const el = document.getElementById('hintA7Prefix');
-    if (el) {
-      el.textContent = PREFIX_A7 + (String(WIZARD.descrizione_ciclo_produttivo || '').trim() || '…');
+  function renderDescrizioneProcesso() {
+    const testo = String(WIZARD.descrizione_ciclo_produttivo || '').trim();
+    const elPrev = document.getElementById('previewDescrizioneProcesso');
+    if (elPrev) {
+      elPrev.textContent = testo || '— (compila in Anagrafica → Sedi operative)';
+      elPrev.className = 'scheda-preview-bl ' + (testo ? 'field-auto' : 'field-missing');
+    }
+    const elHint = document.getElementById('hintA7Prefix');
+    if (elHint) {
+      elHint.textContent = PREFIX_A7 + (testo || '…');
     }
   }
-
-  window.setDescrizioneCiclo = function (val) {
-    WIZARD.descrizione_ciclo_produttivo = String(val || '');
-    renderHintA7();
-    sendUpdate();
-  };
-
 
   function renderProfiliSchedaPreview(data) {
     const elGr = document.getElementById('previewGruppiOmogenei');
@@ -244,9 +243,7 @@
     if (DATA.descrizione_ciclo_produttivo !== undefined) {
       WIZARD.descrizione_ciclo_produttivo = String(DATA.descrizione_ciclo_produttivo || '');
     }
-    const ta = document.getElementById('taDescrizioneCiclo');
-    if (ta) ta.value = WIZARD.descrizione_ciclo_produttivo;
-    renderHintA7();
+    renderDescrizioneProcesso();
     renderLogoPreview();
     renderProfiliSchedaPreview(DATA);
     sendUpdate();

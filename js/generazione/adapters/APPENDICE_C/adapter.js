@@ -49,6 +49,53 @@
     return out;
   }
 
+  /** Dal 2° gruppo con sorveglianza Sì: nuova pagina (apici B/C ripartono per segmento). */
+  function applyAutoPageBreaks(cfgMap, profili) {
+    let pastFirstSorveglianza = false;
+    (Array.isArray(profili) ? profili : []).forEach((p) => {
+      const pid = String(p.id || '');
+      const cfg = cfgMap[pid];
+      if (!cfg) return;
+      if (p.protocollo_sor_san !== true) {
+        cfg.page_break_before = false;
+        return;
+      }
+      cfg.page_break_before = pastFirstSorveglianza;
+      pastFirstSorveglianza = true;
+    });
+  }
+
+  function gruppoConfigFromProfilo(profilo) {
+    const mat = MAT();
+    if (!mat || profilo?.protocollo_sor_san !== true) {
+      return mat?.defaultGruppoConfig?.() || { rischi_ids: [], periodicita: {}, page_break_before: false };
+    }
+    return mat.normalizeProtocolloProfilo(profilo.protocollo_sanitario_config);
+  }
+
+  function mergeWizardGruppiFromProfili(raw, profili) {
+    const mat = MAT();
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const out = {};
+    (Array.isArray(profili) ? profili : []).forEach((p) => {
+      const pid = String(p.id || '');
+      if (!pid) return;
+      const fromProfilo = gruppoConfigFromProfilo(p);
+      const stored = src[pid] ? mat.normalizeGruppoConfig(src[pid]) : null;
+      if (fromProfilo.rischi_ids?.length) {
+        out[pid] = fromProfilo;
+      } else if (stored?.rischi_ids?.length) {
+        out[pid] = stored;
+      } else if (stored) {
+        out[pid] = stored;
+      } else {
+        out[pid] = fromProfilo;
+      }
+    });
+    applyAutoPageBreaks(out, profili);
+    return out;
+  }
+
   function buildGruppoOmogeneoRow(profilo, cfg) {
     const mat = MAT();
     const pid = String(profilo.id || '');
@@ -93,7 +140,7 @@
       ACCERTAMENTI: accRows,
       ACCERTAMENTI_TESTO: accRows.map((a) => a.ACCERTAMENTO_NOME).join('\n') || '—',
       PERIODICITA_TESTO: accRows.map((a) => a.PERIODICITA || '—').join('\n') || '—',
-      PAGE_BREAK_BEFORE: !!cfg?.page_break_before,
+      PAGE_BREAK_BEFORE: false,
     };
     const rules = FN_RULES();
     if (rules?.enrichGruppoWithFootnotes) {
@@ -103,7 +150,7 @@
   }
 
   function buildGruppiOmogenei(profili, wizardGruppi) {
-    const cfgMap = normalizeWizardGruppi(wizardGruppi, profili);
+    const cfgMap = mergeWizardGruppiFromProfili(wizardGruppi, profili);
     return (Array.isArray(profili) ? profili : []).map((p) =>
       buildGruppoOmogeneoRow(p, cfgMap[String(p.id || '')])
     );
@@ -150,7 +197,7 @@
       _logo_path: w.logo_path || '',
       _profili_nomi: Array.isArray(w.profili_nomi) ? w.profili_nomi : [],
       _profili_azienda: profili,
-      _appendice_c_gruppi: normalizeWizardGruppi(w.appendice_c_gruppi, profili),
+      _appendice_c_gruppi: mergeWizardGruppiFromProfili(w.appendice_c_gruppi, profili),
     };
   }
 
@@ -164,7 +211,7 @@
         ? wizard.appendice_c_gruppi
         : merged._appendice_c_gruppi;
     merged._profili_azienda = profili;
-    merged._appendice_c_gruppi = normalizeWizardGruppi(gruppiCfg, profili);
+    merged._appendice_c_gruppi = mergeWizardGruppiFromProfili(gruppiCfg, profili);
     merged.GRUPPI = buildGruppiOmogenei(profili, merged._appendice_c_gruppi);
     merged.HA_GRUPPI = merged.GRUPPI.length > 0;
     return merged;
@@ -172,7 +219,7 @@
 
   function validateGruppi(profili, gruppiCfg) {
     const errors = [];
-    const cfgMap = normalizeWizardGruppi(gruppiCfg, profili);
+    const cfgMap = mergeWizardGruppiFromProfili(gruppiCfg, profili);
     const mat = MAT();
 
     (Array.isArray(profili) ? profili : []).forEach((p) => {
@@ -274,6 +321,9 @@
     luogoDaSede,
     protocolloSorSanLabel,
     normalizeWizardGruppi,
+    mergeWizardGruppiFromProfili,
+    applyAutoPageBreaks,
+    gruppoConfigFromProfilo,
     buildGruppiOmogenei,
     buildGruppoOmogeneoRow,
     repairDocxTemplateZip: (zip) => window.GEN_DOCX_REPAIR?.repairDocxTemplateZip?.(zip) || zip,

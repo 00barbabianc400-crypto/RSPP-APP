@@ -2303,7 +2303,7 @@
             if (!force && sediOk) return;
             const { data, error } = await supabaseClient
                 .from(CONFIG.tables.aziende)
-                .select('id, ragione_sociale, partita_iva, sede_operativa, sedi_operative')
+                .select('id, ragione_sociale, partita_iva, sede_operativa, sedi_operative, descrizioni_processo_sedi')
                 .order('ragione_sociale', { ascending: true });
             if (error) throw error;
             STATE.data.aziende = (data || []).map(normalizeRow);
@@ -5977,8 +5977,8 @@
                 NOTA_LAVORATRICI_MADRI: '20260528d',
                 NOTA_ANTINCENDIO: '20260601b',
                 APPENDICE_A_ORGANIGRAMMA: '20260602a',
-                APPENDICE_B1_PROFILI: '20260603b',
-                APPENDICE_C_SORVEGLIANZA: '20260602d',
+                APPENDICE_B1_PROFILI: '20260603g',
+                APPENDICE_C_SORVEGLIANZA: '20260603f',
             };
             return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -6087,12 +6087,15 @@
 
             // Costruisci data iniziale
             function buildAppendiceCGruppiFromProfili(profiliList) {
+                const ad = window.GEN_ADAPTERS?.APPENDICE_C_SORVEGLIANZA;
+                if (ad?.mergeWizardGruppiFromProfili) {
+                    return ad.mergeWizardGruppiFromProfili({}, profiliList || []);
+                }
                 const mat = window.RISCHIO_ACCERTAMENTO_MATRICE;
                 const out = {};
                 (profiliList || []).forEach((p) => {
                     if (p.protocollo_sor_san !== true || !mat) return;
-                    const cfg = mat.normalizeProtocolloProfilo(p.protocollo_sanitario_config);
-                    if (cfg.rischi_ids?.length) out[p.id] = cfg;
+                    out[p.id] = mat.normalizeProtocolloProfilo(p.protocollo_sanitario_config);
                 });
                 return out;
             }
@@ -6347,8 +6350,8 @@
                 : codice === 'NOTA_LAVORATRICI_MADRI' ? '20260528d'
                 : codice === 'NOTA_ANTINCENDIO' ? '20260601b'
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260602a'
-                : codice === 'APPENDICE_B1_PROFILI' ? '20260528d'
-                : codice === 'APPENDICE_C_SORVEGLIANZA' ? '20260602d'
+                : codice === 'APPENDICE_B1_PROFILI' ? '20260603g'
+                : codice === 'APPENDICE_C_SORVEGLIANZA' ? '20260603f'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);

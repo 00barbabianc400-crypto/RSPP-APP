@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Appendice C</title>
 <script src="../../../../rischio-accertamento-matrice.js?v=20260603a"></script>
-<script src="footnote-rules.js?v=20260602d"></script>
-<script src="appendice-c-footnotes.js?v=20260602d"></script>
-<script src="adapter.js?v=20260602d"></script>
+<script src="footnote-rules.js?v=20260603f"></script>
+<script src="appendice-c-footnotes.js?v=20260603f"></script>
+<script src="adapter.js?v=20260603f"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -98,7 +98,8 @@
     <div class="page">
       <h1 class="doc-title">Appendice C — Protocollo sorveglianza sanitaria</h1>
       <p class="hint-str" style="margin-bottom:12px;">
-        Una riga per ogni profilo associato. Clicca <strong>Configura</strong> per rischi, accertamenti (automatici) e periodicità.
+        Una riga per ogni gruppo omogeneo (profilo associato). I dati arrivano dall’anagrafica profilo (protocollo sanitario).
+        Se manca qualcosa, si apre il configuratore in sequenza; con più gruppi la tabella Word va a pagina nuova automaticamente.
       </p>
 
       <div class="firma-box">
@@ -145,14 +146,6 @@
       <div id="modalAccList"></div>
     </div>
 
-    <div class="modal-section">
-      <label style="font-weight:600;display:flex;gap:8px;align-items:center;">
-        <input type="checkbox" id="chkPageBreak" onchange="modalDraft.page_break_before=!!this.checked">
-        Inizia nuova pagina prima di questo gruppo
-      </label>
-      <p class="hint-str">Su nuova pagina gli apici ematochimici/antitetanica ripartono con numerazione progressiva (come nel modello).</p>
-    </div>
-
     <div class="modal-actions">
       <button type="button" class="secondary" onclick="closeModal()">Annulla</button>
       <button type="button" class="primary" onclick="saveModal()">Salva gruppo</button>
@@ -170,7 +163,9 @@
   let DATA = {};
   let WIZARD = { appendice_c_gruppi: {} };
   let modalProfiloId = null;
-  let modalDraft = { rischi_ids: [], periodicita: {}, page_break_before: false };
+  let modalDraft = { rischi_ids: [], periodicita: {} };
+  let autoConfigActive = false;
+  let autoConfigDismissed = false;
 
   function fnTagsHtml(g) {
     const parts = [];
@@ -192,6 +187,56 @@
   function getGruppoCfg(profiloId) {
     const pid = String(profiloId || '');
     return MAT.normalizeGruppoConfig(WIZARD.appendice_c_gruppi[pid]);
+  }
+
+  function initWizardGruppiFromProfili() {
+    const fromParent = DATA._appendice_c_gruppi;
+    const next = fromParent ? JSON.parse(JSON.stringify(fromParent)) : {};
+    profiliList().forEach((p) => {
+      const pid = String(p.id || '');
+      if (!pid) return;
+      const fromProfilo =
+        ADAPTER?.gruppoConfigFromProfilo
+          ? ADAPTER.gruppoConfigFromProfilo(p)
+          : (p.protocollo_sor_san === true
+            ? MAT.normalizeProtocolloProfilo(p.protocollo_sanitario_config)
+            : MAT.defaultGruppoConfig());
+      const stored = fromParent?.[pid] ? MAT.normalizeGruppoConfig(fromParent[pid]) : null;
+      if (fromProfilo.rischi_ids?.length) {
+        next[pid] = fromProfilo;
+      } else if (stored) {
+        next[pid] = stored;
+      } else {
+        next[pid] = fromProfilo;
+      }
+    });
+    if (ADAPTER?.mergeWizardGruppiFromProfili) {
+      WIZARD.appendice_c_gruppi = ADAPTER.mergeWizardGruppiFromProfili(next, profiliList());
+    } else {
+      WIZARD.appendice_c_gruppi = next;
+    }
+  }
+
+  function profiliDaConfigurare() {
+    return profiliList().filter((p) => {
+      if (p.protocollo_sor_san !== true) return false;
+      return (ADAPTER?.validateGruppi([p], WIZARD.appendice_c_gruppi) || []).length > 0;
+    });
+  }
+
+  function startAutoConfigSequence() {
+    if (autoConfigDismissed || autoConfigActive) return;
+    const pending = profiliDaConfigurare();
+    if (!pending.length) return;
+    autoConfigActive = true;
+    const n = pending.length;
+    const sub = document.getElementById('modalSubtitle');
+    if (sub) {
+      sub.textContent =
+        'Configurazione guidata: ' + n + ' gruppo' + (n === 1 ? '' : 'i')
+        + ' da completare (rischi e periodicità).';
+    }
+    openModal(pending[0].id, { auto: true });
   }
 
   function buildMerged() {
@@ -340,7 +385,7 @@
     modalDraft.periodicita[accId] = Array.from(set);
   };
 
-  window.openModal = function (profiloId) {
+  window.openModal = function (profiloId, opts) {
     modalProfiloId = String(profiloId || '');
     const p = profiliList().find((x) => String(x.id) === modalProfiloId);
     if (!p || p.protocollo_sor_san !== true) return;
@@ -348,20 +393,34 @@
     modalDraft = {
       rischi_ids: cfg.rischi_ids.slice(),
       periodicita: JSON.parse(JSON.stringify(cfg.periodicita || {})),
-      page_break_before: !!cfg.page_break_before,
     };
-    const chkPb = document.getElementById('chkPageBreak');
-    if (chkPb) chkPb.checked = modalDraft.page_break_before;
+    const pending = profiliDaConfigurare();
+    const idx = pending.findIndex((x) => String(x.id) === modalProfiloId);
     document.getElementById('modalTitle').textContent = 'Configura: ' + (p.nome || '');
-    document.getElementById('modalSubtitle').textContent =
-      'I rischi determinano gli accertamenti (matrice protocollo 2024). La periodicità è per accertamento.';
+    const sub = document.getElementById('modalSubtitle');
+    if (opts?.auto && autoConfigActive && pending.length) {
+      sub.textContent =
+        'Gruppo ' + (idx >= 0 ? idx + 1 : 1) + ' di ' + pending.length
+        + ' — rischi (matrice) e periodicità per accertamento. Salva per passare al successivo.';
+    } else {
+      sub.textContent =
+        'I rischi determinano gli accertamenti (matrice protocollo 2024). La periodicità è per accertamento.';
+    }
     renderModalRischi();
     document.getElementById('modalBackdrop').classList.add('open');
   };
 
-  window.closeModal = function () {
+  function dismissModal(fromSave) {
     document.getElementById('modalBackdrop').classList.remove('open');
     modalProfiloId = null;
+    if (!fromSave && autoConfigActive) {
+      autoConfigActive = false;
+      autoConfigDismissed = true;
+    }
+  }
+
+  window.closeModal = function () {
+    dismissModal(false);
   };
 
   window.saveModal = function () {
@@ -369,10 +428,23 @@
     WIZARD.appendice_c_gruppi[modalProfiloId] = MAT.normalizeGruppoConfig({
       rischi_ids: modalDraft.rischi_ids.slice(),
       periodicita: JSON.parse(JSON.stringify(modalDraft.periodicita || {})),
-      page_break_before: !!modalDraft.page_break_before,
     });
-    closeModal();
+    if (ADAPTER?.mergeWizardGruppiFromProfili) {
+      WIZARD.appendice_c_gruppi = ADAPTER.mergeWizardGruppiFromProfili(
+        WIZARD.appendice_c_gruppi,
+        profiliList()
+      );
+    }
+    dismissModal(true);
     sendUpdate();
+    if (autoConfigActive) {
+      const pending = profiliDaConfigurare();
+      if (pending.length) {
+        setTimeout(() => openModal(pending[0].id, { auto: true }), 80);
+        return;
+      }
+      autoConfigActive = false;
+    }
   };
 
   window.showView = function (view) {
@@ -413,17 +485,10 @@
 
   function initFromData() {
     DATA = DATA || {};
-    if (DATA._appendice_c_gruppi) {
-      WIZARD.appendice_c_gruppi = JSON.parse(JSON.stringify(DATA._appendice_c_gruppi));
-    } else {
-      const next = {};
-      profiliList().forEach((p) => {
-        next[String(p.id)] = MAT.defaultGruppoConfig();
-      });
-      WIZARD.appendice_c_gruppi = next;
-    }
+    initWizardGruppiFromProfili();
     syncHeaderFields();
     sendUpdate();
+    setTimeout(() => startAutoConfigSequence(), 120);
   }
 
   window.addEventListener('message', (e) => {

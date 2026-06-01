@@ -171,6 +171,13 @@
     return tables.length ? tables[tables.length - 1] : null;
   }
 
+  function normGruppoNome(nome) {
+    return String(nome || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, ' ');
+  }
+
   function getDataRows(tbl) {
     const rows = tbl.getElementsByTagNameNS(WNS, 'tr');
     const out = [];
@@ -180,9 +187,17 @@
       if (cells.length < 4) continue;
       const nome = cellText(cells[0]);
       if (!nome || /GRUPPO OMOGENEO/i.test(nome)) continue;
-      out.push({ tr, cells });
+      out.push({ tr, cells, nome, key: normGruppoNome(nome) });
     }
     return out;
+  }
+
+  function mapRowsByGruppoNome(dataRows) {
+    const map = new Map();
+    dataRows.forEach((row) => {
+      if (row.key) map.set(row.key, row);
+    });
+    return map;
   }
 
   /**
@@ -208,6 +223,7 @@
 
     stripFootnoteReferencesFromTable(tbl);
     const dataRows = getDataRows(tbl);
+    const rowByNome = mapRowsByGruppoNome(dataRows);
     const footnotesDoc = ensureFootnotesPart(zip);
     const footnotesRoot = footnotesDoc.documentElement;
 
@@ -236,7 +252,7 @@
 
     for (let i = 0; i < activeGruppi.length; i++) {
       const g = activeGruppi[i];
-      const row = dataRows[i];
+      const row = rowByNome.get(normGruppoNome(g.GRUPPO_NOME)) || dataRows[i];
       if (!row) {
         console.warn('[APPENDICE_C_FOOTNOTES] Riga tabella mancante per', g.GRUPPO_NOME);
         continue;

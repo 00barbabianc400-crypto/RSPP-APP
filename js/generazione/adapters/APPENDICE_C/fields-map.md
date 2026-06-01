@@ -53,11 +53,13 @@ La nota **Art. 176** (apice su «Biennale») scatta **solo** se il profilo si ch
 | **B – Ematochimici** | Presenza accertamento «Esami ematochimici» | Su quell’accertamento (col. accertamenti) |
 | **C – Antitetanica** | Presenza «Antitetanica» + periodicità **Biennale** e/o **Quinquennale** (non solo annuale) | Su «Antitetanica» (col. accertamenti) |
 
-**Nuova pagina:** nel modale, flag «Inizia nuova pagina prima di questo gruppo» → salto pagina + apici B/C ripetuti con **nuovo numero** e stesso testo nota (come nel modello pag. 2).
+**Nuova pagina:** automatica dal **2° gruppo omogeneo** con sorveglianza Sì (nessuna scelta manuale nel wizard) → salto pagina + apici B/C ripetuti con **nuovo numero** per segmento (come nel modello pag. 2).
 
 ---
 
 ## Wizard
+
+Dati iniziali da `profilo.protocollo_sanitario_config` (anagrafica profilo). Se mancano rischi/periodicità, sequenza modali automatica gruppo per gruppo.
 
 ```json
 {
@@ -67,12 +69,13 @@ La nota **Art. 176** (apice su «Biennale») scatta **solo** se il profilo si ch
       "periodicita": {
         "ESAMI_EMATOCHIMICI": ["biennale"],
         "ANTITETANICA": ["quinquennale"]
-      },
-      "page_break_before": false
+      }
     }
   }
 }
 ```
+
+`page_break_before` è calcolato in generazione (non salvato dal wizard).
 
 ---
 

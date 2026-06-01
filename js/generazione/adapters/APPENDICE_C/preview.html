@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Appendice C</title>
+<script src="rischio-accertamento-matrice.js?v=20260602d"></script>
+<script src="footnote-rules.js?v=20260602d"></script>
+<script src="appendice-c-footnotes.js?v=20260602d"></script>
+<script src="adapter.js?v=20260602d"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 960px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  h1.doc-title { font-size: 14pt; font-weight: bold; text-align: center; margin-bottom: 12px; }
+  h2.doc-section { font-size: 12pt; font-weight: bold; margin: 18px 0 8px; border-bottom: 1px solid #333; padding-bottom: 3px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .tag-pill { font-family: Consolas, monospace; font-size: 9pt; background: #eee; padding: 1px 5px; border-radius: 3px; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; font-weight: 600; background: #fdecea; padding: 2px 6px; border-radius: 3px; }
+  .firma-box { margin: 14px 0; padding: 14px; background: #fffde7; border: 1px solid #e6d98a; border-radius: 4px; }
+  table.gruppi { width: 100%; border-collapse: collapse; font-size: 10pt; margin-top: 10px; }
+  table.gruppi th, table.gruppi td { border: 1px solid #ccc; padding: 6px 8px; vertical-align: top; text-align: left; }
+  table.gruppi th { background: #f0f0f0; }
+  table.gruppi .col-rischi, table.gruppi .col-acc { white-space: pre-line; max-width: 220px; }
+  .badge-sor-no { color: #666; font-style: italic; }
+  .badge-sor-si { color: #1e6b3a; }
+  .btn-sm {
+    background: #3498db; color: #fff; border: none; padding: 4px 10px; border-radius: 3px;
+    cursor: pointer; font-size: 10pt;
+  }
+  .btn-sm:disabled { background: #aaa; cursor: not-allowed; }
+  .hidden { display: none !important; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200;
+    display: none; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal-panel {
+    background: #fff; width: 100%; max-width: 720px; max-height: 90vh; overflow: auto;
+    border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,.25); padding: 18px 20px;
+  }
+  .modal-panel h3 { font-size: 13pt; margin-bottom: 4px; }
+  .modal-section { margin: 14px 0; }
+  .modal-section h4 { font-size: 11pt; margin-bottom: 8px; color: #333; }
+  .chk-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+  .chk-grid label { font-weight: normal; font-size: 10.5pt; cursor: pointer; display: flex; gap: 6px; }
+  .acc-block {
+    border: 1px solid #dde2e6; border-radius: 4px; padding: 8px 10px; margin-bottom: 8px;
+    background: #fafbfc;
+  }
+  .acc-block .acc-name { font-weight: 600; font-size: 10.5pt; margin-bottom: 6px; }
+  .acc-block .per-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .modal-actions { margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-actions button { padding: 8px 18px; border-radius: 4px; border: none; cursor: pointer; font-size: 11pt; }
+  .modal-actions .primary { background: #27ae60; color: #fff; font-weight: 600; }
+  .modal-actions .secondary { background: #eee; color: #333; }
+  .fn-tag { font-size: 9pt; color: #8e44ad; margin-left: 4px; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">APPENDICE_C_SORVEGLIANZA</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Appendice C — Protocollo sorveglianza sanitaria</h1>
+      <p class="hint-str" style="margin-bottom:12px;">
+        Una riga per ogni profilo associato. Clicca <strong>Configura</strong> per rischi, accertamenti (automatici) e periodicità.
+      </p>
+
+      <div class="firma-box">
+        <p><strong>Luogo</strong> <span class="tag-pill">{{LUOGO}}</span>: <span id="pLuogo" class="field-auto">—</span>
+          · <strong>Data</strong> <span id="pData" class="field-auto">—</span>
+          · <strong>MC</strong> <span id="pMedico" class="field-auto">—</span></p>
+        <p><strong>Azienda</strong> <span id="pAzienda" class="field-auto">—</span>
+          · <strong>Logo</strong> <span id="pLogo" class="field-auto">—</span></p>
+      </div>
+
+      <h2 class="doc-section">Tabella gruppi omogenei</h2>
+      <table class="gruppi">
+        <thead>
+          <tr>
+            <th>Gruppo omogeneo</th>
+            <th>Rischi lavorativi</th>
+            <th>Accertamenti</th>
+            <th>Periodicità</th>
+            <th>Apici</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tblGruppiBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx"><div id="docxPreviewHost"></div></div>
+
+<div class="modal-backdrop" id="modalBackdrop" onclick="if(event.target===this)closeModal()">
+  <div class="modal-panel" role="dialog" aria-labelledby="modalTitle">
+    <h3 id="modalTitle">Configura gruppo</h3>
+    <p class="hint-str" id="modalSubtitle"></p>
+
+    <div class="modal-section">
+      <h4>Rischi lavorativi</h4>
+      <div class="chk-grid" id="modalRischiGrid"></div>
+    </div>
+
+    <div class="modal-section" id="modalAccSection">
+      <h4>Accertamenti sanitari (da matrice)</h4>
+      <p class="hint-str">Seleziona una o più periodicità per ciascun accertamento. Stesso accertamento da più rischi compare una sola volta.</p>
+      <div id="modalAccList"></div>
+    </div>
+
+    <div class="modal-section">
+      <label style="font-weight:600;display:flex;gap:8px;align-items:center;">
+        <input type="checkbox" id="chkPageBreak" onchange="modalDraft.page_break_before=!!this.checked">
+        Inizia nuova pagina prima di questo gruppo
+      </label>
+      <p class="hint-str">Su nuova pagina gli apici ematochimici/antitetanica ripartono con numerazione progressiva (come nel modello).</p>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="secondary" onclick="closeModal()">Annulla</button>
+      <button type="button" class="primary" onclick="saveModal()">Salva gruppo</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  const ADAPTER = window.GEN_ADAPTERS?.APPENDICE_C_SORVEGLIANZA;
+  const MAT = window.APPENDICE_C_MATRICE;
+
+  let DATA = {};
+  let WIZARD = { appendice_c_gruppi: {} };
+  let modalProfiloId = null;
+  let modalDraft = { rischi_ids: [], periodicita: {}, page_break_before: false };
+
+  function fnTagsHtml(g) {
+    const parts = [];
+    if (g.FN_ART176) parts.push('Art.176');
+    if (g.FN_EMATOCHIMICI) parts.push('Ematoch.');
+    if (g.FN_ANTITETANICA) parts.push('Antitet.');
+    if (g.PAGE_BREAK_BEFORE) parts.push('↵ pag.');
+    return parts.length ? '<span class="fn-tag">' + esc(parts.join(' · ')) + '</span>' : '—';
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function profiliList() {
+    return Array.isArray(DATA._profili_azienda) ? DATA._profili_azienda : [];
+  }
+
+  function getGruppoCfg(profiloId) {
+    const pid = String(profiloId || '');
+    return MAT.normalizeGruppoConfig(WIZARD.appendice_c_gruppi[pid]);
+  }
+
+  function buildMerged() {
+    if (!ADAPTER?.applyWizard) return { ...DATA };
+    return ADAPTER.applyWizard(DATA, {
+      profili_azienda: profiliList(),
+      appendice_c_gruppi: WIZARD.appendice_c_gruppi,
+    });
+  }
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', !errors.length);
+    document.getElementById('btnGenera').disabled = !!errors.length;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: merged, valid: !errors.length, errors }, '*');
+    renderGruppiTable();
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML = '<img src="' + esc(url) + '" alt="logo" style="max-height:32px;vertical-align:middle;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.textContent = 'OK';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = 'manca';
+    el.className = 'field-missing';
+  }
+
+  function renderGruppiTable() {
+    const tbody = document.getElementById('tblGruppiBody');
+    if (!tbody || !ADAPTER) return;
+    const profili = profiliList();
+    if (!profili.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="hint-str">Nessun profilo associato</td></tr>';
+      return;
+    }
+    const rows = ADAPTER.buildGruppiOmogenei(profili, WIZARD.appendice_c_gruppi);
+    tbody.innerHTML = rows.map((g) => {
+      const p = profili.find((x) => String(x.id) === String(g.GRUPPO_ID));
+      const sor = p?.protocollo_sor_san === true;
+      const cfgOk = sor
+        ? !ADAPTER.validateGruppi([p], WIZARD.appendice_c_gruppi).length
+        : true;
+      return '<tr>'
+        + '<td><strong>' + esc(g.GRUPPO_NOME) + '</strong>'
+        + (sor ? '' : '<br><span class="badge-sor-no">Sorveglianza non prevista</span>')
+        + '</td>'
+        + '<td class="col-rischi">' + esc(g.RISCHI_TESTO) + '</td>'
+        + '<td class="col-acc">' + esc(g.ACCERTAMENTI_TESTO) + '</td>'
+        + '<td class="col-acc">' + esc(g.PERIODICITA_TESTO) + '</td>'
+        + '<td>' + fnTagsHtml(g) + '</td>'
+        + '<td><button type="button" class="btn-sm" data-pid="' + esc(g.GRUPPO_ID) + '"'
+        + ' onclick="openModal(this.getAttribute(\'data-pid\'))"'
+        + (sor ? '' : ' disabled title="Profilo senza protocollo sorveglianza"') + '>'
+        + (cfgOk ? 'Modifica' : 'Configura') + '</button></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function syncHeaderFields() {
+    document.getElementById('pLuogo').textContent = DATA.LUOGO || '—';
+    document.getElementById('pData').textContent = DATA.DATA_EMISSIONE || '—';
+    document.getElementById('pMedico').textContent = DATA.MEDICO_COMPETENTE || '—';
+    document.getElementById('pAzienda').textContent = DATA.RAGIONE_SOCIALE || '—';
+    renderLogoPreview();
+  }
+
+  function renderModalRischi() {
+    const grid = document.getElementById('modalRischiGrid');
+    if (!grid || !MAT) return;
+    grid.innerHTML = MAT.RISCHI_LAVORATIVI.map((r) => {
+      const checked = modalDraft.rischi_ids.includes(r.id);
+      return '<label><input type="checkbox" data-rischio-id="' + esc(r.id) + '"'
+        + (checked ? ' checked' : '') + ' onchange="toggleRischioModal(this)">'
+        + '<span>' + esc(r.nome) + '</span></label>';
+    }).join('');
+    renderModalAccertamenti();
+  }
+
+  function prunePeriodicita() {
+    const accs = MAT.accertamentiForRischi(modalDraft.rischi_ids);
+    const allowed = new Set(accs.map((a) => a.id));
+    const next = {};
+    Object.keys(modalDraft.periodicita || {}).forEach((aid) => {
+      if (allowed.has(aid)) next[aid] = modalDraft.periodicita[aid];
+    });
+    modalDraft.periodicita = next;
+  }
+
+  function renderModalAccertamenti() {
+    const host = document.getElementById('modalAccList');
+    if (!host || !MAT) return;
+    prunePeriodicita();
+    const accs = MAT.accertamentiForRischi(modalDraft.rischi_ids);
+    if (!modalDraft.rischi_ids.length) {
+      host.innerHTML = '<p class="hint-str">Seleziona almeno un rischio lavorativo.</p>';
+      return;
+    }
+    if (!accs.length) {
+      host.innerHTML = '<p class="hint-str">Nessun accertamento per i rischi selezionati.</p>';
+      return;
+    }
+    host.innerHTML = accs.map((acc) => {
+      const sel = MAT.mergePeriodicitaIds(modalDraft.periodicita, acc.id);
+      const checks = MAT.PERIODICITA_OPTS.map((p) => {
+        const on = sel.includes(p.id);
+        return '<label><input type="checkbox" data-acc-id="' + esc(acc.id) + '" data-per-id="' + esc(p.id) + '"'
+          + (on ? ' checked' : '') + ' onchange="togglePeriodicitaModal(this)"> ' + esc(p.label) + '</label>';
+      }).join('');
+      return '<div class="acc-block"><div class="acc-name">' + esc(acc.nome) + '</div><div class="per-row">' + checks + '</div></div>';
+    }).join('');
+  }
+
+  window.toggleRischioModal = function (el) {
+    const id = el.getAttribute('data-rischio-id');
+    if (!id) return;
+    const set = new Set(modalDraft.rischi_ids);
+    if (el.checked) set.add(id);
+    else set.delete(id);
+    modalDraft.rischi_ids = Array.from(set);
+    renderModalAccertamenti();
+  };
+
+  window.togglePeriodicitaModal = function (el) {
+    const accId = el.getAttribute('data-acc-id');
+    const perId = el.getAttribute('data-per-id');
+    if (!accId || !perId) return;
+    if (!modalDraft.periodicita[accId]) modalDraft.periodicita[accId] = [];
+    const set = new Set(modalDraft.periodicita[accId]);
+    if (el.checked) set.add(perId);
+    else set.delete(perId);
+    modalDraft.periodicita[accId] = Array.from(set);
+  };
+
+  window.openModal = function (profiloId) {
+    modalProfiloId = String(profiloId || '');
+    const p = profiliList().find((x) => String(x.id) === modalProfiloId);
+    if (!p || p.protocollo_sor_san !== true) return;
+    const cfg = getGruppoCfg(modalProfiloId);
+    modalDraft = {
+      rischi_ids: cfg.rischi_ids.slice(),
+      periodicita: JSON.parse(JSON.stringify(cfg.periodicita || {})),
+      page_break_before: !!cfg.page_break_before,
+    };
+    const chkPb = document.getElementById('chkPageBreak');
+    if (chkPb) chkPb.checked = modalDraft.page_break_before;
+    document.getElementById('modalTitle').textContent = 'Configura: ' + (p.nome || '');
+    document.getElementById('modalSubtitle').textContent =
+      'I rischi determinano gli accertamenti (matrice protocollo 2024). La periodicità è per accertamento.';
+    renderModalRischi();
+    document.getElementById('modalBackdrop').classList.add('open');
+  };
+
+  window.closeModal = function () {
+    document.getElementById('modalBackdrop').classList.remove('open');
+    modalProfiloId = null;
+  };
+
+  window.saveModal = function () {
+    if (!modalProfiloId) return;
+    WIZARD.appendice_c_gruppi[modalProfiloId] = MAT.normalizeGruppoConfig({
+      rischi_ids: modalDraft.rischi_ids.slice(),
+      periodicita: JSON.parse(JSON.stringify(modalDraft.periodicita || {})),
+      page_break_before: !!modalDraft.page_break_before,
+    });
+    closeModal();
+    sendUpdate();
+  };
+
+  window.showView = function (view) {
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'APPENDICE_C — Compila' : 'APPENDICE_C — Anteprima Word';
+    if (view === 'docx') requestPreviewDocx();
+  };
+
+  function requestPreviewDocx() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    const host = document.getElementById('docxPreviewHost');
+    if (errors.length) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(errors.join(' · ')) + '</p>';
+      return;
+    }
+    host.innerHTML = '<p style="text-align:center;padding:40px;color:#888;">Generazione anteprima…</p>';
+    window.parent.postMessage({ type: 'PREVIEW_DOCX', data: merged }, '*');
+  }
+
+  async function renderDocxBlob(buffer) {
+    const host = document.getElementById('docxPreviewHost');
+    host.innerHTML = '';
+    if (!window.JSZip || !window.docx?.renderAsync) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">Librerie anteprima non caricate.</p>';
+      return;
+    }
+    try {
+      await window.docx.renderAsync(buffer, host, null, { className: 'docx', inWrapper: true });
+    } catch (err) {
+      host.innerHTML = '<p style="color:#c0392b;padding:20px;">' + esc(err.message) + '</p>';
+    }
+  }
+
+  function initFromData() {
+    DATA = DATA || {};
+    if (DATA._appendice_c_gruppi) {
+      WIZARD.appendice_c_gruppi = JSON.parse(JSON.stringify(DATA._appendice_c_gruppi));
+    } else {
+      const next = {};
+      profiliList().forEach((p) => {
+        next[String(p.id)] = MAT.defaultGruppoConfig();
+      });
+      WIZARD.appendice_c_gruppi = next;
+    }
+    syncHeaderFields();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) renderDocxBlob(e.data.buffer);
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:20px;">' + esc(e.data.message) + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    window.parent.postMessage({ type: 'GENERATE', data: buildMerged() }, '*');
+  });
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

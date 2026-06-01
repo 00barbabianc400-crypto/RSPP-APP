@@ -1029,6 +1029,7 @@
                     CodiceFiscale: row.codice_fiscale,
                     SedeOperativa: row.sede_operativa,
                     SediOperative: Array.isArray(row.sedi_operative) ? row.sedi_operative : [],
+                    DescrizioniProcessoSedi: Array.isArray(row.descrizioni_processo_sedi) ? row.descrizioni_processo_sedi : [],
                     SedeLegale: row.sede_legale,
                     OggettoSociale: row.oggetto_sociale,
                     IscrizioneCCIAA: row.iscrizione_cciaa,
@@ -1119,11 +1120,40 @@
         function sediOperativeExtraFromForm(form) {
             const principale = (form.querySelector('[name="SedeOperativa"]')?.value || '').trim();
             const out = [];
-            form.querySelectorAll('[name="sede_operativa_extra"]').forEach((inp) => {
-                const t = (inp.value || '').trim();
+            form.querySelectorAll('.sede-extra-row').forEach((row) => {
+                const inp = row.querySelector('[name="sede_operativa_extra"]');
+                const t = (inp?.value || '').trim();
                 if (t && t !== principale && !out.includes(t)) out.push(t);
             });
             return out;
+        }
+
+        function splitDescrizioniProcessoPerSedi(fields) {
+            const arr = Array.isArray(fields?.DescrizioniProcessoSedi) ? fields.DescrizioniProcessoSedi : [];
+            const extraSedi = fields?.SediOperative || [];
+            return {
+                principale: String(arr[0] || '').trim(),
+                extra: extraSedi.map((_, i) => String(arr[i + 1] || '').trim())
+            };
+        }
+
+        function descrizioniProcessoSediFromForm(form) {
+            const principale = (form.querySelector('[name="descrizione_processo_sede_principale"]')?.value || '').trim();
+            const extras = [];
+            form.querySelectorAll('.sede-extra-row').forEach((row) => {
+                const t = (row.querySelector('[name="descrizione_processo_sede_extra"]')?.value || '').trim();
+                extras.push(t);
+            });
+            return [principale, ...extras];
+        }
+
+        function getDescrizioneProcessoPerSede(source, sedeIndirizzo) {
+            const sedi = getSediOperativeLista(source);
+            const idx = sedi.indexOf(String(sedeIndirizzo || '').trim());
+            if (idx < 0) return '';
+            const f = source?.fields || source || {};
+            const arr = f.DescrizioniProcessoSedi ?? source?.descrizioni_processo_sedi ?? [];
+            return String((Array.isArray(arr) ? arr[idx] : '') || '').trim();
         }
 
         function shortLabelSede(indirizzo) {
@@ -1132,27 +1162,33 @@
             return s.slice(0, 69) + '…';
         }
 
-        function renderSediOperativeExtraInputs(extraList) {
-            const list = extraList || [];
-            return list.map((s) => ''
-                + '<div class="sede-extra-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;">'
-                + '<textarea name="sede_operativa_extra" rows="2" style="flex:1;" placeholder="Via, CAP, città (prov.)">'
-                + esc(s || '') + '</textarea>'
+        function renderSedeExtraRowHtml(sede, descrizioneProcesso) {
+            return ''
+                + '<div class="sede-extra-row" style="display:flex;gap:8px;align-items:flex-start;margin-bottom:12px;">'
+                + '<div style="flex:1;display:flex;flex-direction:column;gap:6px;">'
+                + '<textarea name="sede_operativa_extra" rows="2" placeholder="Via, CAP, città (prov.)">'
+                + esc(sede || '') + '</textarea>'
+                + '<textarea name="descrizione_processo_sede_extra" rows="2" placeholder="Descrizione del processo produttivo">'
+                + esc(descrizioneProcesso || '') + '</textarea>'
+                + '</div>'
                 + '<button type="button" class="icon-btn danger" title="Rimuovi sede" onclick="removeSedeOperativaExtraRow(this)">🗑</button>'
-                + '</div>').join('');
+                + '</div>';
+        }
+
+        function renderSediOperativeExtraInputs(extraList, descExtraList) {
+            const list = extraList || [];
+            const desc = descExtraList || [];
+            return list.map((s, i) => renderSedeExtraRowHtml(s, desc[i] || '')).join('');
         }
 
         function addSedeOperativaExtraRow() {
             const list = document.getElementById('sediOperativeExtraList');
             if (!list) return;
-            const row = document.createElement('div');
-            row.className = 'sede-extra-row';
-            row.style.cssText = 'display:flex;gap:8px;align-items:flex-start;margin-bottom:8px;';
-            row.innerHTML = ''
-                + '<textarea name="sede_operativa_extra" rows="2" style="flex:1;" placeholder="Via, CAP, città (prov.)"></textarea>'
-                + '<button type="button" class="icon-btn danger" title="Rimuovi sede" onclick="removeSedeOperativaExtraRow(this)">🗑</button>';
-            list.appendChild(row);
-            row.querySelector('textarea')?.focus();
+            const wrap = document.createElement('div');
+            wrap.innerHTML = renderSedeExtraRowHtml('', '');
+            const row = wrap.firstElementChild;
+            if (row) list.appendChild(row);
+            row?.querySelector('textarea')?.focus();
         }
 
         function removeSedeOperativaExtraRow(btn) {
@@ -1238,12 +1274,23 @@
         function resolveSedeOperativaPerGenerazione(aziendaId) {
             const sedi = getSediOperativeLista((STATE.data.aziende || []).find((a) => a.id === aziendaId));
             if (!sedi.length) return { ok: false, message: 'Sede operativa non configurata in anagrafica' };
-            if (sedi.length === 1) return { ok: true, sede: sedi[0] };
+            const azienda = (STATE.data.aziende || []).find((a) => a.id === aziendaId);
+            if (sedi.length === 1) {
+                return {
+                    ok: true,
+                    sede: sedi[0],
+                    descrizioneProcesso: getDescrizioneProcessoPerSede(azienda, sedi[0])
+                };
+            }
             const sel = document.getElementById('generazioneSedeSelect');
             const sede = (sel?.value || '').trim();
             if (!sede) return { ok: false, message: 'Seleziona la sede operativa per la generazione' };
             if (!sedi.includes(sede)) return { ok: false, message: 'Sede operativa non valida' };
-            return { ok: true, sede };
+            return {
+                ok: true,
+                sede,
+                descrizioneProcesso: getDescrizioneProcessoPerSede(azienda, sede)
+            };
         }
 
         async function ensureDocumentiCatalogoLoaded() {
@@ -1675,6 +1722,7 @@
             const isEdit = itemId !== null;
             const item = isEdit ? STATE.data.aziende.find(a => a.id == itemId) : null;
             const f = item ? item.fields : {};
+            const descProc = splitDescrizioniProcessoPerSedi(f);
             await ensureDocumentiCatalogoLoaded();
             const selections = isEdit ? await loadAziendaDocumentiSelections(itemId) : [];
             const selectedSet = new Set((selections || []).filter(s => s.selezionato).map(s => s.documento_id));
@@ -1716,10 +1764,15 @@
                                 </div>
 
                                 <div class="form-field full">
+                                    <label>Descrizione del processo produttivo (sede principale)</label>
+                                    <textarea name="descrizione_processo_sede_principale" rows="3" placeholder="Attività e processi svolti in questa sede">${esc(descProc.principale)}</textarea>
+                                </div>
+
+                                <div class="form-field full">
                                     <label>Altre sedi operative</label>
-                                    <span class="hint">Opzionale. Aggiungi indirizzi distinti (stessa P.IVA). In generazione potrai scegliere quale usare per ogni modulo.</span>
+                                    <span class="hint">Opzionale. Per ogni sede aggiungi anche la descrizione del processo produttivo. In generazione potrai scegliere quale sede usare.</span>
                                     <div id="sediOperativeExtraList" style="margin-top:8px;">
-                                        ${renderSediOperativeExtraInputs(f.SediOperative || [])}
+                                        ${renderSediOperativeExtraInputs(f.SediOperative || [], descProc.extra)}
                                     </div>
                                     <button type="button" class="btn" style="margin-top:8px;" onclick="addSedeOperativaExtraRow()">+ Aggiungi sede</button>
                                 </div>
@@ -1944,6 +1997,7 @@
             }
             const payload = aziendaPayloadFromForm(data);
             payload.sedi_operative = sediOperativeExtraFromForm(form);
+            payload.descrizioni_processo_sedi = descrizioniProcessoSediFromForm(form);
 
             try {
                 const submitBtn = document.querySelector('#aziendaModal .btn-primary');
@@ -6003,7 +6057,11 @@
                 .select('*, logo_azienda_url')
                 .eq('id', aziendaId)
                 .single();
-            const az = azRow ? { ...azRow, sede_operativa: sedeResolved.sede } : null;
+            const az = azRow ? {
+                ...azRow,
+                sede_operativa: sedeResolved.sede,
+                descrizione_processo_produttivo: sedeResolved.descrizioneProcesso || ''
+            } : null;
 
             // Logo: download binario per DOCX + URL per anteprima HTML
             let logoUrl = null;

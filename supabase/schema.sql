@@ -87,6 +87,7 @@ create table if not exists public.aziende (
   codice_fiscale text,
   sede_operativa text not null,
   sedi_operative text[] not null default '{}',
+  descrizioni_processo_sedi text[] not null default '{}',
   sede_legale text,
   oggetto_sociale text,
   iscrizione_cciaa text,

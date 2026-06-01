@@ -35,25 +35,17 @@ Per gli apici automatici il sistema cerca testo **esatto**:
 
 - `Esami ematochimici` (colonna accertamenti)
 - `Antitetanica` (inizio etichetta antitetanica)
-- `Biennale` (colonna periodicità, solo profilo **IMPIEGATO VDT**)
+- `Biennale` (colonna periodicità, deduplicata per gruppo — vedi sotto)
+
+**Colonna periodicità (`{{PERIODICITA_TESTO}}`):** valori **unici** (Annuale / Biennale / Quinquennale) per tutto il gruppo, uno per riga, non ripetuti per ogni accertamento.
+
+**Allineamento:** in generazione tutte le celle della tabella protocollo sono forzate **a sinistra** (`appendice-c-docx-format.js`).
+
+**Note a piè di pagina:** disattivate in generazione automatica (le aggiungi manualmente nel modello Word se serve).
 
 Usare etichette come in `rischio-accertamento-matrice.js` (`wordLabel`).
 
-### 4. Nome profilo per nota Art. 176
-
-La nota **Art. 176** (apice su «Biennale») scatta **solo** se il profilo si chiama esattamente **`IMPIEGATO VDT`** (maiuscole/minuscole normalizzate) **e** c’è periodicità **Biennale** su almeno un accertamento.
-
----
-
-## Regole apici (implementate in codice)
-
-| Caso | Condizione | Dove compare l’apice |
-|------|------------|----------------------|
-| **A – Art. 176** | Profilo = `IMPIEGATO VDT` + periodicità **Biennale** | Su testo `Biennale` (col. periodicità) |
-| **B – Ematochimici** | Presenza accertamento «Esami ematochimici» | Su quell’accertamento (col. accertamenti) |
-| **C – Antitetanica** | Presenza «Antitetanica» + periodicità **Biennale** e/o **Quinquennale** (non solo annuale) | Su «Antitetanica» (col. accertamenti) |
-
-**Nuova pagina:** automatica dal **2° gruppo omogeneo** con sorveglianza Sì (nessuna scelta manuale nel wizard) → salto pagina + apici B/C ripetuti con **nuovo numero** per segmento (come nel modello pag. 2).
+**Nuova pagina:** automatica dal **2° gruppo omogeneo** con sorveglianza Sì (nessuna scelta manuale nel wizard).
 
 ---
 

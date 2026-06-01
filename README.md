@@ -138,6 +138,7 @@ Ogni adapter espone `window.GEN_ADAPTERS['CODICE']` con `validate`, `generateDoc
 | `APPENDICE_A_ORGANIGRAMMA` | DOCX |
 | `APPENDICE_B1_PROFILI` | XLSX |
 | `APPENDICE_B2_MISURE` | DOCX (copertina + tabella sito) |
+| `APPENDICE_B3_ALTRE_SEDI` | DOCX (stesso modello di B.2, sede da picker) |
 | `MOD_MICROCLIMA` | DOCX |
 | `MOD_VDT_ILLUMINAMENTO` | DOCX |
 | `MOD_STRESS_LC` | DOCX |

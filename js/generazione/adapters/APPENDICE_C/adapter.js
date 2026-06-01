@@ -7,7 +7,6 @@
   const CODICE = 'APPENDICE_C_SORVEGLIANZA';
   const NOME = 'Appendice C: Protocollo di sorveglianza sanitaria';
   const MAT = () => window.APPENDICE_C_MATRICE;
-  const FN_RULES = () => window.APPENDICE_C_FOOTNOTE_RULES;
 
   const SOR_PREVISTO =
     'Si rimanda al protocollo sanitario istituito dal Medico Competente';
@@ -139,13 +138,11 @@
       RISCHI_TESTO: rischi.map((r) => r.nome).join('\n') || '—',
       ACCERTAMENTI: accRows,
       ACCERTAMENTI_TESTO: accRows.map((a) => a.ACCERTAMENTO_NOME).join('\n') || '—',
-      PERIODICITA_TESTO: accRows.map((a) => a.PERIODICITA || '—').join('\n') || '—',
-      PAGE_BREAK_BEFORE: false,
+      PERIODICITA_TESTO: mat.formatPeriodicitaTestoGruppo
+        ? mat.formatPeriodicitaTestoGruppo(cfg.periodicita, accertamenti)
+        : accRows.map((a) => a.PERIODICITA || '—').join('\n') || '—',
+      PAGE_BREAK_BEFORE: !!cfg?.page_break_before,
     };
-    const rules = FN_RULES();
-    if (rules?.enrichGruppoWithFootnotes) {
-      return rules.enrichGruppoWithFootnotes(base, profilo, cfg);
-    }
     return base;
   }
 
@@ -299,9 +296,8 @@
     }
 
     let outZip = doc.getZip();
-    const gruppi = data.GRUPPI || buildGruppiOmogenei(data._profili_azienda, data._appendice_c_gruppi);
-    if (window.APPENDICE_C_FOOTNOTES?.injectFootnotesIntoDocxZip) {
-      outZip = window.APPENDICE_C_FOOTNOTES.injectFootnotesIntoDocxZip(outZip, gruppi);
+    if (window.APPENDICE_C_DOCX_FORMAT?.formatGeneratedZip) {
+      outZip = window.APPENDICE_C_DOCX_FORMAT.formatGeneratedZip(outZip);
     }
     if (logoBuffer && window.GEN_LOGO_DOCX?.injectLogoIntoDocxZip) {
       await window.GEN_LOGO_DOCX.injectLogoIntoDocxZip(outZip, logoBuffer, logoPathHint);

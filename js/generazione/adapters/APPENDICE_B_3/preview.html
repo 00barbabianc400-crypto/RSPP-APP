@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anteprima — Appendice B.3</title>
+<script src="adapter.js?v=20260604d"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #e8e8e8; font-family: Arial, Helvetica, sans-serif; font-size: 11pt; color: #1a1a1a; }
+  #toolbar {
+    position: sticky; top: 0; z-index: 100; background: #2a2a2a; color: #fff;
+    padding: 8px 16px; display: flex; align-items: center; gap: 12px; font-size: 13px;
+  }
+  #toolbar .title { flex: 1; font-weight: 600; }
+  #toolbar .stop-badge, #toolbar .ok-badge {
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; display: none;
+  }
+  #toolbar .stop-badge.visible { display: inline-block; background: #e74c3c; }
+  #toolbar .ok-badge.visible { display: inline-block; background: #27ae60; }
+  #toolbar button {
+    background: #3498db; color: #fff; border: none; padding: 6px 16px;
+    border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600;
+  }
+  #toolbar button:disabled { background: #666; cursor: not-allowed; }
+  #toolbar .tab-btn {
+    background: transparent; border: 1px solid #555; color: #ccc; padding: 5px 12px; font-weight: normal;
+  }
+  #toolbar .tab-btn.active { background: #3498db; border-color: #3498db; color: #fff; font-weight: 600; }
+  .page-wrap { max-width: 820px; margin: 20px auto; padding-bottom: 40px; }
+  .page { background: #fff; padding: 2cm; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+  h1.doc-title { font-size: 14pt; font-weight: bold; margin-bottom: 12px; }
+  .hint-str { font-size: 9.5pt; color: #555; line-height: 1.45; }
+  .field-auto { color: #1a5276; font-weight: 600; background: #eaf4fb; padding: 2px 6px; border-radius: 3px; }
+  .field-missing { color: #922b21; font-weight: 600; background: #fdecea; padding: 2px 6px; border-radius: 3px; }
+  .wizard-block { margin: 14px 0; padding: 12px 14px; background: #f8f9fa; border: 1px solid #dde2e6; border-radius: 4px; }
+  .wizard-block label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 11pt; }
+  .wizard-block input[type="date"] { padding: 6px 8px; font-size: 11pt; }
+  .scheda-preview-bl { margin-top: 8px; padding: 10px; background: #f4f6f8; border-radius: 4px; font-size: 10pt; white-space: pre-wrap; word-break: break-word; line-height: 1.4; }
+  .hidden { display: none !important; }
+  #viewDocx { display: none; padding: 16px; background: #fff; min-height: 400px; }
+  #viewDocx.active { display: block; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <span class="title" id="toolbarTitle">APPENDICE_B3_ALTRE_SEDI</span>
+  <span class="stop-badge" id="stopBadge">Errori</span>
+  <span class="ok-badge" id="okBadge">OK</span>
+  <button type="button" class="tab-btn active" id="tabCompileBtn" onclick="showView('compile')">Compila</button>
+  <button type="button" class="tab-btn" id="tabDocxBtn" onclick="showView('docx')">Anteprima Word</button>
+  <button type="button" id="btnGenera" disabled>Genera DOCX</button>
+</div>
+
+<div id="viewCompile">
+  <div class="page-wrap">
+    <div class="page">
+      <h1 class="doc-title">Appendice B.3 — Altre sedi operative (Word)</h1>
+      <p class="hint-str" style="margin-bottom:12px;">
+        Template: <code>modelli/APPENDICE_B3_ALTRE_SEDI.docx</code> (stesso file di B.2) · Logo: <code>{%LOGO%}</code>
+        · Sede da selezione in generazione documenti.
+      </p>
+      <p><strong>Azienda</strong>: <span id="pAzienda" class="field-auto">—</span></p>
+      <p><strong>Logo</strong>: <span id="pLogo" class="field-auto">—</span></p>
+
+      <div class="wizard-block">
+        <label>Tabella sito — da anagrafica (sede selezionata)</label>
+        <p><strong>Sede</strong></p>
+        <div id="previewSede" class="scheda-preview-bl field-auto">—</div>
+        <p style="margin-top:10px;"><strong>Descrizione del sito</strong></p>
+        <div id="previewDescrizioneSito" class="scheda-preview-bl field-auto">—</div>
+        <p style="margin-top:10px;"><strong>Descrizione processo produttivo</strong></p>
+        <div id="previewDescrizioneProcesso" class="scheda-preview-bl field-auto">—</div>
+      </div>
+
+      <div class="wizard-block">
+        <label for="inpDataSopralluogo">Data sopralluogo <span class="required">*</span></label>
+        <input type="date" id="inpDataSopralluogo" onchange="setDataSopralluogo(this.value)">
+        <p class="hint-str" style="margin-top:8px;">Nel documento: <code>{{DATA_SOPRALLUOGO}}</code></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="viewDocx"><div id="docxPreviewHost"></div></div>
+
+<script>
+(function () {
+  'use strict';
+
+  let DATA = {};
+  const WIZARD = { data_sopralluogo: '' };
+  const ADAPTER = window.GEN_ADAPTERS?.APPENDICE_B3_ALTRE_SEDI;
+
+  function esc(s) {
+    return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function buildMerged() {
+    return ADAPTER?.applyWizard ? ADAPTER.applyWizard(DATA, WIZARD) : { ...DATA, ...WIZARD };
+  }
+
+  function renderReadonlyBlocks() {
+    const sede = String(DATA.SEDE_OPERATIVA || '').trim();
+    const sito = String(DATA.DESCRIZIONE_SITO || '').trim();
+    const proc = String(DATA.DESCRIZIONE_PROCESSO_PRODUTTIVO || '').trim();
+    const elSede = document.getElementById('previewSede');
+    const elSito = document.getElementById('previewDescrizioneSito');
+    const elProc = document.getElementById('previewDescrizioneProcesso');
+    if (elSede) {
+      elSede.textContent = sede || '—';
+      elSede.className = 'scheda-preview-bl ' + (sede ? 'field-auto' : 'field-missing');
+    }
+    if (elSito) {
+      elSito.textContent = sito || '— (Anagrafica → Sedi → Descrizione del sito)';
+      elSito.className = 'scheda-preview-bl ' + (sito ? 'field-auto' : 'field-missing');
+    }
+    if (elProc) {
+      elProc.textContent = proc || '— (descrizione processo nel modale sedi)';
+      elProc.className = 'scheda-preview-bl ' + (proc ? 'field-auto' : 'field-missing');
+    }
+  }
+
+  function renderLogoPreview() {
+    const el = document.getElementById('pLogo');
+    if (!el) return;
+    const url = DATA.LOGO_PREVIEW_URL || '';
+    if (url) {
+      el.innerHTML = '<img src="' + esc(url) + '" alt="logo" style="max-height:40px;vertical-align:middle;">';
+      el.className = 'field-auto';
+      return;
+    }
+    if (DATA._logo_buffer) {
+      el.textContent = 'Logo caricato';
+      el.className = 'field-auto';
+      return;
+    }
+    el.textContent = '— (carica logo in Loghi)';
+    el.className = 'field-missing';
+  }
+
+  window.setDataSopralluogo = function (val) {
+    WIZARD.data_sopralluogo = String(val || '').trim();
+    sendUpdate();
+  };
+
+  function sendUpdate() {
+    const merged = buildMerged();
+    const errors = ADAPTER ? ADAPTER.validate(merged) : ['Adapter non caricato'];
+    document.getElementById('stopBadge').classList.toggle('visible', errors.length > 0);
+    document.getElementById('okBadge').classList.toggle('visible', !errors.length);
+    document.getElementById('btnGenera').disabled = !!errors.length;
+    if (errors.length) {
+      document.getElementById('stopBadge').textContent = errors[0] || 'Errori';
+      document.getElementById('stopBadge').title = errors.join('\n');
+    }
+    const payload = { ...merged };
+    delete payload._logo_buffer;
+    delete payload._logo_path;
+    window.parent.postMessage({ type: 'DATA_UPDATE', data: payload, valid: !errors.length, errors }, '*');
+  }
+
+  window.showView = function (view) {
+    document.getElementById('viewCompile').classList.toggle('hidden', view !== 'compile');
+    document.getElementById('viewDocx').classList.toggle('active', view === 'docx');
+    document.getElementById('tabCompileBtn').classList.toggle('active', view === 'compile');
+    document.getElementById('tabDocxBtn').classList.toggle('active', view === 'docx');
+    document.getElementById('toolbarTitle').textContent =
+      view === 'compile' ? 'APPENDICE_B3_ALTRE_SEDI — Compila' : 'APPENDICE_B3_ALTRE_SEDI — Anteprima Word';
+    if (view === 'docx') {
+      window.parent.postMessage({ type: 'PREVIEW_DOCX', data: buildMerged() }, '*');
+    }
+  };
+
+  function initFromData() {
+    document.getElementById('pAzienda').textContent = DATA.RAGIONE_SOCIALE || '—';
+    if (DATA.data_sopralluogo !== undefined) {
+      WIZARD.data_sopralluogo = String(DATA.data_sopralluogo || '');
+    }
+    const inp = document.getElementById('inpDataSopralluogo');
+    if (inp) inp.value = WIZARD.data_sopralluogo || '';
+    renderReadonlyBlocks();
+    renderLogoPreview();
+    sendUpdate();
+  }
+
+  window.addEventListener('message', (e) => {
+    if (!e.data || typeof e.data !== 'object') return;
+    if (e.data.type === 'SET_DATA') {
+      DATA = e.data.data || {};
+      initFromData();
+    }
+    if (e.data.type === 'PREVIEW_DOCX_BLOB' && e.data.buffer) {
+      const host = document.getElementById('docxPreviewHost');
+      if (!window.docx || !host) return;
+      host.innerHTML = '';
+      window.docx.renderAsync(e.data.buffer, host, null, { className: 'docx-preview' });
+    }
+    if (e.data.type === 'PREVIEW_DOCX_ERROR') {
+      document.getElementById('docxPreviewHost').innerHTML =
+        '<p style="color:#c0392b;padding:16px;">' + esc(e.data.message) + '</p>';
+    }
+  });
+
+  document.getElementById('btnGenera').addEventListener('click', () => {
+    window.parent.postMessage({ type: 'GENERATE', data: buildMerged() }, '*');
+  });
+
+  window.parent.postMessage({ type: 'IFRAME_READY' }, '*');
+})();
+</script>
+</body>
+</html>

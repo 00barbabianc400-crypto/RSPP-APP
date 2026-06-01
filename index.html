@@ -16,7 +16,7 @@
     <!-- Runtime ENV (generated from .env) -->
     <script src="./env.js"></script>
     <script src="js/audit-delete-log.js?v=20260529a"></script>
-    <script src="js/rischio-accertamento-matrice.js?v=20260603a"></script>
+    <script src="js/rischio-accertamento-matrice.js?v=20260604c"></script>
     <script src="js/profilo-modal.js?v=20260603e"></script>
     <script src="js/azienda-sedi-modal.js?v=20260604b"></script>
     <!-- Fluent UI (solo foglio di stile, non modulo JS) -->
@@ -5980,13 +5980,14 @@
             return codice === 'APPENDICE_B1_PROFILI';
         }
 
-        function isAppendiceB2Docx(codice) {
-            return codice === 'APPENDICE_B2_MISURE';
+        function isAppendiceBSedeDocx(codice) {
+            return codice === 'APPENDICE_B2_MISURE' || codice === 'APPENDICE_B3_ALTRE_SEDI';
         }
 
         function genAdapterFolder(codice) {
             if (codice === 'APPENDICE_B1_PROFILI') return 'APPENDICE_B_1';
             if (codice === 'APPENDICE_B2_MISURE') return 'APPENDICE_B_2';
+            if (codice === 'APPENDICE_B3_ALTRE_SEDI') return 'APPENDICE_B_3';
             if (codice === 'APPENDICE_C_SORVEGLIANZA') return 'APPENDICE_C';
             return codice;
         }
@@ -6010,7 +6011,8 @@
                 APPENDICE_A_ORGANIGRAMMA: '20260602a',
                 APPENDICE_B1_PROFILI: '20260603h',
                 APPENDICE_B2_MISURE: '20260604b',
-                APPENDICE_C_SORVEGLIANZA: '20260603g',
+                APPENDICE_B3_ALTRE_SEDI: '20260604d',
+                APPENDICE_C_SORVEGLIANZA: '20260604c',
             };
             return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
         }
@@ -6205,7 +6207,7 @@
                 return out;
             }
 
-            function mergeAppendiceB2GenPayload(cur, init) {
+            function mergeAppendiceBSedeDocxGenPayload(cur, init) {
                 const out = { ...(cur || {}) };
                 if (!init) return out;
                 ['SEDE_OPERATIVA', 'DESCRIZIONE_SITO', 'DESCRIZIONE_PROCESSO_PRODUTTIVO', 'RAGIONE_SOCIALE'].forEach((k) => {
@@ -6262,14 +6264,14 @@
                 if (e.data.type === 'DATA_UPDATE') {
                     currentData = isAppendiceProfiliXlsx(codice)
                         ? mergeAppendiceB1GenPayload(e.data.data, initialData)
-                        : isAppendiceB2Docx(codice)
-                        ? mergeAppendiceB2GenPayload(e.data.data, initialData)
+                        : isAppendiceBSedeDocx(codice)
+                        ? mergeAppendiceBSedeDocxGenPayload(e.data.data, initialData)
                         : codice === 'APPENDICE_C_SORVEGLIANZA'
                         ? mergeAppendiceCGenPayload(e.data.data, initialData)
                         : e.data.data;
                     if (
                         !isAppendiceProfiliXlsx(codice) &&
-                        !isAppendiceB2Docx(codice) &&
+                        !isAppendiceBSedeDocx(codice) &&
                         codice !== 'APPENDICE_C_SORVEGLIANZA' &&
                         !currentData?._logo_buffer?.byteLength &&
                         initialData?._logo_buffer?.byteLength
@@ -6294,8 +6296,8 @@
                 if (e.data.type === 'GENERATE') {
                     const genPayload = isAppendiceProfiliXlsx(codice)
                         ? mergeAppendiceB1GenPayload(e.data.data, initialData)
-                        : isAppendiceB2Docx(codice)
-                        ? mergeAppendiceB2GenPayload(e.data.data, initialData)
+                        : isAppendiceBSedeDocx(codice)
+                        ? mergeAppendiceBSedeDocxGenPayload(e.data.data, initialData)
                         : codice === 'APPENDICE_C_SORVEGLIANZA'
                         ? mergeAppendiceCGenPayload(e.data.data, initialData)
                         : e.data.data;
@@ -6311,8 +6313,8 @@
                 if (e.data.type === 'PREVIEW_DOCX' || e.data.type === 'PREVIEW_XLSX') {
                     const previewPayload = isAppendiceProfiliXlsx(codice)
                         ? mergeAppendiceB1GenPayload(e.data.data, initialData)
-                        : isAppendiceB2Docx(codice)
-                        ? mergeAppendiceB2GenPayload(e.data.data, initialData)
+                        : isAppendiceBSedeDocx(codice)
+                        ? mergeAppendiceBSedeDocxGenPayload(e.data.data, initialData)
                         : codice === 'APPENDICE_C_SORVEGLIANZA'
                         ? mergeAppendiceCGenPayload(e.data.data, initialData)
                         : e.data.data;
@@ -6325,8 +6327,8 @@
             generateBtn.addEventListener('click', () => {
                 const genPayload = isAppendiceProfiliXlsx(codice)
                     ? mergeAppendiceB1GenPayload(currentData, initialData)
-                    : isAppendiceB2Docx(codice)
-                    ? mergeAppendiceB2GenPayload(currentData, initialData)
+                    : isAppendiceBSedeDocx(codice)
+                    ? mergeAppendiceBSedeDocxGenPayload(currentData, initialData)
                     : codice === 'APPENDICE_C_SORVEGLIANZA'
                     ? mergeAppendiceCGenPayload(currentData, initialData)
                     : currentData;
@@ -6363,13 +6365,13 @@
                 await loadScriptOnce(base + 'vdt-texts.js');
             }
 
-            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA', 'PROC_INFORTUNI_NEARMISS', 'NOTA_LAVORATRICI_MADRI', 'NOTA_ANTINCENDIO', 'APPENDICE_A_ORGANIGRAMMA', 'APPENDICE_B2_MISURE', 'APPENDICE_C_SORVEGLIANZA'];
+            const withLogoDocx = ['MOD_STRESS_LC', 'MOD_MICROCLIMA', 'MOD_VDT_ILLUMINAMENTO', 'MOD_CHIMICO', 'MOD_EMERGENZE', 'MOD_VIBRAZIONI', 'MOD_GAS_RADON', 'MOD_RUMORE', 'MOD_INCENDIO', 'VADEMECUM_AGGRESSIONI', 'VADEMECUM_ANTIRAPINA', 'PROC_INFORTUNI_NEARMISS', 'NOTA_LAVORATRICI_MADRI', 'NOTA_ANTINCENDIO', 'APPENDICE_A_ORGANIGRAMMA', 'APPENDICE_B2_MISURE', 'APPENDICE_B3_ALTRE_SEDI', 'APPENDICE_C_SORVEGLIANZA'];
             if (withLogoDocx.includes(codice)) {
                 try {
                     const logoVer =
                         codice === 'VADEMECUM_AGGRESSIONI' || codice === 'VADEMECUM_ANTIRAPINA' || codice === 'PROC_INFORTUNI_NEARMISS' || codice === 'NOTA_LAVORATRICI_MADRI' || codice === 'NOTA_ANTINCENDIO'
                             ? '20260601c'
-                            : codice === 'APPENDICE_A_ORGANIGRAMMA' || codice === 'APPENDICE_B2_MISURE' || codice === 'APPENDICE_C_SORVEGLIANZA'
+                            : codice === 'APPENDICE_A_ORGANIGRAMMA' || isAppendiceBSedeDocx(codice) || codice === 'APPENDICE_C_SORVEGLIANZA'
                             ? '20260601b'
                             : '20260520d';
                     await loadScriptOnce(base + 'logo-docx.js?v=' + logoVer);
@@ -6409,7 +6411,8 @@
                 : codice === 'APPENDICE_A_ORGANIGRAMMA' ? '20260602a'
                 : codice === 'APPENDICE_B1_PROFILI' ? '20260603h'
                 : codice === 'APPENDICE_B2_MISURE' ? '20260604b'
-                : codice === 'APPENDICE_C_SORVEGLIANZA' ? '20260603g'
+                : codice === 'APPENDICE_B3_ALTRE_SEDI' ? '20260604d'
+                : codice === 'APPENDICE_C_SORVEGLIANZA' ? '20260604c'
                 : '20260520c';
             if (codice === 'NOTA_LAVORATRICI_MADRI') {
                 await loadScriptOnce(base + 'rischi-madri-catalogo.js?v=' + adapterVer);
@@ -6421,10 +6424,9 @@
                 await loadScriptOnce(base + 'sorveglianza-catalogo.js?v=' + adapterVer);
             }
             if (codice === 'APPENDICE_C_SORVEGLIANZA') {
-                await loadScriptOnce('js/rischio-accertamento-matrice.js?v=20260603a');
+                await loadScriptOnce('js/rischio-accertamento-matrice.js?v=20260604c');
                 await loadScriptOnce(base + 'rischio-accertamento-matrice.js?v=' + adapterVer);
-                await loadScriptOnce(base + 'footnote-rules.js?v=' + adapterVer);
-                await loadScriptOnce(base + 'appendice-c-footnotes.js?v=' + adapterVer);
+                await loadScriptOnce(base + 'appendice-c-docx-format.js?v=' + adapterVer);
             }
             await loadScriptOnce(base + 'adapter.js?v=' + adapterVer);
         }

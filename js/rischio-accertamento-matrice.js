@@ -160,6 +160,26 @@
     return ids.map((id) => PERIODICITA_OPTS.find((p) => p.id === id)?.label || id).join(', ');
   }
 
+  /** Periodicità uniche per gruppo (colonna D Appendice C), ordinate, una per riga. */
+  function formatPeriodicitaTestoGruppo(perAccertamentoMap, accertamenti) {
+    const seen = new Set();
+    const ids = [];
+    (Array.isArray(accertamenti) ? accertamenti : []).forEach((acc) => {
+      mergePeriodicitaIds(perAccertamentoMap, acc.id).forEach((id) => {
+        if (seen.has(id)) return;
+        seen.add(id);
+        ids.push(id);
+      });
+    });
+    ids.sort(
+      (a, b) =>
+        (PERIODICITA_OPTS.find((p) => p.id === a)?.ordine || 99) -
+        (PERIODICITA_OPTS.find((p) => p.id === b)?.ordine || 99)
+    );
+    const lines = ids.map((id) => PERIODICITA_OPTS.find((p) => p.id === id)?.label || id);
+    return lines.length ? lines.join('\n') : '—';
+  }
+
   function defaultGruppoConfig() {
     return { rischi_ids: [], periodicita: {}, page_break_before: false };
   }
@@ -188,6 +208,7 @@
     accertamentiForRischi,
     mergePeriodicitaIds,
     formatPeriodicitaForAccertamento,
+    formatPeriodicitaTestoGruppo,
     defaultGruppoConfig,
     normalizeGruppoConfig,
     normalizeProtocolloProfilo,

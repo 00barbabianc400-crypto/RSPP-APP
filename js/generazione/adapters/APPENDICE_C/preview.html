@@ -4,10 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Appendice C</title>
-<script src="../../../rischio-accertamento-matrice.js?v=20260603a"></script>
-<script src="footnote-rules.js?v=20260603g"></script>
-<script src="appendice-c-footnotes.js?v=20260603g"></script>
-<script src="adapter.js?v=20260603g"></script>
+<script src="../../../rischio-accertamento-matrice.js?v=20260604c"></script>
+<script src="appendice-c-docx-format.js?v=20260604c"></script>
+<script src="adapter.js?v=20260604c"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -118,7 +117,6 @@
             <th>Rischi lavorativi</th>
             <th>Accertamenti</th>
             <th>Periodicità</th>
-            <th>Apici</th>
             <th></th>
           </tr>
         </thead>
@@ -166,15 +164,6 @@
   let modalDraft = { rischi_ids: [], periodicita: {} };
   let autoConfigActive = false;
   let autoConfigDismissed = false;
-
-  function fnTagsHtml(g) {
-    const parts = [];
-    if (g.FN_ART176) parts.push('Art.176');
-    if (g.FN_EMATOCHIMICI) parts.push('Ematoch.');
-    if (g.FN_ANTITETANICA) parts.push('Antitet.');
-    if (g.PAGE_BREAK_BEFORE) parts.push('↵ pag.');
-    return parts.length ? '<span class="fn-tag">' + esc(parts.join(' · ')) + '</span>' : '—';
-  }
 
   function esc(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -284,7 +273,7 @@
     if (!tbody || !ADAPTER) return;
     const profili = profiliList();
     if (!profili.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="hint-str">Nessun profilo associato</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="hint-str">Nessun profilo associato</td></tr>';
       return;
     }
     const rows = ADAPTER.buildGruppiOmogenei(profili, WIZARD.appendice_c_gruppi);
@@ -301,7 +290,6 @@
         + '<td class="col-rischi">' + esc(g.RISCHI_TESTO) + '</td>'
         + '<td class="col-acc">' + esc(g.ACCERTAMENTI_TESTO) + '</td>'
         + '<td class="col-acc">' + esc(g.PERIODICITA_TESTO) + '</td>'
-        + '<td>' + fnTagsHtml(g) + '</td>'
         + '<td><button type="button" class="btn-sm" data-pid="' + esc(g.GRUPPO_ID) + '"'
         + ' onclick="openModal(this.getAttribute(\'data-pid\'))"'
         + (sor ? '' : ' disabled title="Profilo senza protocollo sorveglianza"') + '>'

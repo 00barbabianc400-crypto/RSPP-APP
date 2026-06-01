@@ -16,6 +16,8 @@
     <!-- Runtime ENV (generated from .env) -->
     <script src="./env.js"></script>
     <script src="js/audit-delete-log.js?v=20260529a"></script>
+    <script src="js/rischio-accertamento-matrice.js?v=20260603a"></script>
+    <script src="js/profilo-modal.js?v=20260603c"></script>
     <!-- Fluent UI (solo foglio di stile, non modulo JS) -->
     <link rel="stylesheet" href="https://res.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css">
     
@@ -378,6 +380,37 @@
             padding-top: 0;
             margin-top: 0;
         }
+
+        .profilo-fase-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border: 1px solid var(--sp-border);
+            border-radius: 6px;
+            background: var(--sp-bg-hover);
+        }
+        .profilo-fase-card-head { flex: 1; min-width: 0; }
+        .profilo-fase-card-head .hint-str { display: block; font-size: 12px; margin-top: 4px; }
+        .profilo-fase-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .profilo-matrice-rischi { display: flex; flex-wrap: wrap; gap: 8px; }
+        .profilo-check-chip {
+            font-size: 13px;
+            padding: 4px 8px;
+            border: 1px solid var(--sp-border);
+            border-radius: 4px;
+            background: var(--sp-bg-card);
+            cursor: pointer;
+        }
+        .profilo-check-chip input { margin-right: 4px; vertical-align: middle; }
+        .profilo-acc-row {
+            padding: 10px 0;
+            border-bottom: 1px solid var(--sp-border);
+        }
+        .profilo-per-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .hint-str { font-size: 12px; color: var(--sp-text-secondary); }
         
         .form-field {
             display: flex;
@@ -973,6 +1006,7 @@
             data: {
                 aziende: [],
                 profili: [],
+                profiloFasiDettaglio: {},
                 rischi: [],
                 tipiRilevamento: [],
                 aziendeProfili: [],
@@ -2083,6 +2117,8 @@
                     Attivo: row.attivo,
                     FasiLavoro: Array.isArray(row.fasi_lavoro) ? row.fasi_lavoro : [],
                     RischiMansione: Array.isArray(row.rischi_mansione) ? row.rischi_mansione : [],
+                    ProtocolloSanitarioConfig: row.protocollo_sanitario_config || {},
+                    SediOperative: Array.isArray(row.sedi_operative) ? row.sedi_operative : [],
                     AziendaProprietariaId: row.azienda_proprietaria_id,
                     AziendaProprietariaNome: row.azienda_proprietaria?.ragione_sociale || ''
                 }
@@ -2122,6 +2158,134 @@
             );
         }
 
+        function makeDuplicateNomeProfilo(base, tipoProfilo, aziendaProprietariaId, profili) {
+            const tipo = (tipoProfilo || 'Standard').trim();
+            const owner = tipo === 'Custom' ? String(aziendaProprietariaId || '') : '';
+            const names = new Set(
+                (profili || [])
+                    .filter((p) => {
+                        const f = p.fields || {};
+                        const t = (f.TipoProfilo || 'Standard').trim();
+                        const o = t === 'Custom' ? String(f.AziendaProprietariaId || '') : '';
+                        return t === tipo && o === owner;
+                    })
+                    .map((p) => String(p.fields?.NomeProfilo || '').trim().toLowerCase())
+            );
+            let candidate = String(base || 'Profilo').trim() + ' - Copia';
+            let n = 2;
+            while (names.has(candidate.toLowerCase())) {
+                candidate = String(base || 'Profilo').trim() + ' - Copia (' + n + ')';
+                n += 1;
+            }
+            return candidate;
+        }
+
+        /** Azienda per duplicazione rapida: filtro tab Associazioni, oppure unica azienda in elenco. */
+        function getAziendaIdForProfiloDuplicate() {
+            const fromFilter = document.getElementById('associazioniAziendaFilter')?.value || '';
+            if (fromFilter) return fromFilter;
+            const aziende = STATE.data.aziende || [];
+            if (aziende.length === 1) return aziende[0].id;
+            return null;
+        }
+
+        async function duplicateProfilo(itemId) {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const item = (STATE.data.profili || []).find((p) => p.id == itemId);
+            if (!item) return;
+
+            await reloadProfiloFasiDettaglio();
+
+            const f = item.fields || {};
+            let aziendaId = f.AziendaProprietariaId || getAziendaIdForProfiloDuplicate();
+            const tipoTarget = 'Custom';
+
+            if (f.TipoProfilo === 'Standard' || !aziendaId) {
+                if (window.ProfiloModal?.openDuplicateFrom) {
+                    window.ProfiloModal.openDuplicateFrom(itemId);
+                } else {
+                    showToast('Modulo profilo non caricato', 'error');
+                }
+                return;
+            }
+
+            const nome = makeDuplicateNomeProfilo(
+                f.NomeProfilo,
+                tipoTarget,
+                aziendaId,
+                STATE.data.profili
+            );
+            const payload = {
+                nome_profilo: nome,
+                tipo_personale: f.TipoPersonale || '',
+                descrizione_attivita: f.DescrizioneAttivita || null,
+                tipo_profilo: tipoTarget,
+                misure_gen_generali: f.MisureGenGenerali || null,
+                dpi_base: f.DPIBase || null,
+                dpi_collettivi: f.DPICollettivi || null,
+                protocollo_sor_san: f.ProtocolloSorSan,
+                attivo: true,
+                fasi_lavoro: Array.isArray(f.FasiLavoro) ? f.FasiLavoro : [],
+                rischi_mansione: [],
+                protocollo_sanitario_config: f.ProtocolloSanitarioConfig || {},
+                sedi_operative: Array.isArray(f.SediOperative) ? [...f.SediOperative] : [],
+                azienda_proprietaria_id: aziendaId,
+            };
+
+            const fasiPayload = (STATE.data.profiloFasiDettaglio?.[itemId] || []).map((row) => ({
+                nome: String(row.nome || '').trim(),
+                misure_specifiche: row.misure_specifiche || '',
+                dpi_specifici: row.dpi_specifici || '',
+                rischi_lavorativi_ids: (row.rischi || [])
+                    .map((x) => x.rischio_lavorativo_id)
+                    .filter(Boolean),
+            })).filter((x) => x.nome);
+
+            if (!fasiPayload.length && (f.FasiLavoro || []).length) {
+                (f.FasiLavoro || []).forEach((nome) => {
+                    const n = String(nome || '').trim();
+                    if (n) {
+                        fasiPayload.push({
+                            nome: n,
+                            misure_specifiche: '',
+                            dpi_specifici: '',
+                            rischi_lavorativi_ids: [],
+                        });
+                    }
+                });
+            }
+
+            try {
+                const { data: inserted, error } = await supabaseClient
+                    .from(CONFIG.tables.profili)
+                    .insert(payload)
+                    .select('id')
+                    .single();
+                if (error) throw error;
+
+                if (inserted?.id && fasiPayload.length) {
+                    const { error: strErr } = await supabaseClient.rpc('fn_salva_struttura_profilo', {
+                        p_profilo_id: inserted.id,
+                        p_fasi: fasiPayload,
+                    });
+                    if (strErr) throw strErr;
+                }
+
+                showToast('Profilo duplicato (Custom)', 'success');
+                await renderProfili();
+                openProfiloModal(inserted.id);
+            } catch (error) {
+                console.error(error);
+                showToast('Errore duplicazione: ' + error.message, 'error');
+            }
+        }
+        window.duplicateProfilo = duplicateProfilo;
+        window.makeDuplicateNomeProfilo = makeDuplicateNomeProfilo;
+        window.getAziendaIdForProfiloDuplicate = getAziendaIdForProfiloDuplicate;
+
         function profiloPayloadFromForm(data) {
             return {
                 nome_profilo: data.NomeProfilo,
@@ -2135,9 +2299,42 @@
                 attivo: data.Attivo,
                 fasi_lavoro: data.FasiLavoro || [],
                 rischi_mansione: data.RischiMansione || [],
+                protocollo_sanitario_config: data.protocollo_sanitario_config || {},
+                sedi_operative: Array.isArray(data.sedi_operative) ? data.sedi_operative : [],
                 azienda_proprietaria_id: data.TipoProfilo === 'Custom' ? (data.AziendaProprietariaId || null) : null
             };
         }
+
+        async function reloadProfiloFasiDettaglio() {
+            const { data, error } = await supabaseClient
+                .from('profilo_fasi')
+                .select('id, profilo_id, nome, ordine, misure_specifiche, dpi_specifici, profilo_fase_rischi_lavoro(rischio_lavorativo_id, ordine)')
+                .order('ordine', { ascending: true });
+            if (error) {
+                console.warn('[Profili] profilo_fasi dettaglio', error);
+                return;
+            }
+            const byProfilo = {};
+            (data || []).forEach((row) => {
+                const pid = row.profilo_id;
+                if (!byProfilo[pid]) byProfilo[pid] = [];
+                const rischi = (row.profilo_fase_rischi_lavoro || [])
+                    .slice()
+                    .sort((a, b) => (a.ordine || 0) - (b.ordine || 0));
+                byProfilo[pid].push({
+                    id: row.id,
+                    nome: row.nome,
+                    ordine: row.ordine,
+                    misure_specifiche: row.misure_specifiche,
+                    dpi_specifici: row.dpi_specifici,
+                    rischi,
+                });
+            });
+            STATE.data.profiloFasiDettaglio = byProfilo;
+            STATE.data.profiloFasi = data || [];
+        }
+        window.reloadProfiloFasiDettaglio = reloadProfiloFasiDettaglio;
+        window.renderProfili = renderProfili;
 
         function normalizeAssociazioneRow(row) {
             return {
@@ -2183,6 +2380,8 @@
                 .order('data_associazione', { ascending: false });
             if (assocError) throw assocError;
             STATE.data.aziendeProfili = (assocData || []).map(normalizeAssociazioneRow);
+
+            await reloadProfiloFasiDettaglio();
         }
 
         async function renderProfili() {
@@ -2327,6 +2526,7 @@
                     <td>${attivoBadge}</td>
                     <td>
                         <div class="actions">
+                            <button class="icon-btn" title="Duplica come Custom" onclick="duplicateProfilo('${item.id}')">📋</button>
                             <button class="icon-btn" onclick="openProfiloModal('${item.id}')" title="Modifica">✏️</button>
                             <button class="icon-btn danger" onclick="deleteProfilo('${item.id}')" title="Elimina">🗑️</button>
                         </div>
@@ -2432,204 +2632,11 @@
         }
 
         function openProfiloModal(itemId = null) {
-            if (!canMutateData()) {
-                showToast('Profilo in sola lettura', 'warning');
+            if (window.ProfiloModal?.open) {
+                window.ProfiloModal.open(itemId);
                 return;
             }
-            const isEdit = itemId !== null;
-            const item = isEdit ? STATE.data.profili.find(p => p.id == itemId) : null;
-            const f = item ? item.fields : {};
-
-            const aziendeOptions = (STATE.data.aziende || [])
-                .map(a => `<option value="${a.id}" ${(f.AziendaProprietariaId === a.id) ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`)
-                .join('');
-
-            const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
-            modal.id = 'profiloModal';
-            modal.innerHTML = `
-                <div class="modal" onclick="event.stopPropagation()">
-                    <div class="modal-header">
-                        <div class="modal-title">${isEdit ? 'Modifica Profilo' : 'Nuovo Profilo'}</div>
-                        <button class="icon-btn" onclick="closeModal('profiloModal')">✕</button>
-                    </div>
-                    <div class="modal-body">
-                        <form id="profiloForm" onsubmit="saveProfilo(event, ${itemId != null ? `'${itemId}'` : 'null'})">
-                            <div class="form-grid">
-                                <div class="form-field">
-                                    <label>Nome Profilo <span class="required">*</span></label>
-                                    <input type="text" name="NomeProfilo" value="${esc(f.NomeProfilo || '')}" required>
-                                </div>
-                                <div class="form-field">
-                                    <label>Tipo Personale <span class="required">*</span></label>
-                                    <input type="text" name="TipoPersonale" value="${esc(f.TipoPersonale || '')}" required>
-                                </div>
-                                <div class="form-field">
-                                    <label>Tipo Profilo <span class="required">*</span></label>
-                                    <select name="TipoProfilo" required onchange="toggleAziendaProprietariaField(this.value)" ${isEdit && f.TipoProfilo === 'Standard' ? 'disabled' : ''}>
-                                        <option value="Standard" ${f.TipoProfilo === 'Standard' ? 'selected' : ''}>Standard</option>
-                                        <option value="Custom" ${f.TipoProfilo === 'Custom' ? 'selected' : ''}>Custom</option>
-                                    </select>
-                                    ${isEdit && f.TipoProfilo === 'Standard' ? '<input type="hidden" name="TipoProfilo" value="Standard">' : ''}
-                                </div>
-                                <div class="form-field" id="aziendaProprietariaField" style="${(f.TipoProfilo === 'Custom') ? '' : 'display:none;'}">
-                                    <label>Azienda Proprietaria</label>
-                                    <select name="AziendaProprietariaId">
-                                        <option value="">— Nessuna —</option>
-                                        ${aziendeOptions}
-                                    </select>
-                                </div>
-                                <div class="form-field full">
-                                    <label>Fasi di lavoro</label>
-                                    <div id="profiloFasiLavoroList">
-                                        ${renderProfiloArrayInputs(f.FasiLavoro || [], 'fasi_lavoro_item', 'Descrivi una fase di lavoro')}
-                                    </div>
-                                    <button type="button" class="btn" style="margin-top:8px;"
-                                            onclick="addProfiloArrayRow('profiloFasiLavoroList', 'fasi_lavoro_item', 'Descrivi una fase di lavoro')">
-                                        + Aggiungi fase
-                                    </button>
-                                </div>
-                                <div class="form-field full">
-                                    <label>Rischi lavorativi connessi allo svolgimento della mansione</label>
-                                    <div id="profiloRischiMansioneList">
-                                        ${renderProfiloArrayInputs(f.RischiMansione || [], 'rischi_mansione_item', 'Descrivi un rischio lavorativo connesso')}
-                                    </div>
-                                    <button type="button" class="btn" style="margin-top:8px;"
-                                            onclick="addProfiloArrayRow('profiloRischiMansioneList', 'rischi_mansione_item', 'Descrivi un rischio lavorativo connesso')">
-                                        + Aggiungi rischio
-                                    </button>
-                                </div>
-                                <div class="form-field full">
-                                    <label>Descrizione Attivita</label>
-                                    <textarea name="DescrizioneAttivita">${esc(f.DescrizioneAttivita || '')}</textarea>
-                                </div>
-                                <div class="form-field full">
-                                    <label>Misure Generali</label>
-                                    <textarea name="MisureGenGenerali">${esc(f.MisureGenGenerali || '')}</textarea>
-                                </div>
-                                <div class="form-field full">
-                                    <label>DPI Base</label>
-                                    <textarea name="DPIBase">${esc(f.DPIBase || '')}</textarea>
-                                </div>
-                                <div class="form-field full">
-                                    <label>DPI Collettivi</label>
-                                    <textarea name="DPICollettivi">${esc(f.DPICollettivi || '')}</textarea>
-                                </div>
-                                <div class="form-field">
-                                    <label>Protocollo Sorveglianza Sanitaria</label>
-                                    <select name="ProtocolloSorSan">
-                                        <option value="">— Non impostato —</option>
-                                        <option value="true" ${f.ProtocolloSorSan === true ? 'selected' : ''}>Sì</option>
-                                        <option value="false" ${f.ProtocolloSorSan === false ? 'selected' : ''}>No</option>
-                                    </select>
-                                </div>
-                                <div class="form-field">
-                                    <label>Attivo</label>
-                                    <select name="Attivo">
-                                        <option value="true" ${f.Attivo !== false ? 'selected' : ''}>Sì</option>
-                                        <option value="false" ${f.Attivo === false ? 'selected' : ''}>No</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        ${isEdit && f.TipoProfilo !== 'Standard' ? '<button class="btn btn-danger" onclick="deleteProfilo(\'' + itemId + '\')">Elimina</button>' : ''}
-                        <button class="btn" onclick="closeModal('profiloModal')">Annulla</button>
-                        <button class="btn btn-primary" onclick="document.getElementById('profiloForm').requestSubmit()">
-                            ${isEdit ? 'Salva Modifiche' : 'Crea Profilo'}
-                        </button>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-            setTimeout(() => modal.classList.add('show'), 10);
-            modal.onclick = () => closeModal('profiloModal');
-        }
-
-        function toggleAziendaProprietariaField(tipoProfilo) {
-            const field = document.getElementById('aziendaProprietariaField');
-            if (!field) return;
-            field.style.display = tipoProfilo === 'Custom' ? '' : 'none';
-        }
-
-        async function saveProfilo(event, itemId) {
-            if (!canMutateData()) {
-                showToast('Permessi insufficienti: sola lettura', 'warning');
-                return;
-            }
-            event.preventDefault();
-            const formData = new FormData(event.target);
-            const data = {};
-            for (const [key, value] of formData.entries()) {
-                if (value === '') continue;
-                if (['ProtocolloSorSan', 'Attivo'].includes(key)) {
-                    data[key] = value === 'true';
-                } else {
-                    data[key] = value;
-                }
-            }
-
-            data.FasiLavoro = profiloArrayFromForm(event.target, 'fasi_lavoro_item');
-            data.RischiMansione = profiloArrayFromForm(event.target, 'rischi_mansione_item');
-            const payload = profiloPayloadFromForm(data);
-            if (payload.tipo_profilo === 'Custom' && !payload.azienda_proprietaria_id) {
-                showToast('Per un profilo Custom devi selezionare Azienda Proprietaria', 'warning');
-                return;
-            }
-
-            try {
-                let profiloIdSaved = itemId;
-                if (itemId) {
-                    const existing = STATE.data.profili.find(p => p.id == itemId);
-                    if (existing?.fields?.TipoProfilo === 'Standard') {
-                        if (!canMutateData()) {
-                            throw new Error('I profili Standard non sono modificabili (serve ruolo editor o superiore)');
-                        }
-                        payload.tipo_profilo = 'Standard';
-                        payload.azienda_proprietaria_id = null;
-                    }
-                    const { error } = await supabaseClient
-                        .from(CONFIG.tables.profili)
-                        .update(payload)
-                        .eq('id', itemId);
-                    if (error) throw error;
-                    showToast('Profilo aggiornato con successo', 'success');
-                } else {
-                    const { data: inserted, error } = await supabaseClient
-                        .from(CONFIG.tables.profili)
-                        .insert(payload)
-                        .select('id')
-                        .single();
-                    if (error) throw error;
-                    profiloIdSaved = inserted?.id;
-                    showToast('Profilo creato con successo', 'success');
-                }
-
-                if (profiloIdSaved) {
-                    const { error: syncFasiErr } = await supabaseClient.rpc('fn_sincronizza_fasi_da_array', {
-                        p_profilo_id: profiloIdSaved
-                    });
-                    if (syncFasiErr) {
-                        console.warn('[Profili] sync fasi', syncFasiErr);
-                        showToast('Profilo salvato; sync fasi: ' + syncFasiErr.message, 'warning');
-                    }
-                    const { data: fasiData, error: fasiReloadErr } = await supabaseClient
-                        .from('profilo_fasi')
-                        .select('id, profilo_id, nome, ordine')
-                        .order('ordine');
-                    if (!fasiReloadErr) {
-                        STATE.data.profiloFasi = fasiData || [];
-                    }
-                }
-
-                closeModal('profiloModal');
-                await renderProfili();
-            } catch (error) {
-                console.error(error);
-                showToast('Errore salvataggio profilo: ' + error.message, 'error');
-            }
+            showToast('Modulo profilo non caricato', 'error');
         }
 
         async function deleteProfilo(itemId) {
@@ -6025,7 +6032,7 @@
                 NOTA_LAVORATRICI_MADRI: '20260528d',
                 NOTA_ANTINCENDIO: '20260601b',
                 APPENDICE_A_ORGANIGRAMMA: '20260602a',
-                APPENDICE_B1_PROFILI: '20260207o',
+                APPENDICE_B1_PROFILI: '20260603b',
                 APPENDICE_C_SORVEGLIANZA: '20260602d',
             };
             return 'js/generazione/adapters/' + genAdapterFolder(codice) + '/preview.html?v=' + (v[codice] || Date.now());
@@ -6087,7 +6094,8 @@
                     .from(CONFIG.tables.aziendeProfili)
                     .select(
                         'profilo_id, profilo:profilo_id(id, nome_profilo, attivo, descrizione_attivita, '
-                        + 'protocollo_sor_san, fasi_lavoro, misure_gen_generali, dpi_base, dpi_collettivi)'
+                        + 'protocollo_sor_san, protocollo_sanitario_config, fasi_lavoro, '
+                        + 'misure_gen_generali, dpi_base, dpi_collettivi)'
                     )
                     .eq('azienda_id', aziendaId),
             ]);
@@ -6102,6 +6110,7 @@
                     nome: row.profilo.nome_profilo || '',
                     descrizione_attivita: row.profilo.descrizione_attivita || '',
                     protocollo_sor_san: row.profilo.protocollo_sor_san,
+                    protocollo_sanitario_config: row.profilo.protocollo_sanitario_config || {},
                     misure_gen_generali: row.profilo.misure_gen_generali || '',
                     dpi_base: row.profilo.dpi_base || '',
                     dpi_collettivi: row.profilo.dpi_collettivi || '',
@@ -6109,6 +6118,10 @@
                     fasi_lavoro: Array.isArray(row.profilo?.fasi_lavoro) ? row.profilo.fasi_lavoro : [],
                 }))
                 .filter((p) => p.id && p.nome);
+
+            if (codice === 'APPENDICE_B1_PROFILI') {
+                await reloadProfiloFasiDettaglio();
+            }
 
             let valutazioniAppendiceB1 = [];
             if (codice === 'APPENDICE_B1_PROFILI') {
@@ -6128,6 +6141,17 @@
             const moduloNumero = catalogoItem?.ordine != null ? String(catalogoItem.ordine).padStart(2, '0') : '01';
 
             // Costruisci data iniziale
+            function buildAppendiceCGruppiFromProfili(profiliList) {
+                const mat = window.RISCHIO_ACCERTAMENTO_MATRICE;
+                const out = {};
+                (profiliList || []).forEach((p) => {
+                    if (p.protocollo_sor_san !== true || !mat) return;
+                    const cfg = mat.normalizeProtocolloProfilo(p.protocollo_sanitario_config);
+                    if (cfg.rischi_ids?.length) out[p.id] = cfg;
+                });
+                return out;
+            }
+
             const initialData = adapter.buildData(
                 az,
                 rilevamenti || [],
@@ -6141,7 +6165,11 @@
                     ...(codice === 'APPENDICE_B1_PROFILI'
                         ? {
                             valutazioni_appendice_b1: valutazioniAppendiceB1,
+                            profilo_fasi_dettaglio: STATE.data.profiloFasiDettaglio || {},
                           }
+                        : {}),
+                    ...(codice === 'APPENDICE_C_SORVEGLIANZA'
+                        ? { appendice_c_gruppi: buildAppendiceCGruppiFromProfili(profiliAzienda) }
                         : {}),
                 }
             );
@@ -6218,6 +6246,12 @@
                     out._logo_buffer = init._logo_buffer;
                     out._logo_path = out._logo_path || init._logo_path;
                     out.LOGO_PREVIEW_URL = out.LOGO_PREVIEW_URL || init.LOGO_PREVIEW_URL;
+                }
+                if (
+                    !out._profilo_fasi_dettaglio ||
+                    !Object.keys(out._profilo_fasi_dettaglio).length
+                ) {
+                    out._profilo_fasi_dettaglio = init._profilo_fasi_dettaglio;
                 }
                 return out;
             }
@@ -6381,6 +6415,7 @@
                 await loadScriptOnce(base + 'sorveglianza-catalogo.js?v=' + adapterVer);
             }
             if (codice === 'APPENDICE_C_SORVEGLIANZA') {
+                await loadScriptOnce('js/rischio-accertamento-matrice.js?v=20260603a');
                 await loadScriptOnce(base + 'rischio-accertamento-matrice.js?v=' + adapterVer);
                 await loadScriptOnce(base + 'footnote-rules.js?v=' + adapterVer);
                 await loadScriptOnce(base + 'appendice-c-footnotes.js?v=' + adapterVer);
@@ -7264,6 +7299,7 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                     <td>${r.ordine ?? '—'}</td>
                     <td>
                         <div class="actions">
+                            <button class="icon-btn" title="Duplica" onclick="duplicateRischioCatalogo('${r.id}')">📋</button>
                             <button class="icon-btn" onclick="openRischioModal('${r.id}')">✏️</button>
                             <button class="icon-btn danger" onclick="deleteRischio('${r.id}')">🗑️</button>
                         </div>
@@ -7376,6 +7412,59 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             document.body.appendChild(modal);
             setTimeout(() => modal.classList.add('show'), 10);
             modal.onclick = () => closeModal('rischioModal');
+        }
+
+        function makeDuplicateIdRischio(base, existing) {
+            const ids = new Set(
+                (existing || []).map((r) => String(r.id_rischio || '').trim().toLowerCase())
+            );
+            let candidate = String(base || 'R').trim() + '_COPIA';
+            let n = 2;
+            while (ids.has(candidate.toLowerCase())) {
+                candidate = String(base || 'R').trim() + '_COPIA_' + n;
+                n += 1;
+            }
+            return candidate;
+        }
+
+        async function duplicateRischioCatalogo(itemId) {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const item = (STATE.data.rischi || []).find((r) => r.id == itemId);
+            if (!item) return;
+            const idRischio = makeDuplicateIdRischio(item.id_rischio, STATE.data.rischi);
+            const payload = {
+                id_rischio: idRischio,
+                nome_rischio: item.nome_rischio,
+                categoria: item.categoria,
+                macro_categoria: item.macro_categoria,
+                titolo_normativo: item.titolo_normativo || null,
+                normativa_rif: item.normativa_rif || null,
+                descrizione: item.descrizione || null,
+                attivo: item.attivo !== false,
+                ordine: item.ordine ?? null,
+            };
+            const { data: inserted, error } = await supabaseClient
+                .from(CONFIG.tables.catalogoRischi)
+                .insert(payload)
+                .select('id')
+                .single();
+            if (error) {
+                showToast('Errore duplicazione: ' + error.message, 'error');
+                return;
+            }
+            if (inserted?.id && payload.attivo !== false) {
+                try {
+                    await syncNuovoRischioCatalogoValutazioni(inserted.id);
+                } catch (syncErr) {
+                    console.warn('[Catalogo] sync valutazioni nuovo rischio', syncErr);
+                }
+            }
+            showToast('Rischio duplicato', 'success');
+            await renderCatalogoRischi();
+            openRischioModal(inserted.id);
         }
 
         async function saveRischio(event, itemId) {

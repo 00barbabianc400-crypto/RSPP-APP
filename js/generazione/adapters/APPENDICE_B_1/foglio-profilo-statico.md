@@ -48,20 +48,20 @@ I tre campi testo vanno scritti **così come salvati** (trim); se vuoti → cell
 
 Struttura del foglio-profilo:
 
-- **Riga 4**: intestazione blocco *Descrizione della Fase di lavoro* (e resto matrice in C…).
-- **Riga 5**: sotto-intestazioni colonne rischio.
-- **Righe 6 … (5 + N)**: **N** righe dati, una per fase (`N = len(fasi_lavoro)`).
-- **Riga vuota** di separazione (nel modello con *N = 2*: riga 8 vuota).
-- **Prima riga del blocco statico** = **`7 + N`** (verificato: *N = 2* → riga 9; *N = 1* → riga 8).
+- **Riga 6**: nomi rischi (A:AO).
+- **Riga 7**: recap livelli.
+- **Riga 8**: intestazioni tabella fasi (A descrizione, C misure specifiche, D DPI specifici).
+- **Righe 9 … (8 + N)**: **N** righe dati fase (`N` = numero fasi da `profilo_fasi`).
+- **Prima riga blocco statico** = **`9 + N`** (es. *N = 2* → righe fase 9–10, statico da riga 11).
 
-Quindi le quattro etichette occupano le righe:
+Blocco statico (4 righe):
 
-- `R0 = 7 + N` → Misure generali  
+- `R0 = 9 + N` → Misure generali  
 - `R0 + 1` → DPI in dotazione  
 - `R0 + 2` → DPC  
 - `R0 + 3` → Protocollo  
 
-In generazione non si usa “A9:C12” fisso: si calcola **`R0` da N** (e in fase di sviluppo va allineato 1:1 al template se cambia il numero di righe vuote tra matrice e blocco statico).
+Colonne fase: **A** (+ merge A:B) descrizione, **C** misure specifiche, **D** DPI specifici (`misure_specifiche`, `dpi_specifici` da DB).
 
 ---
 

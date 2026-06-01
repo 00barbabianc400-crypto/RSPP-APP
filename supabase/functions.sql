@@ -390,6 +390,114 @@ $$;
 revoke all on function public.fn_sincronizza_fasi_da_array(uuid, uuid) from public;
 grant execute on function public.fn_sincronizza_fasi_da_array(uuid, uuid) to authenticated;
 
+-- Salva fasi strutturate (nome, misure, dpi, rischi lavorativi matrice) + sync fasi_lavoro[]
+create or replace function public.fn_salva_struttura_profilo(
+  p_profilo_id uuid,
+  p_fasi jsonb,
+  p_user_id uuid default auth.uid()
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_fase jsonb;
+  v_fase_id uuid;
+  v_ord integer := 0;
+  v_nomi text[] := '{}';
+  v_nome text;
+  v_rid text;
+  v_rord integer;
+  v_keep_ids uuid[] := '{}';
+  v_ids jsonb;
+begin
+  if not public.app_is_internal_user() then
+    raise exception 'Permessi insufficienti';
+  end if;
+
+  if p_profilo_id is null then
+    raise exception 'profilo_id obbligatorio';
+  end if;
+
+  if p_fasi is null or jsonb_typeof(p_fasi) <> 'array' then
+    raise exception 'p_fasi deve essere un array JSON';
+  end if;
+
+  for v_fase in select value from jsonb_array_elements(p_fasi) loop
+    v_ord := v_ord + 1;
+    v_nome := trim(coalesce(v_fase->>'nome', ''));
+    if v_nome = '' then
+      continue;
+    end if;
+
+    v_nomi := array_append(v_nomi, v_nome);
+    v_fase_id := null;
+
+    if coalesce(v_fase->>'id', '') <> '' then
+      begin
+        v_fase_id := (v_fase->>'id')::uuid;
+      exception when others then
+        v_fase_id := null;
+      end;
+    end if;
+
+    if v_fase_id is not null then
+      update public.profilo_fasi
+      set nome = v_nome,
+          ordine = v_ord,
+          misure_specifiche = nullif(trim(coalesce(v_fase->>'misure_specifiche', '')), ''),
+          dpi_specifici = nullif(trim(coalesce(v_fase->>'dpi_specifici', '')), '')
+      where id = v_fase_id and profilo_id = p_profilo_id;
+      if not found then
+        v_fase_id := null;
+      end if;
+    end if;
+
+    if v_fase_id is null then
+      insert into public.profilo_fasi (profilo_id, nome, ordine, misure_specifiche, dpi_specifici)
+      values (
+        p_profilo_id,
+        v_nome,
+        v_ord,
+        nullif(trim(coalesce(v_fase->>'misure_specifiche', '')), ''),
+        nullif(trim(coalesce(v_fase->>'dpi_specifici', '')), '')
+      )
+      returning id into v_fase_id;
+    end if;
+
+    v_keep_ids := array_append(v_keep_ids, v_fase_id);
+
+    delete from public.profilo_fase_rischi_lavoro where profilo_fase_id = v_fase_id;
+
+    v_ids := coalesce(v_fase->'rischi_lavorativi_ids', '[]'::jsonb);
+    if jsonb_typeof(v_ids) = 'array' then
+      v_rord := 0;
+      for v_rid in select trim(elem) from jsonb_array_elements_text(v_ids) as elem loop
+        if v_rid = '' then continue; end if;
+        v_rord := v_rord + 1;
+        insert into public.profilo_fase_rischi_lavoro (profilo_fase_id, rischio_lavorativo_id, ordine)
+        values (v_fase_id, v_rid, v_rord)
+        on conflict (profilo_fase_id, rischio_lavorativo_id) do update set ordine = excluded.ordine;
+      end loop;
+    end if;
+  end loop;
+
+  if cardinality(v_keep_ids) > 0 then
+    delete from public.profilo_fasi pf
+    where pf.profilo_id = p_profilo_id
+      and pf.id <> all (v_keep_ids);
+  else
+    delete from public.profilo_fasi where profilo_id = p_profilo_id;
+  end if;
+
+  update public.profili set fasi_lavoro = v_nomi where id = p_profilo_id;
+end;
+$$;
+
+revoke all on function public.fn_salva_struttura_profilo(uuid, jsonb, uuid) from public;
+grant execute on function public.fn_salva_struttura_profilo(uuid, jsonb, uuid) to authenticated;
+
 create or replace function public.fn_set_valutazione(
   p_valutazione_id uuid,
   p_stato public.stato_valutazione_enum,

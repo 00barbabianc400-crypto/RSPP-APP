@@ -21,7 +21,12 @@
   const RECAP_VALUES_ROW  = 7;   // valori recap rischi (A:AO)
   const RISCHI_COL_START  = 1;   // A
   const RISCHI_COL_END    = 41;  // AO
+  const FASE_HEADER_ROW   = 8;
+  const FASE_FIRST_DATA_ROW = 9;
+  const TEMPLATE_FASE_ROW_COUNT = 2; // righe-modello nel foglio MANUTENTORE (9–10)
   const STATIC_ROW_HEIGHTS = [102, 75, 112.5, 68.25];
+  const FASE_MIN_ROW_HEIGHT = 48;
+  const FASE_MAX_ROW_HEIGHT = 320;
 
   const LIVELLO_TO_NUM = {
     'Trascurabile': 1,
@@ -88,6 +93,110 @@
 
   function fasiLavoroVirgola(fasi_lavoro) {
     return normalizzaFasiLavoro(fasi_lavoro).join(', ');
+  }
+
+  /** Fasi strutturate (DB) o fallback da `fasi_lavoro[]`. */
+  function getFasiDettaglioProfilo(profilo, sheetData) {
+    const pid = String(profilo?.id || '');
+    const list = sheetData?._profilo_fasi_dettaglio?.[pid];
+    if (Array.isArray(list) && list.length) {
+      return list
+        .slice()
+        .sort((a, b) => (a.ordine || 0) - (b.ordine || 0))
+        .map((f) => ({
+          nome: String(f.nome || '').trim(),
+          misure_specifiche: String(f.misure_specifiche || '').trim(),
+          dpi_specifici: String(f.dpi_specifici || '').trim(),
+        }))
+        .filter((f) => f.nome);
+    }
+    return normalizzaFasiLavoro(profilo?.fasi_lavoro).map((nome) => ({
+      nome,
+      misure_specifiche: '',
+      dpi_specifici: '',
+    }));
+  }
+
+  function firstStaticRowNum(numFasi) {
+    return FASE_FIRST_DATA_ROW + Math.max(0, numFasi);
+  }
+
+  function ensureCellReadable(cell) {
+    if (!cell) return;
+    const f = cell.font || {};
+    cell.font = {
+      name: f.name || 'Calibri',
+      size: f.size || 11,
+      bold: f.bold || false,
+      italic: f.italic || false,
+      color: { argb: 'FF000000' },
+    };
+  }
+
+  function estimatePhaseRowHeight(ws, rowNum) {
+    const cols = [
+      { col: 'A', width: (ws.getColumn('A').width || 18) + (ws.getColumn('B').width || 18) },
+      { col: 'C', width: ws.getColumn('C').width || 28 },
+      { col: 'D', width: ws.getColumn('D').width || 28 },
+    ];
+    const texts = {
+      A: String(ws.getCell('A' + rowNum).value || ''),
+      C: String(ws.getCell('C' + rowNum).value || ''),
+      D: String(ws.getCell('D' + rowNum).value || ''),
+    };
+    let maxH = FASE_MIN_ROW_HEIGHT;
+    cols.forEach(({ col, width }) => {
+      const text = texts[col] || '';
+      if (!text) return;
+      const charsPerLine = Math.max(12, Math.floor(width * 1.05));
+      const lines = Math.max(1, Math.ceil(text.length / charsPerLine));
+      maxH = Math.max(maxH, lines * 15 + 10);
+    });
+    return Math.min(FASE_MAX_ROW_HEIGHT, maxH);
+  }
+
+  /** Adatta il numero di righe fase (template ne ha 2) prima del blocco statico. */
+  function ensurePhaseRowCount(ws, numFasi) {
+    const n = Math.max(0, numFasi);
+    const delta = n - TEMPLATE_FASE_ROW_COUNT;
+    const snap = snapshotRowStyles(ws, FASE_FIRST_DATA_ROW, RISCHI_COL_END);
+    const insertAfter = FASE_FIRST_DATA_ROW + TEMPLATE_FASE_ROW_COUNT;
+
+    if (delta > 0) {
+      for (let i = 0; i < delta; i++) {
+        ws.spliceRows(insertAfter, 0, []);
+        applyRowStyleSnapshot(ws, insertAfter + i, snap, RISCHI_COL_END);
+      }
+    } else if (delta < 0) {
+      ws.spliceRows(FASE_FIRST_DATA_ROW + n, -delta);
+    }
+  }
+
+  function writePhaseDataRows(ws, fasi, wrapTop) {
+    ensurePhaseRowCount(ws, fasi.length);
+    fasi.forEach((fase, i) => {
+      const r = FASE_FIRST_DATA_ROW + i;
+      try { ws.unMergeCells('A' + r + ':B' + r); } catch (e) { /* skip */ }
+      try { ws.mergeCells('A' + r + ':B' + r); } catch (e) { /* skip */ }
+
+      const cellA = ws.getCell('A' + r);
+      cellA.value = fase.nome || '';
+      cellA.alignment = wrapTop;
+      ensureCellReadable(cellA);
+
+      const cellC = ws.getCell('C' + r);
+      cellC.value = fase.misure_specifiche || '';
+      cellC.alignment = wrapTop;
+      ensureCellReadable(cellC);
+
+      const cellD = ws.getCell('D' + r);
+      cellD.value = fase.dpi_specifici || '';
+      cellD.alignment = wrapTop;
+      ensureCellReadable(cellD);
+
+      const h = estimatePhaseRowHeight(ws, r);
+      if (h) ws.getRow(r).height = h;
+    });
   }
 
   // ─── Macro categoria → colonna Sicurezza/Igiene (Scheda Azienda) ────────────
@@ -321,7 +430,7 @@
    * @param {object} profilo      - oggetto profilo (id, nome, fasi_lavoro, …)
    * @param {object} livelliByNome - { [nomeRischioNormalizzato]: livello }
    */
-  function populateProfiloSheet(ws, profilo, livelliByNome) {
+  function populateProfiloSheet(ws, profilo, livelliByNome, sheetData) {
     const wrapTop = { vertical: 'top', wrapText: true };
     const centerMid = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
@@ -339,9 +448,11 @@
       styleRecapCell(cell, outVal);
     });
 
-    // ── Blocco statico (Misure gen., DPI base, DPC, Protocollo) ──
-    // Posizione fissa nel nuovo template: righe 9..12
-    const R0 = 9;
+    const fasi = getFasiDettaglioProfilo(profilo, sheetData);
+    writePhaseDataRows(ws, fasi, wrapTop);
+
+    // ── Blocco statico subito dopo le righe fase ──
+    const R0 = firstStaticRowNum(fasi.length);
     const labelFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF99' } };
 
     const staticRows = [
@@ -351,7 +462,7 @@
         height: STATIC_ROW_HEIGHTS[0],
       },
       {
-        label: 'Dispositivi di Protezione Individuale in dotazione Base',
+        label: 'Dispositivi di Protezione Individuale in dotazione',
         value: profilo.dpi_base || '',
         height: STATIC_ROW_HEIGHTS[1],
       },
@@ -377,9 +488,9 @@
       try { ws.unMergeCells('A' + r + ':B' + r); } catch (e) { /* già senza merge */ }
       try { ws.mergeCells('A' + r + ':B' + r); } catch (e) { /* già unita */ }
 
-      // Assicura merge C:U per valore
-      try { ws.unMergeCells('C' + r + ':U' + r); } catch (e) { /* già senza merge */ }
-      try { ws.mergeCells('C' + r + ':U' + r); } catch (e) { /* già unita */ }
+      // Assicura merge C:S per valore (template 2023)
+      try { ws.unMergeCells('C' + r + ':S' + r); } catch (e) { /* già senza merge */ }
+      try { ws.mergeCells('C' + r + ':S' + r); } catch (e) { /* già unita */ }
 
       const cellA = ws.getCell('A' + r);
       cellA.value = label;
@@ -421,6 +532,7 @@
       _appendice_b1_rischi_by_profilo:  byProfilo,
       _appendice_b1_selezione_rischi:   defSel,
       _appendice_b1_livelli_by_nome:    livelliByNome,
+      _profilo_fasi_dettaglio:          w.profilo_fasi_dettaglio || {},
     };
   }
 
@@ -453,6 +565,10 @@
     const byR = data?._appendice_b1_rischi_by_profilo || {};
     sorted.forEach((p) => {
       const pid = String(p.id || '');
+      const fasi = getFasiDettaglioProfilo(p, data);
+      if (!fasi.length) {
+        errors.push('Profilo «' + String(p.nome).trim() + '»: nessuna fase di lavoro in anagrafica');
+      }
       const lista = byR[pid] || [];
       if (!lista.length) {
         errors.push('Profilo «' + String(p.nome).trim() + '»: nessun rischio in Valutazioni con «Rischio associato» attivo');
@@ -530,7 +646,8 @@
         populateProfiloSheet(
           wsP,
           profilo,
-          livelliByNome[profilo.id] || {}
+          livelliByNome[profilo.id] || {},
+          data
         );
       }
 

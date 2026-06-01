@@ -135,6 +135,13 @@ using (public.app_is_active_user());
 
 -- profilo_fasi: SELECT per utenti attivi; INSERT/UPDATE/DELETE solo via RPC (SECURITY DEFINER)
 
+alter table public.profilo_fase_rischi_lavoro enable row level security;
+
+drop policy if exists profilo_fase_rischi_lavoro_read_auth on public.profilo_fase_rischi_lavoro;
+create policy profilo_fase_rischi_lavoro_read_auth on public.profilo_fase_rischi_lavoro
+for select to authenticated
+using (public.app_is_active_user());
+
 drop policy if exists profili_read_auth on public.profili;
 create policy profili_read_auth on public.profili
 for select to authenticated

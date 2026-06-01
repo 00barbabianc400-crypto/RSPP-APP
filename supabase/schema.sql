@@ -135,6 +135,8 @@ create table if not exists public.profili (
   dpi_collettivi text,
   fasi_lavoro text[] not null default '{}',
   rischi_mansione text[] not null default '{}',
+  protocollo_sanitario_config jsonb not null default '{}'::jsonb,
+  sedi_operative text[] not null default '{}'::text[],
   protocollo_sor_san boolean,
   attivo boolean not null default true,
   azienda_proprietaria_id uuid references public.aziende(id) on delete set null,
@@ -156,6 +158,7 @@ create table if not exists public.aziende_profili (
   profilo_id uuid not null references public.profili(id) on delete cascade,
   data_associazione date not null default current_date,
   note text,
+  sedi_operative text[] not null default '{}'::text[],
   created_by uuid references public.profiles(id) on delete set null,
   created_at timestamptz not null default timezone('utc', now()),
   updated_at timestamptz not null default timezone('utc', now()),
@@ -208,9 +211,20 @@ create table if not exists public.profilo_fasi (
   profilo_id  uuid not null references public.profili(id) on delete cascade,
   nome        text not null check (char_length(trim(nome)) > 0),
   ordine      integer not null default 0,
+  misure_specifiche text,
+  dpi_specifici text,
   created_at  timestamptz not null default timezone('utc', now()),
   updated_at  timestamptz not null default timezone('utc', now()),
   unique (profilo_id, nome)
+);
+
+create table if not exists public.profilo_fase_rischi_lavoro (
+  id uuid primary key default gen_random_uuid(),
+  profilo_fase_id uuid not null references public.profilo_fasi(id) on delete cascade,
+  rischio_lavorativo_id text not null,
+  ordine integer not null default 0,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (profilo_fase_id, rischio_lavorativo_id)
 );
 
 create table if not exists public.rilevamenti_ambientali (
@@ -270,6 +284,7 @@ create index if not exists idx_aziende_profili_azienda on public.aziende_profili
 create index if not exists idx_aziende_profili_profilo on public.aziende_profili(profilo_id);
 create index if not exists idx_testi_dvr_rischio_livello on public.testi_dvr(rischio_id, livello);
 create index if not exists idx_profilo_fasi_profilo on public.profilo_fasi(profilo_id);
+create index if not exists idx_profilo_fase_rischi_fase on public.profilo_fase_rischi_lavoro(profilo_fase_id);
 create index if not exists idx_valutazioni_azienda_profilo on public.valutazioni_rischio(azienda_id, profilo_id);
 create index if not exists idx_valutazioni_fase on public.valutazioni_rischio(profilo_fase_id) where profilo_fase_id is not null;
 create index if not exists idx_valutazioni_stato on public.valutazioni_rischio(stato);

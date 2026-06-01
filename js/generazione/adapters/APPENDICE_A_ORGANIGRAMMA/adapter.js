@@ -34,6 +34,13 @@
     };
   }
 
+  function refPrevistoWizard(wizard, wizardKey, fallbackText) {
+    const w = wizard || {};
+    if (w[wizardKey] === true) return true;
+    if (w[wizardKey] === false) return false;
+    return !!String(fallbackText || '').trim();
+  }
+
   /** §5.1: Datore = Preposto (opzione 1) vs distinti (opzione 2). */
   function organigrammaSezione51Flags(wizard) {
     const w = wizard || {};
@@ -43,6 +50,9 @@
       ORG_OPT_DATORE_PREPOSTO_UNICO: unico,
       ORG_OPT_DATORE_DISTINTO_DA_PREPOSTO: !unico,
       ORG_MC_PREVISTO: mcPrevisto,
+      ORG_REF_PERSONALE_PREVISTO: refPrevistoWizard(w, 'organigramma_ref_personale_previsto', w.org_ref_personale),
+      ORG_REF_SERVIZI_TEC_PREVISTO: refPrevistoWizard(w, 'organigramma_ref_servizi_tecnici_previsto', w.org_ref_servizi_tecnici),
+      ORG_REF_ACQUISTI_PREVISTO: refPrevistoWizard(w, 'organigramma_ref_acquisti_previsto', w.org_ref_acquisti_appalti),
     };
   }
 
@@ -139,6 +149,21 @@
       const mc = String(data.ORG_SOGG_MC || '').trim();
       if (!mc) {
         errors.push('Medico competente previsto: indica Medico competente in Anagrafica azienda');
+      }
+    }
+    if (data?.ORG_REF_PERSONALE_PREVISTO) {
+      if (!String(data.ORG_SOGG_REF_PERSONALE || '').trim()) {
+        errors.push('§5.1: Referente affari del personale previsto — indica il nominativo nel wizard');
+      }
+    }
+    if (data?.ORG_REF_SERVIZI_TEC_PREVISTO) {
+      if (!String(data.ORG_SOGG_REF_SERVIZI_TEC || '').trim()) {
+        errors.push('§5.1: Referente servizi tecnici previsto — indica il nominativo nel wizard');
+      }
+    }
+    if (data?.ORG_REF_ACQUISTI_PREVISTO) {
+      if (!String(data.ORG_SOGG_REF_ACQUISTI || '').trim()) {
+        errors.push('§5.1: Referente acquisti/appalti previsto — indica il nominativo nel wizard');
       }
     }
     return errors;

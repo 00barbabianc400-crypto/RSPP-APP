@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Anteprima — Appendice A (organigramma)</title>
-<script src="adapter.js?v=20260601c"></script>
+<script src="adapter.js?v=20260602a"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/docx-preview@0.3.5/dist/docx-preview.min.js"></script>
 <style>
@@ -94,16 +94,31 @@
 
         <div class="wizard-grid">
           <p class="wizard-field">
-            <label for="inpOrgRefPersonale">Referente affari del personale</label>
-            <input id="inpOrgRefPersonale" type="text" oninput="setWizardText('org_ref_personale', this.value)" placeholder="Nome e cognome / ruolo">
+            <label for="selOrgRefPersonale">Referente affari del personale</label>
+            <select id="selOrgRefPersonale" onchange="setOrgRefPrevisto('personale', this.value)">
+              <option value="si">Presente in organigramma</option>
+              <option value="no">Non presente (escludi riga tabella)</option>
+            </select>
+            <input id="inpOrgRefPersonale" type="text" style="margin-top:8px;" oninput="setWizardText('org_ref_personale', this.value)" placeholder="Nome e cognome / ruolo">
+            <small id="hintOrgRefPersonale"></small>
           </p>
           <p class="wizard-field">
-            <label for="inpOrgRefServizi">Referente servizi tecnici</label>
-            <input id="inpOrgRefServizi" type="text" oninput="setWizardText('org_ref_servizi_tecnici', this.value)" placeholder="Nome e cognome / ruolo">
+            <label for="selOrgRefServizi">Referente servizi tecnici</label>
+            <select id="selOrgRefServizi" onchange="setOrgRefPrevisto('servizi', this.value)">
+              <option value="si">Presente in organigramma</option>
+              <option value="no">Non presente (escludi riga tabella)</option>
+            </select>
+            <input id="inpOrgRefServizi" type="text" style="margin-top:8px;" oninput="setWizardText('org_ref_servizi_tecnici', this.value)" placeholder="Nome e cognome / ruolo">
+            <small id="hintOrgRefServizi"></small>
           </p>
           <p class="wizard-field">
-            <label for="inpOrgRefAcquisti">Referente acquisti/appalti</label>
-            <input id="inpOrgRefAcquisti" type="text" oninput="setWizardText('org_ref_acquisti_appalti', this.value)" placeholder="Nome e cognome / ruolo">
+            <label for="selOrgRefAcquisti">Referente acquisti/appalti</label>
+            <select id="selOrgRefAcquisti" onchange="setOrgRefPrevisto('acquisti', this.value)">
+              <option value="si">Presente in organigramma</option>
+              <option value="no">Non presente (escludi riga tabella)</option>
+            </select>
+            <input id="inpOrgRefAcquisti" type="text" style="margin-top:8px;" oninput="setWizardText('org_ref_acquisti_appalti', this.value)" placeholder="Nome e cognome / ruolo">
+            <small id="hintOrgRefAcquisti"></small>
           </p>
           <p class="wizard-field" id="wrapOrgPreposto">
             <label for="inpOrgPreposto">Preposto alla sicurezza (solo Opzione 2)</label>
@@ -151,6 +166,9 @@
     stato_formalizzazione_organigramma: 'da_formalizzare',
     organigramma_datore_preposto_unico: true,
     organigramma_mc_previsto: true,
+    organigramma_ref_personale_previsto: false,
+    organigramma_ref_servizi_tecnici_previsto: false,
+    organigramma_ref_acquisti_previsto: false,
     org_ref_personale: '',
     org_ref_servizi_tecnici: '',
     org_ref_acquisti_appalti: '',
@@ -181,6 +199,36 @@
     if (sel) sel.value = WIZARD.stato_formalizzazione_organigramma || 'da_formalizzare';
   }
 
+  const REF_WIZARD_KEYS = {
+    personale: { flag: 'organigramma_ref_personale_previsto', sel: 'selOrgRefPersonale', inp: 'inpOrgRefPersonale', hint: 'hintOrgRefPersonale', label: 'Referente affari del personale' },
+    servizi: { flag: 'organigramma_ref_servizi_tecnici_previsto', sel: 'selOrgRefServizi', inp: 'inpOrgRefServizi', hint: 'hintOrgRefServizi', label: 'Referente servizi tecnici' },
+    acquisti: { flag: 'organigramma_ref_acquisti_previsto', sel: 'selOrgRefAcquisti', inp: 'inpOrgRefAcquisti', hint: 'hintOrgRefAcquisti', label: 'Referente acquisti/appalti' },
+  };
+
+  function refPrevistoActive(key) {
+    return WIZARD[REF_WIZARD_KEYS[key].flag] === true;
+  }
+
+  function renderRefTecniciPreview() {
+    Object.keys(REF_WIZARD_KEYS).forEach((key) => {
+      const cfg = REF_WIZARD_KEYS[key];
+      const previsto = refPrevistoActive(key);
+      const sel = document.getElementById(cfg.sel);
+      const inp = document.getElementById(cfg.inp);
+      const hint = document.getElementById(cfg.hint);
+      if (sel) sel.value = previsto ? 'si' : 'no';
+      if (inp) {
+        inp.disabled = !previsto;
+        inp.style.opacity = previsto ? '1' : '0.55';
+      }
+      if (hint) {
+        hint.textContent = previsto
+          ? 'Riga «' + cfg.label + '» inclusa nella tabella Word.'
+          : 'Riga esclusa dalla tabella (come Medico Competente se non previsto).';
+      }
+    });
+  }
+
   function renderSezione51Preview() {
     const unico = WIZARD.organigramma_datore_preposto_unico !== false;
     const mcPrevisto = WIZARD.organigramma_mc_previsto !== false;
@@ -206,6 +254,7 @@
     if (selOpt) selOpt.value = unico ? 'unico' : 'distinto';
     const selMc = document.getElementById('selOrgMcPrevisto');
     if (selMc) selMc.value = mcPrevisto ? 'si' : 'no';
+    renderRefTecniciPreview();
   }
 
   function renderLogoPreview() {
@@ -262,6 +311,14 @@
     sendUpdate();
   };
 
+  window.setOrgRefPrevisto = function (which, val) {
+    const cfg = REF_WIZARD_KEYS[which];
+    if (!cfg) return;
+    WIZARD[cfg.flag] = val !== 'no';
+    renderRefTecniciPreview();
+    sendUpdate();
+  };
+
   window.setWizardText = function (key, val) {
     WIZARD[key] = String(val || '');
     sendUpdate();
@@ -315,6 +372,12 @@
     }
     WIZARD.organigramma_datore_preposto_unico = DATA.ORG_OPT_DATORE_DISTINTO_DA_PREPOSTO ? false : true;
     WIZARD.organigramma_mc_previsto = DATA.ORG_MC_PREVISTO !== false;
+    WIZARD.organigramma_ref_personale_previsto = DATA.ORG_REF_PERSONALE_PREVISTO === true
+      || (DATA.ORG_REF_PERSONALE_PREVISTO !== false && !!String(DATA.ORG_SOGG_REF_PERSONALE || '').trim());
+    WIZARD.organigramma_ref_servizi_tecnici_previsto = DATA.ORG_REF_SERVIZI_TEC_PREVISTO === true
+      || (DATA.ORG_REF_SERVIZI_TEC_PREVISTO !== false && !!String(DATA.ORG_SOGG_REF_SERVIZI_TEC || '').trim());
+    WIZARD.organigramma_ref_acquisti_previsto = DATA.ORG_REF_ACQUISTI_PREVISTO === true
+      || (DATA.ORG_REF_ACQUISTI_PREVISTO !== false && !!String(DATA.ORG_SOGG_REF_ACQUISTI || '').trim());
     WIZARD.org_ref_personale = DATA.ORG_SOGG_REF_PERSONALE || '';
     WIZARD.org_ref_servizi_tecnici = DATA.ORG_SOGG_REF_SERVIZI_TEC || '';
     WIZARD.org_ref_acquisti_appalti = DATA.ORG_SOGG_REF_ACQUISTI || '';

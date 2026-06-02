@@ -1,33 +1,31 @@
 /**
- * GEN_STORAGE_CHART  —  donut SVG per lo Storage nella tab «Documenti generati».
- *
- * Comportamento:
- *   renderOutputByAzienda(el, client, cfg, nomiMap)
- *     → donut: spicchio per ogni azienda, basato su output/{id}/*
- *
- *   renderOutputByDocumento(el, client, cfg, aziendaId, aziendaNome)
- *     → donut: spicchio per ogni file generato di quell'azienda
- *
- * config richiede: { storage: { output }, QUOTA_BYTES? }
- * QUOTA_BYTES default: 1 GB (plan Free Supabase)
- *
- * Nessuna libreria esterna — SVG puro.
+ * GEN_STORAGE_CHART — grafici SVG dark/vividi (Generazione + Monitoraggio).
+ * Nessuna libreria esterna.
  */
 (function () {
   'use strict';
 
-  const DEFAULT_QUOTA = 1 * 1024 * 1024 * 1024; // 1 GB
+  const DEFAULT_QUOTA = 1 * 1024 * 1024 * 1024;
 
-  const PALETTE = [
-    '#3498db','#2ecc71','#e67e22','#9b59b6','#e74c3c',
-    '#1abc9c','#f39c12','#d35400','#16a085','#8e44ad',
-    '#27ae60','#c0392b','#2980b9','#f1c40f','#7f8c8d',
-    '#00b894','#fd79a8','#6c5ce7','#fdcb6e','#00cec9',
-  ];
-  const COLOR_FREE        = '#222';
-  const COLOR_FREE_STROKE = '#444';
-
-  // ── utilità ────────────────────────────────────────────────────────────────
+  const THEME = {
+    bg: '#0f1419',
+    bgPanel: '#161b22',
+    border: '#30363d',
+    text: '#f0f6fc',
+    textMuted: '#8b949e',
+    textDim: '#6e7681',
+    font: 'Segoe UI, system-ui, sans-serif',
+    palette: [
+      '#58a6ff', '#3fb950', '#f78166', '#d2a8ff', '#ffa657',
+      '#79c0ff', '#56d364', '#ff7b72', '#bc8cff', '#e3b341',
+      '#1f6feb', '#238636', '#da3633', '#8957e5', '#9e6a03',
+    ],
+    free: '#21262d',
+    freeStroke: '#484f58',
+    warn: '#ffa657',
+    danger: '#f85149',
+    ok: '#3fb950',
+  };
 
   function fmt(bytes) {
     if (!bytes || bytes <= 0) return '0 B';
@@ -37,8 +35,20 @@
     return (bytes / 1073741824).toFixed(2) + ' GB';
   }
 
+  function fmtNum(n) {
+    const x = Number(n) || 0;
+    if (x >= 1e6) return (x / 1e6).toFixed(2) + ' M';
+    if (x >= 1e4) return (x / 1e3).toFixed(1) + ' k';
+    return x.toLocaleString('it-IT');
+  }
+
   function esc(s) {
     return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function pct(part, total) {
+    if (!total) return '0%';
+    return ((part / total) * 100).toFixed(1) + '%';
   }
 
   async function listFiles(client, bucket, prefix) {
@@ -46,152 +56,208 @@
       limit: 1000,
       sortBy: { column: 'name', order: 'desc' },
     });
-    return (data || []).filter(f => f.name && !f.name.endsWith('/'));
+    return (data || []).filter((f) => f.name && !f.name.endsWith('/'));
   }
 
-  // ── SVG donut ──────────────────────────────────────────────────────────────
-
   function arc(cx, cy, r, a1, a2) {
-    const rad = a => (a - 90) * Math.PI / 180;
-    const x1 = cx + r * Math.cos(rad(a1)), y1 = cy + r * Math.sin(rad(a1));
-    const x2 = cx + r * Math.cos(rad(a2)), y2 = cy + r * Math.sin(rad(a2));
+    const rad = (a) => (a - 90) * Math.PI / 180;
+    const x1 = cx + r * Math.cos(rad(a1));
+    const y1 = cy + r * Math.sin(rad(a1));
+    const x2 = cx + r * Math.cos(rad(a2));
+    const y2 = cy + r * Math.sin(rad(a2));
     return `M${x1} ${y1} A${r} ${r} 0 ${a2 - a1 > 180 ? 1 : 0} 1 ${x2} ${y2}`;
   }
 
-  function donut(segments, quota, centerTop, centerBot) {
-    const S = 180, cx = S / 2, cy = S / 2, r = 68, sw = 22;
-    let svg = `<svg viewBox="0 0 ${S} ${S}" width="${S}" height="${S}" style="display:block;flex-shrink:0;">`;
-    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${COLOR_FREE_STROKE}" stroke-width="${sw}" opacity="0.35"/>`;
+  /** Donut generico — segments: [{ label, value, color? }] */
+  function renderDonut(segments, centerTop, centerBot, opts) {
+    const o = opts || {};
+    const S = o.size || 188;
+    const cx = S / 2;
+    const cy = S / 2;
+    const r = o.radius || 72;
+    const sw = o.stroke || 24;
+    const total = segments.reduce((s, x) => s + (Number(x.value) || 0), 0) || 1;
+    let svg = `<svg viewBox="0 0 ${S} ${S}" width="${S}" height="${S}" style="display:block;flex-shrink:0;font-family:${THEME.font};">`;
+    svg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${THEME.freeStroke}" stroke-width="${sw}" opacity="0.45"/>`;
     let ang = 0;
-    for (const seg of segments) {
-      const sweep = Math.min(359.99, (seg.bytes / quota) * 360);
-      if (sweep < 0.3) { ang += sweep; continue; }
-      svg += `<path d="${arc(cx, cy, r, ang, ang + sweep)}" fill="none" stroke="${seg.color}"
-        stroke-width="${sw}" stroke-linecap="butt"><title>${esc(seg.label)}: ${esc(fmt(seg.bytes))}</title></path>`;
+    segments.forEach((seg, i) => {
+      const val = Number(seg.value) || 0;
+      if (val <= 0) return;
+      const sweep = Math.min(359.99, (val / total) * 360);
+      if (sweep < 0.25) { ang += sweep; return; }
+      const color = seg.color || THEME.palette[i % THEME.palette.length];
+      svg += `<path d="${arc(cx, cy, r, ang, ang + sweep)}" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="butt">`;
+      svg += `<title>${esc(seg.label)}: ${esc(fmtNum(val))}</title></path>`;
       ang += sweep;
-    }
-    svg += `<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="17" font-weight="700" fill="#f0f0f0">${esc(centerTop)}</text>`;
-    svg += `<text x="${cx}" y="${cy + 13}" text-anchor="middle" font-size="11" fill="#888">${esc(centerBot)}</text>`;
-    svg += `</svg>`;
+    });
+    svg += `<text x="${cx}" y="${cy - 8}" text-anchor="middle" font-size="18" font-weight="700" fill="${THEME.text}">${esc(centerTop)}</text>`;
+    svg += `<text x="${cx}" y="${cy + 14}" text-anchor="middle" font-size="12" fill="${THEME.textMuted}">${esc(centerBot)}</text>`;
+    svg += '</svg>';
     return svg;
   }
 
-  function legend(segments) {
-    return segments.map(s => `
-      <div style="display:flex;align-items:center;gap:8px;padding:3px 0;min-width:0;">
-        <span style="flex-shrink:0;width:11px;height:11px;border-radius:2px;background:${s.color};"></span>
-        <span style="flex:1;font-size:11.5px;color:#ccc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(s.label)}">${esc(s.label)}</span>
-        <span style="font-size:11px;color:#888;white-space:nowrap;">${fmt(s.bytes)}</span>
+  function renderLegend(segments, valueFmt) {
+    const vf = valueFmt || fmtNum;
+    return segments.filter((s) => (Number(s.value) || 0) > 0).map((s, i) => `
+      <div class="gen-chart-legend-row">
+        <span class="gen-chart-swatch" style="background:${s.color || THEME.palette[i % THEME.palette.length]};"></span>
+        <span class="gen-chart-legend-label" title="${esc(s.label)}">${esc(s.label)}</span>
+        <span class="gen-chart-legend-val">${vf(s.value)}</span>
       </div>`).join('');
   }
 
-  function shell(svgHtml, legendHtml, usedBytes, quota, subtitle) {
-    const p = Math.min(100, (usedBytes / quota) * 100);
-    const barColor = p > 90 ? '#e74c3c' : p > 70 ? '#e67e22' : '#2ecc71';
-    return `
-      <div style="display:flex;align-items:flex-start;gap:18px;flex-wrap:wrap;">
-        ${svgHtml}
-        <div style="flex:1;min-width:160px;padding-top:4px;">
-          <div style="font-size:11px;color:#666;margin-bottom:6px;">${esc(subtitle)}</div>
-          <div style="background:#1a1a1a;border-radius:4px;height:6px;overflow:hidden;margin-bottom:10px;">
-            <div style="width:${p.toFixed(1)}%;height:100%;background:${barColor};transition:width .5s;"></div>
-          </div>
-          <div style="max-height:200px;overflow-y:auto;">${legendHtml}</div>
+  function renderHBar(items, opts) {
+    const o = opts || {};
+    const maxVal = o.maxVal || Math.max(...items.map((i) => Number(i.n ?? i.value) || 0), 1);
+    const valueKey = o.valueKey || 'n';
+    const labelKey = o.labelKey || 'nome';
+    return items.map((it, i) => {
+      const n = Number(it[valueKey] ?? it.value) || 0;
+      const w = Math.max(3, (n / maxVal) * 100);
+      const color = it.color || THEME.palette[i % THEME.palette.length];
+      const label = it[labelKey] ?? it.label ?? '—';
+      return `<div class="gen-chart-hbar-row">
+        <div class="gen-chart-hbar-head">
+          <span class="gen-chart-hbar-label" title="${esc(label)}">${esc(label)}</span>
+          <span class="gen-chart-hbar-val">${fmtNum(n)}</span>
         </div>
+        <div class="gen-chart-hbar-track"><div class="gen-chart-hbar-fill" style="width:${w.toFixed(1)}%;background:${color};"></div></div>
       </div>`;
+    }).join('');
   }
 
-  // ── renderOutputByAzienda ──────────────────────────────────────────────────
-  // Tab «Documenti generati», nessuna azienda selezionata.
-  // Mostra spicchi per ogni azienda (solo bucket output).
+  function renderProgressBar(label, used, quota, hint, opts) {
+    const o = opts || {};
+    const p = Math.min(100, (used / (quota || 1)) * 100);
+    const color = p > 90 ? THEME.danger : p > 70 ? THEME.warn : THEME.ok;
+    const fmtUsed = o.fmtUsed || fmt;
+    return `<div class="gen-chart-progress">
+      <div class="gen-chart-progress-head">
+        <span>${esc(label)}</span>
+        <span>${fmtUsed(used)} / ${fmtUsed(quota)}</span>
+      </div>
+      <div class="gen-chart-progress-track"><div class="gen-chart-progress-fill" style="width:${p.toFixed(1)}%;background:${color};"></div></div>
+      ${hint ? `<div class="gen-chart-progress-hint">${esc(hint)}</div>` : ''}
+    </div>`;
+  }
+
+  function injectChartStylesOnce() {
+    if (document.getElementById('gen-chart-styles')) return;
+    const el = document.createElement('style');
+    el.id = 'gen-chart-styles';
+    el.textContent = `
+      .gen-chart-panel{background:${THEME.bgPanel};border:1px solid ${THEME.border};border-radius:8px;padding:16px 18px;}
+      .gen-chart-title{margin:0 0 14px;font-size:15px;font-weight:600;color:${THEME.text};letter-spacing:.01em;}
+      .gen-chart-sub{font-size:12px;color:${THEME.textMuted};margin:-8px 0 12px;}
+      .gen-chart-body{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;}
+      .gen-chart-legend{flex:1;min-width:180px;max-height:220px;overflow-y:auto;padding-top:2px;}
+      .gen-chart-legend-row{display:flex;align-items:center;gap:10px;padding:5px 0;min-width:0;}
+      .gen-chart-swatch{flex-shrink:0;width:12px;height:12px;border-radius:3px;}
+      .gen-chart-legend-label{flex:1;font-size:13px;color:${THEME.textMuted};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+      .gen-chart-legend-val{font-size:13px;font-weight:600;color:${THEME.text};white-space:nowrap;}
+      .gen-chart-hbar-row{margin-bottom:10px;}
+      .gen-chart-hbar-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:5px;}
+      .gen-chart-hbar-label{font-size:13px;color:${THEME.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:72%;font-weight:500;}
+      .gen-chart-hbar-val{font-size:13px;font-weight:700;color:${THEME.text};}
+      .gen-chart-hbar-track{background:${THEME.bg};border-radius:6px;height:10px;overflow:hidden;border:1px solid ${THEME.border};}
+      .gen-chart-hbar-fill{height:100%;border-radius:6px;transition:width .45s ease;}
+      .gen-chart-progress{margin-bottom:16px;}
+      .gen-chart-progress-head{display:flex;justify-content:space-between;font-size:13px;font-weight:500;color:${THEME.text};margin-bottom:6px;gap:12px;}
+      .gen-chart-progress-track{background:${THEME.bg};border-radius:6px;height:10px;overflow:hidden;border:1px solid ${THEME.border};}
+      .gen-chart-progress-fill{height:100%;border-radius:6px;transition:width .45s ease;}
+      .gen-chart-progress-hint{font-size:11px;color:${THEME.textDim};margin-top:4px;}
+      .gen-chart-foot{font-size:11px;color:${THEME.textDim};margin-top:10px;}
+    `;
+    document.head.appendChild(el);
+  }
+
+  function chartPanel(title, subtitle, innerHtml, foot) {
+    injectChartStylesOnce();
+    return `<div class="gen-chart-panel">
+      <h3 class="gen-chart-title">${esc(title)}</h3>
+      ${subtitle ? `<p class="gen-chart-sub">${esc(subtitle)}</p>` : ''}
+      ${innerHtml}
+      ${foot ? `<div class="gen-chart-foot">${esc(foot)}</div>` : ''}
+    </div>`;
+  }
+
+  function shell(svgHtml, legendHtml, foot) {
+    injectChartStylesOnce();
+    return `<div class="gen-chart-body">${svgHtml}<div class="gen-chart-legend">${legendHtml}</div></div>${foot ? `<div class="gen-chart-foot">${esc(foot)}</div>` : ''}`;
+  }
 
   async function renderOutputByAzienda(containerEl, client, cfg, nomiMap) {
     if (!containerEl) return;
-    containerEl.style.display = '';
-    containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Calcolo spazio documenti generati…</p>';
+    injectChartStylesOnce();
+    containerEl.innerHTML = '<p style="font-size:13px;color:#8b949e;padding:8px 0;">Calcolo spazio documenti generati…</p>';
     try {
       const quota = cfg.QUOTA_BYTES || DEFAULT_QUOTA;
-
-      // Elenca cartelle/prefissi radice del bucket output
-      const rootItems = await listFiles(client, cfg.storage.output);
-      // Supabase restituisce le sottocartelle come item senza estensione con id=null
       const { data: rawRoot } = await client.storage.from(cfg.storage.output).list('', { limit: 1000 });
-      const folders = (rawRoot || []).filter(f => f.id == null || !f.name.includes('.'));
+      const folders = (rawRoot || []).filter((f) => f.id == null || !f.name.includes('.'));
 
       const byAzienda = {};
       if (folders.length > 0) {
-        await Promise.all(folders.map(async f => {
+        await Promise.all(folders.map(async (f) => {
           const id = f.name.replace(/\/$/, '');
           const files = await listFiles(client, cfg.storage.output, id);
           byAzienda[id] = files.reduce((s, ff) => s + (ff.metadata?.size || 0), 0);
         }));
       } else {
-        // Bucket flat (tutti i file alla radice) — usa il rootItems
-        rootItems.forEach(f => {
+        const rootItems = await listFiles(client, cfg.storage.output);
+        rootItems.forEach((f) => {
           const parts = f.name.split('/');
           const id = parts.length > 1 ? parts[0] : 'output';
           byAzienda[id] = (byAzienda[id] || 0) + (f.metadata?.size || 0);
         });
       }
 
-      const totalOutput = Object.values(byAzienda).reduce((s, v) => s + v, 0);
-
-      const sorted = Object.entries(byAzienda)
-        .filter(([, v]) => v > 0)
-        .sort((a, b) => b[1] - a[1]);
-
+      const sorted = Object.entries(byAzienda).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
       if (!sorted.length) {
-        containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Nessun documento generato ancora.</p>';
+        containerEl.innerHTML = chartPanel('Storage output', 'Bucket modelli generati', '<p style="font-size:13px;color:#8b949e;">Nessun documento generato ancora.</p>');
         return;
       }
 
+      const totalOutput = sorted.reduce((s, [, v]) => s + v, 0);
       const segments = sorted.map(([id, bytes], i) => ({
         label: (nomiMap && nomiMap[id]) || id,
-        bytes,
-        color: PALETTE[i % PALETTE.length],
+        value: bytes,
+        color: THEME.palette[i % THEME.palette.length],
       }));
 
+      const legendSegs = segments.map((s) => ({ ...s, value: s.value }));
+      const donutSegs = [...segments];
       const freeInOutput = Math.max(0, quota - totalOutput);
-      const centerTop = fmt(totalOutput);
-      const centerBot = 'documenti';
+      if (freeInOutput > 0) donutSegs.push({ label: 'Libero', value: freeInOutput, color: THEME.free });
 
-      const segsForDonut = segments.map(s => ({ ...s, bytes: s.bytes }));
-      if (freeInOutput > 0) segsForDonut.push({ label: 'Libero', bytes: freeInOutput, color: COLOR_FREE });
-
-      containerEl.innerHTML = shell(
-        donut(segsForDonut, quota, centerTop, centerBot),
-        legend(segments),
-        totalOutput,
-        quota,
-        fmt(totalOutput) + ' usati di ' + fmt(quota) + ' — solo documenti generati'
+      containerEl.innerHTML = chartPanel(
+        'Storage output',
+        'Documenti generati per azienda',
+        shell(
+          renderDonut(donutSegs, fmt(totalOutput), 'generati', { size: 188 }),
+          renderLegend(legendSegs, fmt),
+          fmt(totalOutput) + ' usati · quota ref. ' + fmt(quota)
+        )
       );
     } catch (err) {
-      containerEl.innerHTML = '<p style="font-size:12px;color:#e74c3c;padding:8px 0;">Errore storage: ' + esc(err.message) + '</p>';
+      containerEl.innerHTML = `<p style="font-size:13px;color:${THEME.danger};padding:8px 0;">Errore storage: ${esc(err.message)}</p>`;
     }
   }
 
-  // ── renderOutputByDocumento ────────────────────────────────────────────────
-  // Tab «Documenti generati», azienda selezionata.
-  // Mostra uno spicchio per ogni file generato di quell'azienda.
-
   async function renderOutputByDocumento(containerEl, client, cfg, aziendaId, aziendaNome) {
     if (!containerEl || !aziendaId) return;
-    containerEl.style.display = '';
-    containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Calcolo spazio ' + esc(aziendaNome || aziendaId) + '…</p>';
+    injectChartStylesOnce();
+    containerEl.innerHTML = '<p style="font-size:13px;color:#8b949e;padding:8px 0;">Calcolo spazio…</p>';
     try {
       const quota = cfg.QUOTA_BYTES || DEFAULT_QUOTA;
       const files = await listFiles(client, cfg.storage.output, aziendaId);
-
       if (!files.length) {
-        containerEl.innerHTML = '<p style="font-size:12px;color:#888;padding:8px 0;">Nessun documento generato per questa azienda.</p>';
+        containerEl.innerHTML = '<p style="font-size:13px;color:#8b949e;">Nessun documento generato per questa azienda.</p>';
         return;
       }
 
-      // Raggruppa per codice documento (MOD_XXX)
       const byDoc = {};
-      files.forEach(f => {
+      files.forEach((f) => {
         const stem = f.name.replace(/\.[^.]+$/, '');
-        // Formato atteso: MOD_XXX_YYYYMMDD — estraiamo MOD_XXX
         const m = stem.match(/^(.+?)_\d{8}/);
         const codice = m ? m[1] : stem;
         byDoc[codice] = (byDoc[codice] || 0) + (f.metadata?.size || 0);
@@ -199,34 +265,38 @@
 
       const totalAz = Object.values(byDoc).reduce((s, v) => s + v, 0);
       const sorted = Object.entries(byDoc).sort((a, b) => b[1] - a[1]);
-
       const segments = sorted.map(([cod, bytes], i) => ({
         label: cod,
-        bytes,
-        color: PALETTE[i % PALETTE.length],
+        value: bytes,
+        color: THEME.palette[i % THEME.palette.length],
       }));
 
       const freeSlice = Math.max(0, quota - totalAz);
-      const segsForDonut = [...segments];
-      if (freeSlice > 0) segsForDonut.push({ label: 'Resto quota', bytes: freeSlice, color: COLOR_FREE });
+      const donutSegs = [...segments];
+      if (freeSlice > 0) donutSegs.push({ label: 'Resto quota', value: freeSlice, color: THEME.free });
 
       containerEl.innerHTML = shell(
-        donut(segsForDonut, quota, fmt(totalAz), esc(aziendaNome || aziendaId)),
-        legend(segments),
-        totalAz,
-        quota,
-        fmt(totalAz) + ' — ' + files.length + ' file generati'
+        renderDonut(donutSegs, fmt(totalAz), esc(aziendaNome || aziendaId)),
+        renderLegend(segments, fmt),
+        fmt(totalAz) + ' — ' + files.length + ' file'
       );
     } catch (err) {
-      containerEl.innerHTML = '<p style="font-size:12px;color:#e74c3c;padding:8px 0;">Errore storage: ' + esc(err.message) + '</p>';
+      containerEl.innerHTML = `<p style="font-size:13px;color:${THEME.danger};">Errore: ${esc(err.message)}</p>`;
     }
   }
 
-  // ── export ─────────────────────────────────────────────────────────────────
-
   window.GEN_STORAGE_CHART = {
+    THEME,
+    fmt,
+    fmtNum,
+    pct,
+    renderDonut,
+    renderLegend,
+    renderHBar,
+    renderProgressBar,
+    chartPanel,
+    injectChartStylesOnce,
     renderOutputByAzienda,
     renderOutputByDocumento,
-    fmt,
   };
 })();

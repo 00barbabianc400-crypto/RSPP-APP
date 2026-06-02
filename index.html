@@ -5922,7 +5922,7 @@
             const main = document.getElementById('mainContent');
             const canGenerate = canMutateData();
             await ensureAziendeLoaded(true);
-            await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260523b');
+            await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260605a');
             await loadScriptOnce('js/generazione/output-export.js?v=20260523f');
             await loadScriptOnce('js/generazione/output-wipe.js?v=20260523e');
 
@@ -8028,7 +8028,11 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                 await renderAccessPending(false);
                 return;
             }
-            await loadScriptOnce('js/monitoraggio/dashboard.js?v=20260528a');
+            await ensureAziendeLoaded();
+            await loadScriptOnce('js/generazione/graphs/storage-chart.js?v=20260605a');
+            await loadScriptOnce('js/generazione/output-export.js?v=20260605a');
+            await loadScriptOnce('https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js');
+            await loadScriptOnce('js/monitoraggio/dashboard.js?v=20260605a');
             main.innerHTML = `
                 <div class="page-header">
                     <div>
@@ -8060,8 +8064,18 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                 return;
             }
             const payloadKb = (JSON.stringify(data || {}).length / 1024).toFixed(1);
+            const nomiMap = {};
+            (STATE.data.aziende || []).forEach((a) => {
+                nomiMap[a.id] = a.fields?.RagioneSociale || a.id;
+            });
             if (window.MONITORAGGIO_DASH) {
-                MONITORAGGIO_DASH.render(root, data, { elapsedMs, payloadKb });
+                MONITORAGGIO_DASH.render(root, data, {
+                    elapsedMs,
+                    payloadKb,
+                    client: supabaseClient,
+                    cfg: CONFIG,
+                    nomiMap,
+                });
             } else {
                 root.innerHTML = '<pre style="font-size:11px;overflow:auto;">' + esc(JSON.stringify(data, null, 2)) + '</pre>';
             }

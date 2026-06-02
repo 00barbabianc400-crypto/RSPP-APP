@@ -382,6 +382,21 @@
             margin-top: 0;
         }
 
+        .form-section.form-section-with-action {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .form-section.form-section-with-action .btn {
+            text-transform: none;
+            letter-spacing: normal;
+            font-weight: 500;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
         .profilo-fase-card {
             display: flex;
             justify-content: space-between;
@@ -679,10 +694,17 @@
             border-radius: 2px;
             box-shadow: var(--sp-shadow-elevated);
             min-width: 280px;
+            max-width: min(440px, calc(100vw - 48px));
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
             animation: slideIn 0.2s;
+        }
+
+        .toast span {
+            white-space: pre-wrap;
+            line-height: 1.45;
+            font-size: 13px;
         }
         
         .toast.success { border-left-color: var(--sp-success); }
@@ -709,6 +731,69 @@
         .badge.warning { background: #FFF4CE; color: #997B00; }
         .badge.error { background: #FDE7E9; color: var(--sp-error); }
         .badge.info { background: #DEECF9; color: var(--sp-primary); }
+        .badge.missing-logo-tag {
+            background: #EDE7F6;
+            color: #5E35B1;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            text-transform: lowercase;
+            letter-spacing: 0.02em;
+            vertical-align: middle;
+        }
+        .loghi-azienda-picker {
+            position: relative;
+            width: 100%;
+            max-width: 520px;
+        }
+        .loghi-azienda-picker-summary {
+            list-style: none;
+            cursor: pointer;
+            border: 1px solid var(--sp-border);
+            border-radius: 4px;
+            padding: 8px 12px;
+            background: var(--sp-bg-card);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .loghi-azienda-picker-summary::-webkit-details-marker { display: none; }
+        .loghi-azienda-picker-summary::after {
+            content: '▾';
+            color: var(--sp-text-secondary);
+            font-size: 12px;
+        }
+        .loghi-azienda-picker-list {
+            position: absolute;
+            z-index: 40;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            max-height: 280px;
+            overflow-y: auto;
+            background: var(--sp-bg-card);
+            border: 1px solid var(--sp-border);
+            border-radius: 4px;
+            box-shadow: var(--sp-shadow-elevated);
+            padding: 4px 0;
+            list-style: none;
+        }
+        .loghi-azienda-picker-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .loghi-azienda-picker-item:hover,
+        .loghi-azienda-picker-item-selected {
+            background: var(--sp-bg-hover);
+        }
         tr.row-error td { background: #FDE7E9; }
         
         /* Rilevamenti — valore microclima tabellare (dashboard) */
@@ -1336,6 +1421,58 @@
             if (error) throw error;
         }
 
+        const DOCUMENTI_STANDARD_CODICI = [
+            'DVR_CORPO_CENTRALE',
+            'APPENDICE_A_ORGANIGRAMMA',
+            'APPENDICE_B1_PROFILI',
+            'APPENDICE_B2_MISURE',
+            'APPENDICE_B3_ALTRE_SEDI',
+            'APPENDICE_C_SORVEGLIANZA',
+            'MOD_MICROCLIMA',
+            'MOD_VDT_ILLUMINAMENTO',
+            'MOD_STRESS_LC',
+            'MOD_EMERGENZE',
+            'MOD_INCENDIO',
+            'MOD_RUMORE',
+            'MOD_VIBRAZIONI',
+            'MOD_CHIMICO',
+            'MOD_GAS_RADON',
+        ];
+
+        function applyDocumentiStandardAzienda() {
+            const form = document.getElementById('aziendaForm');
+            if (!form) return;
+
+            const catalog = (STATE.data.documentiCatalogo || []).filter((d) => d.attivo !== false);
+            const byCodice = Object.fromEntries(catalog.map((d) => [d.codice, d]));
+            const selected = DOCUMENTI_STANDARD_CODICI.map((codice) => byCodice[codice]).filter(Boolean);
+            const standardIdSet = new Set(selected.map((d) => d.id));
+
+            form.querySelectorAll('input[name="documenti_selezionati"]').forEach((cb) => {
+                cb.checked = standardIdSet.has(cb.value);
+            });
+
+            const extra = catalog.filter((d) => !DOCUMENTI_STANDARD_CODICI.includes(d.codice));
+            const appendici = selected.filter((d) => (d.categoria || '').toLowerCase().includes('appendic')).length;
+            const moduli = selected.filter((d) => (d.categoria || '').toLowerCase() === 'moduli').length;
+            const hasDvr = selected.some((d) => d.codice === 'DVR_CORPO_CENTRALE');
+
+            let msg = 'Selezionati ' + selected.length + ' documenti standard';
+            if (hasDvr || appendici || moduli) {
+                const parts = [];
+                if (hasDvr) parts.push('DVR centrale');
+                if (appendici) parts.push(appendici + ' appendici');
+                if (moduli) parts.push(moduli + ' moduli');
+                msg += ' (' + parts.join(', ') + ')';
+            }
+            msg += '.\n\nAssociati:\n• ' + selected.map((d) => d.nome).join('\n• ');
+            if (extra.length) {
+                msg += '\n\nValuta l\'aggiunta manuale di:\n• ' + extra.map((d) => d.nome).join('\n• ');
+            }
+
+            showToast(msg, 'success', 10000);
+        }
+
         function renderDocumentiChecklist(catalog, selectedSet = new Set()) {
             const categories = [...new Set((catalog || []).map(d => d.categoria || 'Altro'))];
             return categories.map(cat => {
@@ -1928,11 +2065,16 @@
                                     <textarea name="Note">${esc(f.Note || '')}</textarea>
                                 </div>
 
-                                <div class="form-section">Documentazione da produrre</div>
+                                <div class="form-section form-section-with-action">
+                                    <span>Documentazione da produrre</span>
+                                    <button type="button" class="btn" onclick="applyDocumentiStandardAzienda()">Documenti standard</button>
+                                </div>
                                 <div class="form-field full">
                                     <span class="hint">Seleziona i documenti da generare per questa azienda (DVR centrale predefinito).</span>
                                 </div>
+                                <div class="form-field full" id="aziendaDocumentiChecklist">
                                 ${renderDocumentiChecklist(STATE.data.documentiCatalogo || [], selectedSet)}
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -5317,7 +5459,8 @@
                 const pickLogo = e.target.closest?.('[data-action="pick-logo"]');
                 if (pickLogo) {
                     e.preventDefault();
-                    pickLogo.closest('tr')?.querySelector('input.loghi-file-input')?.click();
+                    const aid = pickLogo.dataset.aziendaId;
+                    document.querySelector('input.loghi-file-input[data-azienda-id="' + CSS.escape(aid) + '"]')?.click();
                     return;
                 }
                 const delLogo = e.target.closest?.('[data-action="delete-logo"]');
@@ -5507,11 +5650,68 @@
             return byAziendaId;
         }
 
-        function renderLogoRow(azienda, file, canManage, previewUrl) {
+        let loghiSelectedAziendaId = '';
+
+        function buildLoghiAziendaPickerHtml(aziende, byId, selectedId) {
+            const sorted = [...(aziende || [])].sort((a, b) =>
+                (a.fields?.RagioneSociale || '').localeCompare(b.fields?.RagioneSociale || '', 'it', { sensitivity: 'base' })
+            );
+            const selected = sorted.find((a) => a.id === selectedId);
+            const summaryLabel = selected
+                ? (selected.fields?.RagioneSociale || '—')
+                : '— Seleziona azienda —';
+            const summaryBadge = selected && !byId[selected.id]
+                ? '<span class="badge missing-logo-tag">mancante</span>'
+                : '';
+            const items = sorted.map((a) => {
+                const missing = !byId[a.id];
+                const name = esc(a.fields?.RagioneSociale || '—');
+                const tag = missing ? '<span class="badge missing-logo-tag">mancante</span>' : '';
+                const sel = a.id === selectedId ? ' loghi-azienda-picker-item-selected' : '';
+                return '<li class="loghi-azienda-picker-item' + sel + '" data-azienda-id="' + attrEsc(a.id) + '" role="option">'
+                    + '<span>' + name + '</span>' + tag + '</li>';
+            }).join('');
+            return ''
+                + '<details class="loghi-azienda-picker" id="loghiAziendaPicker">'
+                + '<summary class="loghi-azienda-picker-summary">'
+                + '<span data-loghi-summary-label>' + esc(summaryLabel) + '</span>'
+                + summaryBadge
+                + '</summary>'
+                + '<ul class="loghi-azienda-picker-list" role="listbox">' + items + '</ul>'
+                + '</details>';
+        }
+
+        function bindLoghiAziendaPicker() {
+            const picker = document.getElementById('loghiAziendaPicker');
+            if (!picker || picker.dataset.bound === '1') return;
+            picker.dataset.bound = '1';
+            picker.querySelector('.loghi-azienda-picker-list')?.addEventListener('click', (e) => {
+                const item = e.target.closest('.loghi-azienda-picker-item');
+                if (!item) return;
+                e.preventDefault();
+                loghiSelectedAziendaId = item.dataset.aziendaId || '';
+                picker.removeAttribute('open');
+                picker.querySelectorAll('.loghi-azienda-picker-item').forEach((li) => {
+                    li.classList.toggle('loghi-azienda-picker-item-selected', li.dataset.aziendaId === loghiSelectedAziendaId);
+                });
+                const name = item.querySelector('span')?.textContent || '—';
+                const labelEl = picker.querySelector('[data-loghi-summary-label]');
+                if (labelEl) labelEl.textContent = name;
+                const summary = picker.querySelector('.loghi-azienda-picker-summary');
+                const oldBadge = summary?.querySelector('.badge.missing-logo-tag');
+                if (oldBadge) oldBadge.remove();
+                const missingTag = item.querySelector('.badge.missing-logo-tag');
+                if (missingTag && summary) summary.insertAdjacentHTML('beforeend', missingTag.outerHTML);
+                renderLoghiPanelContent();
+            });
+        }
+
+        function renderLogoPanel(azienda, file, canManage) {
+            if (!azienda) return '';
             const idAttr = attrEsc(azienda.id);
-            const previewHtml = previewUrl
-                ? '<img src="' + attrEsc(previewUrl) + '" alt="Logo" style="max-height:40px;max-width:120px;object-fit:contain;">'
-                : (file ? '<span class="badge info">Caricato</span>' : '<span class="badge warning">Mancante</span>');
+            const previewHtml = file
+                ? '<span class="badge info">Caricato</span>'
+                : '<span class="badge missing-logo-tag">mancante</span>';
             let actionsHtml = '';
             if (canManage) {
                 actionsHtml += '<button type="button" class="btn" data-action="pick-logo" data-azienda-id="' + idAttr + '">'
@@ -5528,34 +5728,57 @@
                     + idAttr + '">Scarica</button>';
             }
             return ''
-                + '<tr data-azienda-id="' + idAttr + '">'
-                + '<td><strong>' + esc(azienda.fields?.RagioneSociale || '—') + '</strong></td>'
-                + '<td>' + esc(azienda.fields?.PartitaIVA || '—') + '</td>'
-                + '<td>' + previewHtml + '</td>'
-                + '<td><div class="actions">' + actionsHtml + '</div></td>'
-                + '</tr>';
+                + '<div class="card" data-loghi-panel data-azienda-id="' + idAttr + '">'
+                + '<div class="card-body">'
+                + '<div class="form-grid cols-2">'
+                + '<div class="form-field">'
+                + '<label>Ragione sociale</label>'
+                + '<div><strong>' + esc(azienda.fields?.RagioneSociale || '—') + '</strong></div>'
+                + '</div>'
+                + '<div class="form-field">'
+                + '<label>Partita IVA</label>'
+                + '<div>' + esc(azienda.fields?.PartitaIVA || '—') + '</div>'
+                + '</div>'
+                + '<div class="form-field full">'
+                + '<label>Anteprima</label>'
+                + '<div id="loghiPreviewCell">' + previewHtml + '</div>'
+                + '</div>'
+                + '</div>'
+                + '<div class="actions" style="margin-top:12px;">' + actionsHtml + '</div>'
+                + '</div></div>';
         }
 
-        async function hydrateLogoPreviews(aziende, byId) {
-            const bucket = CONFIG.storage.loghi;
-            for (const a of aziende) {
-                const file = byId[a.id];
-                if (!file?.name) continue;
-                const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(file.name, 3600);
-                if (error || !data?.signedUrl) continue;
-                const row = document.querySelector('tr[data-azienda-id="' + a.id + '"]');
-                if (!row) continue;
-                const cell = row.querySelector('td:nth-child(3)');
-                if (cell) {
-                    cell.innerHTML = '<img src="' + attrEsc(data.signedUrl) + '" alt="Logo" style="max-height:40px;max-width:120px;object-fit:contain;">';
-                }
+        function renderLoghiPanelContent() {
+            const panel = document.getElementById('loghiPanel');
+            if (!panel) return;
+            const aziendaId = loghiSelectedAziendaId || '';
+            if (!aziendaId) {
+                panel.innerHTML = '<p class="hint">Seleziona un\'azienda per caricare o sostituire il logo.</p>';
+                return;
             }
+            const azienda = (STATE.data.aziende || []).find((a) => a.id === aziendaId);
+            const byId = STATE.data.loghiStorageByAziendaId || {};
+            const file = byId[aziendaId];
+            panel.innerHTML = renderLogoPanel(azienda, file, canMutateData());
+            if (file?.name) hydrateLogoPreviewSingle(aziendaId, file.name);
+        }
+
+        async function hydrateLogoPreviewSingle(aziendaId, fileName) {
+            const cell = document.getElementById('loghiPreviewCell');
+            if (!cell || !fileName) return;
+            const { data, error } = await supabaseClient.storage
+                .from(CONFIG.storage.loghi)
+                .createSignedUrl(fileName, 3600);
+            if (error || !data?.signedUrl) return;
+            cell.innerHTML = '<img src="' + attrEsc(data.signedUrl) + '" alt="Logo" style="max-height:80px;max-width:240px;object-fit:contain;">';
         }
 
         async function renderLoghi() {
             const main = document.getElementById('mainContent');
             const canManage = canMutateData();
             await ensureAziendeLoaded();
+
+            const prevSelected = loghiSelectedAziendaId || '';
 
             main.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento loghi...</div>';
             let byId = {};
@@ -5567,15 +5790,16 @@
             }
 
             const aziende = STATE.data.aziende || [];
-            const uploaded = aziende.filter(a => !!byId[a.id]).length;
-            const rowsHtml = aziende.length === 0
-                ? '<tr><td colspan="4"><em>Nessuna azienda registrata.</em></td></tr>'
-                : aziende.map(a => renderLogoRow(a, byId[a.id], canManage)).join('');
+            const uploaded = aziende.filter((a) => !!byId[a.id]).length;
+            const missing = aziende.length - uploaded;
+            loghiSelectedAziendaId = prevSelected;
 
             main.innerHTML = ''
                 + '<div class="page-header"><div>'
                 + '<h1 class="page-title">Loghi aziendali</h1>'
-                + '<p class="page-subtitle">Bucket <code>loghi</code> — ' + uploaded + '/' + aziende.length + ' caricati (path: <code>AZIENDA_ID.ext</code>)</p>'
+                + '<p class="page-subtitle">Bucket <code>loghi</code> — ' + uploaded + '/' + aziende.length + ' caricati'
+                + (missing ? ' · <span class="badge missing-logo-tag">' + missing + ' mancanti</span>' : '')
+                + ' (path: <code>AZIENDA_ID.ext</code>)</p>'
                 + '</div>'
                 + (canManage ? '' : '<span class="badge info">Sola lettura</span>')
                 + '</div>'
@@ -5583,14 +5807,16 @@
                 + 'Un logo per azienda, collegato tramite <code>azienda_id</code> e salvato anche in <code>aziende.logo_azienda_url</code>. '
                 + 'Formati: ' + (CONFIG.loghiAllowedExt || []).join(', ') + '. '
                 + (canManage ? 'Editor, RSPP e admin possono caricare o sostituire.' : 'Solo utenti con permesso di modifica possono caricare.')
-                + '</p></div>'
-                + '<div class="card-body" style="padding-top:0;">'
-                + '<table class="data-table" id="loghiTable">'
-                + '<thead><tr><th>Azienda</th><th>P.IVA</th><th>Anteprima</th><th></th></tr></thead>'
-                + '<tbody id="loghiTableBody">' + rowsHtml + '</tbody>'
-                + '</table></div></div>';
+                + '</p>'
+                + '<div class="form-field" style="margin-top:12px;">'
+                + '<label>Azienda</label>'
+                + buildLoghiAziendaPickerHtml(aziende, byId, prevSelected)
+                + '</div>'
+                + '</div></div>'
+                + '<div id="loghiPanel" style="margin-top:16px;"></div>';
 
-            if (aziende.length) await hydrateLogoPreviews(aziende, byId);
+            bindLoghiAziendaPicker();
+            renderLoghiPanelContent();
         }
 
         async function uploadLogoAzienda(aziendaId, inputEl) {
@@ -7966,7 +8192,7 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             setTimeout(() => modal.remove(), 200);
         }
         
-        function showToast(message, type = 'info') {
+        function showToast(message, type = 'info', durationMs = 4000) {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
@@ -7975,7 +8201,7 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             setTimeout(() => {
                 toast.style.opacity = '0';
                 setTimeout(() => toast.remove(), 200);
-            }, 4000);
+            }, durationMs);
         }
         
         // ════════════════════════════════════════════════════════════════

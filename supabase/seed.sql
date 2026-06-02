@@ -123,10 +123,7 @@ values
 ('VADEMECUM_AGGRESSIONI', 'Note informative e procedure', 'Vademecum aggressioni e molestie', false, true, 290),
 ('MOD_GESTIONE_DPI', 'Note informative e procedure', 'Moduli per la gestione dei DPI', false, true, 300),
 ('PROC_LAVORO_SICUREZZA', 'Note informative e procedure', 'Procedure di lavoro in sicurezza (specifiche attività)', false, true, 310),
-('DVR_STANDARDIZZATE', 'DVR Procedure Standardizzate', 'DVR Procedure Standardizzate', false, true, 320),
-('ALLEGATO_TITOLI_RSPP', 'Allegati', 'Titoli abilitativi del RSPP', false, true, 330),
-('ALLEGATO_QUESTIONARIO_STRESS', 'Allegati', 'Questionario di valutazione del rischio stress lavoro correlato', false, true, 340),
-('ALLEGATO_RISCHIO_MOLESTIE', 'Allegati', 'Valutazione del rischio molestie', false, true, 350)
+('DVR_STANDARDIZZATE', 'DVR Procedure Standardizzate', 'DVR Procedure Standardizzate', false, true, 320)
 on conflict (codice) do update
 set categoria = excluded.categoria,
     nome = excluded.nome,

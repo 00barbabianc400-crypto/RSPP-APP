@@ -3092,7 +3092,7 @@
                         <td>${esc(v.rischio?.id_rischio || '—')}</td>
                         <td>${esc(v.rischio?.nome_rischio || '—')}</td>
                         <td>${esc(v.profilo?.nome_profilo || '—')}</td>
-                        <td><span class="badge ${v.stato === 'Presente' ? 'warning' : 'info'}">${esc(v.stato || '—')}</span></td>
+                        <td><span class="badge ${v.stato === 'Presente' ? 'warning' : 'info'}">${esc(labelStatoValutazione(v.stato))}</span></td>
                         <td>${v.probabilita ?? '—'}</td>
                         <td>${v.gravita ?? '—'}</td>
                         <td>${v.indice_rischio ?? '—'}</td>
@@ -3172,6 +3172,11 @@
                 : testiScopeAzienda(testiStessoRischio);
         }
 
+        function labelStatoValutazione(stato) {
+            if (stato === 'Trascurabile') return 'Non applicabile';
+            return stato || '—';
+        }
+
         function livelloPerTestiDvrValutazione(stato, probabilita, gravita, livelloSalvato) {
             if (stato !== 'Presente') {
                 const salvato = livelloSalvato && livelloSalvato !== 'Trascurabile' ? livelloSalvato : 'Basso';
@@ -3214,7 +3219,7 @@
                     hint.textContent = 'Inserisci P e G (1–4) per calcolare la fascia e filtrare i testi DVR';
                     hint.style.display = '';
                 } else {
-                    hint.textContent = 'Stato Trascurabile: testi per livello ' + livello;
+                    hint.textContent = 'Stato Non applicabile: testi per livello ' + livello;
                     hint.style.display = '';
                 }
             }
@@ -3252,7 +3257,7 @@
                                 <div class="form-field">
                                     <label>Stato</label>
                                     <select name="stato" required onchange="toggleValutazionePG(this.value); refreshValutazioneTestiDvrSelect();">
-                                        <option value="Trascurabile" ${item.stato === 'Trascurabile' ? 'selected' : ''}>Trascurabile</option>
+                                        <option value="Trascurabile" ${item.stato === 'Trascurabile' ? 'selected' : ''}>Non applicabile</option>
                                         <option value="Presente" ${item.stato === 'Presente' ? 'selected' : ''}>Presente</option>
                                     </select>
                                 </div>
@@ -7224,7 +7229,7 @@
 <p><strong>P.IVA:</strong> ${esc(azienda.partita_iva)} | <strong>Profilo:</strong> ${esc(profilo.nome_profilo)}</p>
 <h2>Valutazioni Rischio</h2>
 <table><thead><tr><th>ID</th><th>Rischio</th><th>Stato</th><th>P</th><th>G</th><th>Indice</th><th>Livello</th><th>Testo</th></tr></thead><tbody>
-${(valutazioni || []).map(v => `<tr><td>${esc(v.rischio?.id_rischio || '')}</td><td>${esc(v.rischio?.nome_rischio || '')}</td><td>${esc(v.stato || '')}</td><td>${v.probabilita ?? ''}</td><td>${v.gravita ?? ''}</td><td>${v.indice_rischio ?? ''}</td><td>${esc(v.livello_rischio || '')}</td><td>${esc(v.testo_dvr?.testo_valutazione || v.testo_valutazione || '')}</td></tr>`).join('')}
+${(valutazioni || []).map(v => `<tr><td>${esc(v.rischio?.id_rischio || '')}</td><td>${esc(v.rischio?.nome_rischio || '')}</td><td>${esc(labelStatoValutazione(v.stato))}</td><td>${v.probabilita ?? ''}</td><td>${v.gravita ?? ''}</td><td>${v.indice_rischio ?? ''}</td><td>${esc(v.livello_rischio || '')}</td><td>${esc(v.testo_dvr?.testo_valutazione || v.testo_valutazione || '')}</td></tr>`).join('')}
 </tbody></table>
 <h2>Rilevamenti Ambientali</h2>
 <table><thead><tr><th>Tipo</th><th>Valore</th><th>Limite</th><th>Esito</th><th>Data</th></tr></thead><tbody>

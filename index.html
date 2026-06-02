@@ -329,6 +329,37 @@
             gap: 4px;
             justify-content: flex-end;
         }
+
+        .admin-users-table tbody tr {
+            cursor: default;
+            background: var(--sp-bg-hover, #1e1e1e);
+        }
+
+        .admin-users-table tbody tr:nth-child(even) {
+            background: rgba(0, 0, 0, 0.12);
+        }
+
+        .admin-users-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .admin-users-table td {
+            vertical-align: middle;
+        }
+
+        .admin-users-email {
+            font-size: 13px;
+            color: var(--sp-text-secondary);
+        }
+
+        .admin-users-name {
+            font-weight: 600;
+        }
+
+        .badge.role-viewer { background: #3a3f44; color: #c8cdd2; }
+        .badge.role-editor { background: #DEECF9; color: var(--sp-primary); }
+        .badge.role-rspp { background: #FFF4CE; color: #997B00; }
+        .badge.role-admin { background: #FDE7E9; color: var(--sp-error); }
         
         .icon-btn {
             background: transparent;
@@ -8081,6 +8112,41 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             }
         }
 
+        let _adminUsersCache = [];
+
+        function roleBadgeHtml(role) {
+            const r = String(role || 'viewer').toLowerCase();
+            const labels = { admin: 'Admin', rspp: 'RSPP', editor: 'Editor', viewer: 'Viewer' };
+            return `<span class="badge role-${r}">${esc(labels[r] || r)}</span>`;
+        }
+
+        function activeBadgeHtml(isActive) {
+            return isActive
+                ? '<span class="badge success">Attivo</span>'
+                : '<span class="badge warning">Inattivo</span>';
+        }
+
+        function renderAdminUserRow(u) {
+            const idAttr = attrEsc(u.id);
+            const isSelf = STATE.account?.id === u.id;
+            return `
+                <tr data-user-id="${idAttr}">
+                    <td>
+                        <div class="admin-users-name">${esc(u.full_name || '—')}</div>
+                        <div class="admin-users-email">${esc(u.email || '—')}</div>
+                    </td>
+                    <td>${roleBadgeHtml(u.role)}</td>
+                    <td>${activeBadgeHtml(!!u.is_active)}</td>
+                    <td onclick="event.stopPropagation()">
+                        <div class="actions">
+                            <button type="button" class="icon-btn" onclick="openAdminUserModal('${idAttr}')" title="Modifica">✏️</button>
+                            <button type="button" class="icon-btn" onclick="deactivateAdminUser('${idAttr}')" title="${isSelf ? 'Non puoi disattivare te stesso' : 'Disattiva account'}" ${isSelf ? 'disabled' : ''}>🔒</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+
         async function renderAdminUsers() {
             const main = document.getElementById('mainContent');
             if (!hasRequiredRole('admin')) {
@@ -8091,55 +8157,36 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             const { data, error } = await supabaseClient
                 .from('profiles')
                 .select('id, email, full_name, role, is_active, created_at')
-                .order('created_at', { ascending: false });
+                .order('full_name', { ascending: true });
             if (error) throw error;
+
+            _adminUsersCache = data || [];
+            const users = _adminUsersCache;
+            const activeCount = users.filter((u) => u.is_active).length;
 
             main.innerHTML = `
                 <div class="page-header">
                     <div>
                         <h1 class="page-title">Admin Utenti</h1>
-                        <p class="page-subtitle">Gestione ruoli e attivazione account</p>
+                        <p class="page-subtitle">Gestione ruoli e attivazione account · ${users.length} utenti · ${activeCount} attivi</p>
                     </div>
                 </div>
                 <div class="card">
                     <div class="card-body" style="padding:0;">
-                        ${(data || []).length === 0 ? `
+                        ${users.length === 0 ? `
                             <div class="empty-state"><h3>Nessun utente trovato</h3></div>
                         ` : `
-                            <table class="data-table">
+                            <table class="data-table admin-users-table">
                                 <thead>
                                     <tr>
-                                        <th>Email</th>
-                                        <th>Nome</th>
+                                        <th>Utente</th>
                                         <th>Ruolo</th>
-                                        <th>Attivo</th>
+                                        <th>Stato</th>
                                         <th></th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${(data || []).map(u => `
-                                        <tr>
-                                            <td>${esc(u.email || '—')}</td>
-                                            <td>${esc(u.full_name || '—')}</td>
-                                            <td>
-                                                <select id="role_${u.id}">
-                                                    <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>viewer</option>
-                                                    <option value="editor" ${u.role === 'editor' ? 'selected' : ''}>editor</option>
-                                                    <option value="rspp" ${u.role === 'rspp' ? 'selected' : ''}>rspp</option>
-                                                    <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>admin</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <select id="active_${u.id}">
-                                                    <option value="true" ${u.is_active ? 'selected' : ''}>Sì</option>
-                                                    <option value="false" ${!u.is_active ? 'selected' : ''}>No</option>
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <button class="btn" onclick="saveUserRole('${u.id}')">Salva</button>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
+                                    ${users.map((u) => renderAdminUserRow(u)).join('')}
                                 </tbody>
                             </table>
                         `}
@@ -8148,14 +8195,68 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             `;
         }
 
-        async function saveUserRole(userId) {
-            const roleEl = document.getElementById(`role_${userId}`);
-            const activeEl = document.getElementById(`active_${userId}`);
-            if (!roleEl || !activeEl) return;
+        function openAdminUserModal(userId) {
+            const u = _adminUsersCache.find((x) => x.id === userId);
+            if (!u) return;
 
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.id = 'adminUserModal';
+            modal.innerHTML = `
+                <div class="modal" onclick="event.stopPropagation()">
+                    <div class="modal-header">
+                        <div>
+                            <div class="modal-title">Modifica utente</div>
+                            <div class="hint">${esc(u.email || '')}</div>
+                        </div>
+                        <button type="button" class="icon-btn" onclick="closeModal('adminUserModal')">✕</button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="adminUserForm" onsubmit="saveAdminUser(event, '${attrEsc(u.id)}')">
+                            <div class="form-grid cols-1">
+                                <div class="form-field">
+                                    <label>Nome visualizzato</label>
+                                    <input type="text" name="full_name" value="${esc(u.full_name || '')}" readonly>
+                                    <span class="hint">Modificabile dall'utente nel proprio profilo.</span>
+                                </div>
+                                <div class="form-field">
+                                    <label>Ruolo</label>
+                                    <select name="role" required>
+                                        <option value="viewer" ${u.role === 'viewer' ? 'selected' : ''}>Viewer — sola lettura</option>
+                                        <option value="editor" ${u.role === 'editor' ? 'selected' : ''}>Editor — inserimento dati</option>
+                                        <option value="rspp" ${u.role === 'rspp' ? 'selected' : ''}>RSPP — modelli e generazione</option>
+                                        <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin — gestione completa</option>
+                                    </select>
+                                </div>
+                                <div class="form-field">
+                                    <label>Account attivo</label>
+                                    <select name="is_active" required ${STATE.account?.id === u.id ? 'disabled' : ''}>
+                                        <option value="true" ${u.is_active ? 'selected' : ''}>Attivo</option>
+                                        <option value="false" ${!u.is_active ? 'selected' : ''}>Inattivo</option>
+                                    </select>
+                                    ${STATE.account?.id === u.id ? '<span class="hint">Non puoi disattivare il tuo account da qui.</span>' : ''}
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn" onclick="closeModal('adminUserModal')">Annulla</button>
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('adminUserForm').requestSubmit()">Salva</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            setTimeout(() => modal.classList.add('show'), 10);
+            modal.onclick = () => closeModal('adminUserModal');
+        }
+
+        async function saveAdminUser(event, userId) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
             const payload = {
-                role: roleEl.value,
-                is_active: activeEl.value === 'true'
+                role: formData.get('role'),
+                is_active: formData.get('is_active') === 'true',
             };
 
             const { error } = await supabaseClient
@@ -8167,6 +8268,7 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
                 return;
             }
 
+            closeModal('adminUserModal');
             if (STATE.account?.id === userId) {
                 await loadCurrentProfile();
                 applyRoleToNavigation();
@@ -8175,7 +8277,33 @@ ${(rilevamenti || []).map(r => `<tr><td>${esc(r.tipo_rilevamento?.nome_tipo || '
             showToast('Utente aggiornato', 'success');
             await renderAdminUsers();
         }
-        
+
+        async function deactivateAdminUser(userId) {
+            if (STATE.account?.id === userId) {
+                showToast('Non puoi disattivare il tuo account', 'warning');
+                return;
+            }
+            const u = _adminUsersCache.find((x) => x.id === userId);
+            if (!u) return;
+            if (!u.is_active) {
+                showToast('Utente già inattivo — usa Modifica per riattivare', 'info');
+                return;
+            }
+            if (!confirm('Disattivare l\'accesso per ' + (u.full_name || u.email || 'questo utente') + '?')) return;
+
+            const { error } = await supabaseClient
+                .from('profiles')
+                .update({ is_active: false })
+                .eq('id', userId);
+            if (error) {
+                showToast('Errore: ' + error.message, 'error');
+                return;
+            }
+            showToast('Utente disattivato', 'success');
+            await renderAdminUsers();
+        }
+
+
         // ════════════════════════════════════════════════════════════════
         // UTILITY
         // ════════════════════════════════════════════════════════════════

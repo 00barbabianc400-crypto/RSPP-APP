@@ -794,6 +794,22 @@
         .loghi-azienda-picker-item-selected {
             background: var(--sp-bg-hover);
         }
+        .loghi-detail-table tbody tr {
+            cursor: default;
+        }
+        .loghi-detail-table tbody tr:hover {
+            background: var(--sp-bg-card);
+        }
+        .loghi-preview-cell {
+            width: 132px;
+            vertical-align: middle;
+        }
+        .loghi-preview-cell img {
+            max-height: 40px;
+            max-width: 120px;
+            object-fit: contain;
+            display: block;
+        }
         tr.row-error td { background: #FDE7E9; }
         
         /* Rilevamenti — valore microclima tabellare (dashboard) */
@@ -5729,22 +5745,15 @@
             }
             return ''
                 + '<div class="card" data-loghi-panel data-azienda-id="' + idAttr + '">'
-                + '<div class="card-body">'
-                + '<div class="form-grid cols-2">'
-                + '<div class="form-field">'
-                + '<label>Ragione sociale</label>'
-                + '<div><strong>' + esc(azienda.fields?.RagioneSociale || '—') + '</strong></div>'
-                + '</div>'
-                + '<div class="form-field">'
-                + '<label>Partita IVA</label>'
-                + '<div>' + esc(azienda.fields?.PartitaIVA || '—') + '</div>'
-                + '</div>'
-                + '<div class="form-field full">'
-                + '<label>Anteprima</label>'
-                + '<div id="loghiPreviewCell">' + previewHtml + '</div>'
-                + '</div>'
-                + '</div>'
-                + '<div class="actions" style="margin-top:12px;">' + actionsHtml + '</div>'
+                + '<div class="card-body" style="padding:0;">'
+                + '<table class="data-table loghi-detail-table">'
+                + '<thead><tr><th>Azienda</th><th>Anteprima</th><th>P.IVA</th><th></th></tr></thead>'
+                + '<tbody><tr>'
+                + '<td><strong>' + esc(azienda.fields?.RagioneSociale || '—') + '</strong></td>'
+                + '<td class="loghi-preview-cell" id="loghiPreviewCell">' + previewHtml + '</td>'
+                + '<td>' + esc(azienda.fields?.PartitaIVA || '—') + '</td>'
+                + '<td><div class="actions">' + actionsHtml + '</div></td>'
+                + '</tr></tbody></table>'
                 + '</div></div>';
         }
 
@@ -5770,7 +5779,7 @@
                 .from(CONFIG.storage.loghi)
                 .createSignedUrl(fileName, 3600);
             if (error || !data?.signedUrl) return;
-            cell.innerHTML = '<img src="' + attrEsc(data.signedUrl) + '" alt="Logo" style="max-height:80px;max-width:240px;object-fit:contain;">';
+            cell.innerHTML = '<img src="' + attrEsc(data.signedUrl) + '" alt="Logo">';
         }
 
         async function renderLoghi() {

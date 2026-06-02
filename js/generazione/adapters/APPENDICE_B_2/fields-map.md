@@ -7,7 +7,7 @@ Template bucket: **`modelli/APPENDICE_B2_MISURE.docx`** (base: `Appendice B-2 - 
 
 | Tag | Origine |
 |-----|---------|
-| `{%LOGO%}` | Logo azienda (iniezione codice) |
+| `{%LOGO}` | Logo azienda (iniezione codice) |
 | `{{RAGIONE_SOCIALE}}` | Anagrafica |
 | `{{SEDE_OPERATIVA}}` | Sede selezionata in generazione |
 | `{{DATA_EMISSIONE}}` | Data emissione (gg/mm/aaaa, automatica) |

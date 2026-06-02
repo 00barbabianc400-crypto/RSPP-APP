@@ -7,7 +7,7 @@ Logica identica a **Appendice B.2**: sede, descrizione sito e processo dalla sed
 
 | Tag | Origine |
 |-----|---------|
-| `{%LOGO%}` | Logo azienda |
+| `{%LOGO}` | Logo azienda |
 | `{{RAGIONE_SOCIALE}}` | Anagrafica |
 | `{{SEDE_OPERATIVA}}` | Sede selezionata (`generazioneSedeSelect`) |
 | `{{DATA_EMISSIONE}}` | Automatica |

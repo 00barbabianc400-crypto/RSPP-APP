@@ -1,5 +1,5 @@
 /**
- * Modale profilo: fasi strutturate, protocollo sanitario (matrice), sedi custom.
+ * Modale profilo: fasi strutturate, protocollo sanitario (matrice).
  */
 (function () {
   'use strict';
@@ -11,6 +11,7 @@
     protocollo: { rischi_ids: [], periodicita: {} },
   };
   let faseEditIndex = null;
+  let isDuplicateFlow = false;
 
   function esc(s) {
     return String(s || '')
@@ -156,32 +157,6 @@
     wrap.innerHTML = html;
   }
 
-  function renderSediProfilo(aziendaId, selected) {
-    const host = document.getElementById('profiloSediOperativeList');
-    if (!host) return;
-    const sedi = sediListaAzienda(aziendaId);
-    const selSet = new Set(selected || []);
-    if (!aziendaId) {
-      host.innerHTML = '<p class="hint-str">Seleziona prima l\'azienda proprietaria.</p>';
-      return;
-    }
-    if (!sedi.length) {
-      host.innerHTML = '<p class="hint-str">Nessuna sede in anagrafica azienda.</p>';
-      return;
-    }
-    host.innerHTML = sedi
-      .map(
-        (s) => ''
-          + '<label class="profilo-check-chip" style="display:block;margin-bottom:6px;">'
-          + '<input type="checkbox" name="profilo_sede_item" value="' + attrEsc(s) + '"'
-          + (selSet.has(s) ? ' checked' : '')
-          + '> '
-          + esc(s)
-          + '</label>'
-      )
-      .join('');
-  }
-
   function renderFaseSubModal() {
     const fase = faseEditIndex != null ? draft.fasi[faseEditIndex] : null;
 
@@ -209,15 +184,6 @@
     document.body.appendChild(modal);
     setTimeout(() => modal.classList.add('show'), 10);
     modal.onclick = () => ProfiloModal.closeFaseModal();
-  }
-
-  function sediFromForm() {
-    const out = [];
-    document.querySelectorAll('#profiloSediOperativeList input[name="profilo_sede_item"]:checked').forEach((inp) => {
-      const t = (inp.value || '').trim();
-      if (t && !out.includes(t)) out.push(t);
-    });
-    return out;
   }
 
   function findProfiloInState(profiloId) {
@@ -292,6 +258,7 @@
   }
 
   function open(itemId = null, options = {}) {
+    isDuplicateFlow = !!options.copyFasiFromId;
     if (!window.canMutateData?.()) {
       window.showToast?.('Profilo in sola lettura', 'warning');
       return;
@@ -356,13 +323,8 @@
       + '<div class="form-field" id="aziendaProprietariaField" style="'
       + (f.TipoProfilo === 'Custom' ? '' : 'display:none;') + '">'
       + '<label>Azienda Proprietaria</label>'
-      + '<select name="AziendaProprietariaId" onchange="ProfiloModal.onAziendaProprietariaChange(this.value)">'
+      + '<select name="AziendaProprietariaId">'
       + '<option value="">— Nessuna —</option>' + aziendeOptions + '</select></div>'
-      + '<div class="form-field full" id="profiloSediField" style="'
-      + (f.TipoProfilo === 'Custom' && f.AziendaProprietariaId ? '' : 'display:none;') + '">'
-      + '<label>Sedi operative (profilo custom)</label>'
-      + '<span class="hint">Sottoinsieme delle sedi dell\'azienda proprietaria. Vuoto = tutte.</span>'
-      + '<div id="profiloSediOperativeList" style="margin-top:8px;"></div></div>'
       + '<div class="form-section full">Fasi di lavoro</div>'
       + '<div class="form-field full"><div id="profiloFasiCards"></div>'
       + '<button type="button" class="btn" style="margin-top:8px;" onclick="ProfiloModal.addFase()">+ Aggiungi fase</button></div>'
@@ -402,9 +364,6 @@
 
     renderFasiList();
     renderProtocolloPanel();
-    if (f.TipoProfilo === 'Custom' && f.AziendaProprietariaId) {
-      renderSediProfilo(f.AziendaProprietariaId, f.SediOperative || []);
-    }
   }
 
   async function save(event, itemId) {
@@ -453,7 +412,7 @@
     const payload = window.profiloPayloadFromForm(data);
     payload.protocollo_sanitario_config = protoSi ? protocolloConfig : {};
     if (data.TipoProfilo === 'Custom') {
-      payload.sedi_operative = sediFromForm();
+      payload.sedi_operative = sediListaAzienda(payload.azienda_proprietaria_id);
     } else {
       payload.sedi_operative = [];
     }
@@ -470,6 +429,29 @@
       dpi_specifici: x.dpi_specifici || '',
       rischi_lavorativi_ids: [],
     }));
+
+    // Confirm se è un duplicato e il nome richiama uno Standard
+    if (!itemId && isDuplicateFlow) {
+      isDuplicateFlow = false;
+      const newName = (data.NomeProfilo || '').trim();
+      const baseName = newName.replace(/ - Copia(\s*\(\d+\))?$/i, '').trim().toLowerCase();
+      const standards = (window.STATE?.data?.profili || []).filter(
+        (p) => p.fields?.TipoProfilo === 'Standard'
+      );
+      const matched = standards.find(
+        (s) => newName.toLowerCase().includes((s.fields?.NomeProfilo || '').trim().toLowerCase())
+          || baseName === (s.fields?.NomeProfilo || '').trim().toLowerCase()
+      );
+      if (matched) {
+        const ok = window.confirm(
+          'Il nome "' + newName + '" è derivato dal profilo Standard "' + (matched.fields?.NomeProfilo || '') + '".\n'
+          + 'Stai creando un profilo Custom specifico per un\'azienda.\nConfermi il salvataggio?'
+        );
+        if (!ok) return;
+      }
+    } else {
+      isDuplicateFlow = false;
+    }
 
     try {
       let profiloIdSaved = itemId;
@@ -552,14 +534,7 @@
     },
     onTipoProfiloChange(val) {
       const field = document.getElementById('aziendaProprietariaField');
-      const sediField = document.getElementById('profiloSediField');
       if (field) field.style.display = val === 'Custom' ? '' : 'none';
-      if (sediField) sediField.style.display = 'none';
-    },
-    onAziendaProprietariaChange(aziendaId) {
-      const sediField = document.getElementById('profiloSediField');
-      if (sediField) sediField.style.display = aziendaId ? '' : 'none';
-      renderSediProfilo(aziendaId, []);
     },
     onProtocolloSorSanChange() {
       renderProtocolloPanel();

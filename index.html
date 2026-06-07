@@ -2545,101 +2545,75 @@
             const canWrite = canMutateData();
             await loadProfiliAndAssociazioni();
 
-            const profili = STATE.data.profili;
+            const standards = (STATE.data.profili || []).filter(p => p.fields?.TipoProfilo === 'Standard');
+            const customs   = (STATE.data.profili || []).filter(p => p.fields?.TipoProfilo === 'Custom');
             const associazioni = STATE.data.aziendeProfili;
 
-            main.innerHTML = `
-                <div class="page-header">
-                    <div>
-                        <h1 class="page-title">Profili</h1>
-                        <p class="page-subtitle">Profili occupazionali e associazioni azienda/profilo</p>
-                    </div>
-                    <button class="btn btn-primary" onclick="openProfiloModal()" ${canWrite ? '' : 'disabled'}>
-                        + Nuovo Profilo
-                    </button>
-                </div>
+            const standardRows = standards.length === 0
+                ? '<tr><td colspan="6"><div class="empty-state" style="padding:20px;"><h3>Nessun profilo Standard</h3></div></td></tr>'
+                : standards.map(renderProfiloRow).join('');
 
-                <div class="toolbar">
-                    <div class="toolbar-search">
-                        <input type="text" placeholder="Cerca profilo o tipo personale..."
-                               oninput="filterProfili(this.value)">
-                    </div>
-                </div>
+            const assocBody = associazioni.length === 0
+                ? `<div class="empty-state" style="padding:20px;">
+                       <h3>Nessuna associazione</h3>
+                       <p>Associa un profilo a un'azienda per generare automaticamente le valutazioni rischio.</p>
+                   </div>`
+                : `<table class="data-table">
+                       <thead><tr>
+                           <th>Azienda</th><th>P.IVA</th><th>Profilo</th><th>Tipo</th><th>Data</th><th></th>
+                       </tr></thead>
+                       <tbody id="associazioniTableBody">${renderAssociazioniGroupedRows(associazioni)}</tbody>
+                   </table>`;
 
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Catalogo Profili (${profili.length})</div>
-                    </div>
-                    <div class="card-body" style="padding:0;">
-                        ${profili.length === 0 ? `
-                            <div class="empty-state">
-                                <div class="empty-state-icon">👥</div>
-                                <h3>Nessun profilo disponibile</h3>
-                            </div>
-                        ` : `
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Nome Profilo</th>
-                                        <th>Tipo Personale</th>
-                                        <th>Tipo Profilo</th>
-                                        <th>Azienda Proprietaria</th>
-                                        <th>Attivo</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="profiliTableBody">
-                                    ${profili.map(renderProfiloRow).join('')}
-                                </tbody>
-                            </table>
-                        `}
-                    </div>
-                </div>
+            main.innerHTML = ''
+                // ── Page header ──
+                + '<div class="page-header"><div>'
+                + '<h1 class="page-title">Profili</h1>'
+                + '<p class="page-subtitle">Profili occupazionali e associazioni azienda/profilo</p>'
+                + '</div>'
+                + '<button class="btn btn-primary" onclick="openProfiloModal()" ' + (canWrite ? '' : 'disabled') + '>+ Nuovo Profilo</button>'
+                + '</div>'
 
-                <div class="card">
-                    <div class="card-header">
-                        <div class="card-title">Associazioni Azienda- Profilo</div>
-                    </div>
-                    <div class="card-body">
-                        ${renderAssociazioneForm(canWrite)}
-                    </div>
-                    <div class="card-body" style="padding-top:0;">
-                        <div class="form-grid cols-3">
-                            <div class="form-field">
-                                <label>Vista per Azienda</label>
-                                <select id="associazioniAziendaFilter" onchange="filterAssociazioniByAzienda()">
-                                    <option value="">— Tutte le aziende —</option>
-                                    ${(STATE.data.aziende || []).map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                </select>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body" style="padding-top:0;">
-                        ${associazioni.length === 0 ? `
-                            <div class="empty-state" style="padding:20px;">
-                                <h3>Nessuna associazione</h3>
-                                <p>Associa un profilo a un'azienda per generare automaticamente le valutazioni rischio.</p>
-                            </div>
-                        ` : `
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Azienda</th>
-                                        <th>P.IVA</th>
-                                        <th>Profilo</th>
-                                        <th>Tipo</th>
-                                        <th>Data</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="associazioniTableBody">
-                                    ${renderAssociazioniGroupedRows(associazioni)}
-                                </tbody>
-                            </table>
-                        `}
-                    </div>
-                </div>
-            `;
+                // ── Search bar (Standard) ──
+                + '<div class="toolbar"><div class="toolbar-search">'
+                + '<input type="text" placeholder="Cerca profilo Standard..." oninput="filterProfili(this.value)">'
+                + '</div></div>'
+
+                // ── Tabella Standard ──
+                + '<div class="card">'
+                + '<div class="card-header"><div class="card-title">Profili Standard (' + standards.length + ')</div></div>'
+                + '<div class="card-body" style="padding:0;">'
+                + '<table class="data-table"><thead><tr>'
+                + '<th>Nome Profilo</th><th>Tipo Personale</th><th>Tipo</th><th>Azienda Proprietaria</th><th>Attivo</th><th></th>'
+                + '</tr></thead>'
+                + '<tbody id="profiliTableBody">' + standardRows + '</tbody>'
+                + '</table></div></div>'
+
+                // ── Sezione Custom (collassabile) ──
+                + '<div class="card" style="margin-top:12px;">'
+                + '<div class="card-header" style="cursor:pointer;user-select:none;" onclick="toggleCustomProfiliExpander()">'
+                + '<div class="card-title">'
+                + '<span id="customProfiliToggleIcon" style="margin-right:8px;font-size:11px;">▶</span>'
+                + 'Profili Custom (' + customs.length + ')'
+                + '</div>'
+                + '<span class="hint" style="font-size:12px;">Clicca per espandere</span>'
+                + '</div>'
+                + '<div id="customProfiliContent" style="display:none;"></div>'
+                + '</div>'
+
+                // ── Associazioni ──
+                + '<div class="card" style="margin-top:12px;">'
+                + '<div class="card-header"><div class="card-title">Associazioni Azienda – Profilo</div></div>'
+                + '<div class="card-body">' + renderAssociazioneForm(canWrite) + '</div>'
+                + '<div class="card-body" style="padding-top:0;">'
+                + '<div class="form-grid cols-3"><div class="form-field">'
+                + '<label>Vista per Azienda</label>'
+                + '<select id="associazioniAziendaFilter" onchange="filterAssociazioniByAzienda()">'
+                + '<option value="">— Tutte le aziende —</option>'
+                + (STATE.data.aziende || []).map(a => '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>').join('')
+                + '</select></div></div></div>'
+                + '<div class="card-body" style="padding-top:0;">' + assocBody + '</div>'
+                + '</div>';
         }
 
         function filterAssociazioniByAzienda() {
@@ -2648,7 +2622,6 @@
             if (!tbody) return;
             const rows = (STATE.data.aziendeProfili || []).filter(a => !aziendaId || a.azienda_id === aziendaId);
             tbody.innerHTML = renderAssociazioniGroupedRows(rows);
-            filterProfili(document.querySelector('.toolbar-search input')?.value || '');
         }
 
         function renderAssociazioniGroupedRows(rows) {
@@ -2691,40 +2664,180 @@
             `;
         }
 
-        function getProfiliForSelectedAzienda() {
-            const aziendaId = document.getElementById('associazioniAziendaFilter')?.value || '';
-            if (!aziendaId) return STATE.data.profili || [];
-            const profiliIds = new Set(
-                (STATE.data.aziendeProfili || [])
-                    .filter(a => a.azienda_id === aziendaId)
-                    .map(a => a.profilo_id)
-            );
-            return (STATE.data.profili || []).filter(p => profiliIds.has(p.id));
+        // ── UI state per tab Profili (Standard search + Custom paginazione) ──────
+        let _profiliCustomPage = 0;
+        let _profiliCustomAziendaFilter = '';
+
+        /** Base-name di un Custom: strip " - Copia (N)" per matching con Standard. */
+        function customBaseName(name) {
+            return (name || '').replace(/ - Copia(\s*\(\d+\))?$/i, '').trim();
         }
 
         function filterProfili(query) {
             const tbody = document.getElementById('profiliTableBody');
             if (!tbody) return;
             const q = (query || '').toLowerCase().trim();
-            const filtered = getProfiliForSelectedAzienda().filter(item => {
-                const f = item.fields;
-                return !q
-                    || (f.NomeProfilo || '').toLowerCase().includes(q)
+            const standards = (STATE.data.profili || []).filter(p => p.fields?.TipoProfilo === 'Standard');
+            const filtered = !q ? standards : standards.filter(p => {
+                const f = p.fields;
+                return (f.NomeProfilo || '').toLowerCase().includes(q)
                     || (f.TipoPersonale || '').toLowerCase().includes(q);
             });
             tbody.innerHTML = filtered.map(renderProfiloRow).join('');
         }
 
+        function renderCustomProfiliSection() {
+            const PAGE = 5;
+            const customs = (STATE.data.profili || []).filter(p => p.fields?.TipoProfilo === 'Custom');
+            const aziende = STATE.data.aziende || [];
+
+            const filtered = _profiliCustomAziendaFilter
+                ? customs.filter(p => p.fields?.AziendaProprietariaId === _profiliCustomAziendaFilter)
+                : customs;
+
+            const total = filtered.length;
+            const totalPages = Math.max(1, Math.ceil(total / PAGE));
+            if (_profiliCustomPage >= totalPages) _profiliCustomPage = totalPages - 1;
+            const pageItems = filtered.slice(_profiliCustomPage * PAGE, _profiliCustomPage * PAGE + PAGE);
+
+            const aziendeOptions = '<option value="">— Tutte le aziende —</option>'
+                + aziende.map(a => '<option value="' + attrEsc(a.id) + '"'
+                    + (a.id === _profiliCustomAziendaFilter ? ' selected' : '') + '>'
+                    + esc(a.fields?.RagioneSociale || '') + '</option>').join('');
+
+            const rowsHtml = pageItems.length === 0
+                ? '<tr><td colspan="5"><em>' + (total === 0 ? 'Nessun profilo Custom.' : 'Nessun risultato per il filtro selezionato.') + '</em></td></tr>'
+                : pageItems.map(item => {
+                    const f = item.fields;
+                    const canWrite = canMutateData();
+                    const attivoBadge = f.Attivo ? '<span class="badge success">Sì</span>' : '<span class="badge error">No</span>';
+                    return '<tr>'
+                        + '<td><strong>' + esc(f.NomeProfilo || '—') + '</strong></td>'
+                        + '<td>' + esc(f.TipoPersonale || '—') + '</td>'
+                        + '<td>' + esc(f.AziendaProprietariaNome || '—') + '</td>'
+                        + '<td>' + attivoBadge + '</td>'
+                        + '<td><div class="actions">'
+                        + '<button class="icon-btn" title="Duplica come Custom" onclick="duplicateProfilo(\'' + item.id + '\')">📋</button>'
+                        + '<button class="icon-btn" onclick="openProfiloModal(\'' + item.id + '\')" title="Modifica">✏️</button>'
+                        + '<button class="icon-btn danger" onclick="deleteProfilo(\'' + item.id + '\')" title="Elimina">🗑️</button>'
+                        + '</div></td></tr>';
+                }).join('');
+
+            const prevDisabled = _profiliCustomPage === 0 ? ' disabled' : '';
+            const nextDisabled = _profiliCustomPage >= totalPages - 1 ? ' disabled' : '';
+            const pagerHtml = total > PAGE
+                ? '<div style="display:flex;align-items:center;gap:12px;padding:8px 16px;border-top:1px solid var(--sp-border);">'
+                    + '<button class="btn" onclick="setCustomProfiliPage(-1)"' + prevDisabled + '>← Prec</button>'
+                    + '<span class="hint" style="flex:1;text-align:center;">Pagina ' + (_profiliCustomPage + 1) + ' di ' + totalPages + ' (' + total + ' profili)</span>'
+                    + '<button class="btn" onclick="setCustomProfiliPage(1)"' + nextDisabled + '>Succ →</button>'
+                    + '</div>'
+                : '<div style="padding:6px 16px;"><span class="hint">' + total + ' profil' + (total === 1 ? 'o' : 'i') + '</span></div>';
+
+            const content = document.getElementById('customProfiliContent');
+            if (!content) return;
+
+            content.innerHTML = ''
+                + '<div class="card-body" style="padding-bottom:0;">'
+                + '<div class="form-grid cols-2" style="margin-bottom:0;">'
+                + '<div class="form-field"><label>Filtra per azienda proprietaria</label>'
+                + '<select onchange="filterCustomProfili(this.value)">' + aziendeOptions + '</select></div>'
+                + '</div></div>'
+                + '<div class="card-body" style="padding:0;">'
+                + '<table class="data-table"><thead><tr>'
+                + '<th>Nome Profilo</th><th>Tipo Personale</th><th>Azienda Proprietaria</th><th>Attivo</th><th></th>'
+                + '</tr></thead><tbody>' + rowsHtml + '</tbody></table>'
+                + pagerHtml
+                + '</div>';
+        }
+
+        function filterCustomProfili(aziendaId) {
+            _profiliCustomAziendaFilter = aziendaId || '';
+            _profiliCustomPage = 0;
+            renderCustomProfiliSection();
+        }
+
+        function setCustomProfiliPage(delta) {
+            const PAGE = 5;
+            const customs = (STATE.data.profili || []).filter(p => p.fields?.TipoProfilo === 'Custom');
+            const filtered = _profiliCustomAziendaFilter
+                ? customs.filter(p => p.fields?.AziendaProprietariaId === _profiliCustomAziendaFilter)
+                : customs;
+            const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE));
+            _profiliCustomPage = Math.max(0, Math.min(_profiliCustomPage + delta, totalPages - 1));
+            renderCustomProfiliSection();
+        }
+
+        function toggleCustomProfiliExpander() {
+            const content = document.getElementById('customProfiliContent');
+            const icon = document.getElementById('customProfiliToggleIcon');
+            if (!content) return;
+            const isOpen = content.style.display !== 'none';
+            content.style.display = isOpen ? 'none' : '';
+            if (icon) icon.textContent = isOpen ? '▶' : '▼';
+            if (!isOpen) renderCustomProfiliSection();
+        }
+
+        /**
+         * Ritorna i profili selezionabili per una data azienda nella form Associa.
+         * Regola Custom:
+         *  - Standard senza Custom-pair per questa azienda → sempre visibile
+         *  - Coppia Standard+Custom (match by base-name):
+         *      · Standard già associato → mostra entrambi
+         *      · Standard non ancora associato → mostra solo il Custom, nascondi lo Standard
+         */
+        function getProfiliOptionsForAssociazione(aziendaId) {
+            const all = (STATE.data.profili || []).filter(p => p.fields?.Attivo !== false);
+            const standards = all.filter(p => p.fields?.TipoProfilo === 'Standard');
+
+            if (!aziendaId) return standards;
+
+            const customsForAzienda = all.filter(p =>
+                p.fields?.TipoProfilo === 'Custom' && p.fields?.AziendaProprietariaId === aziendaId
+            );
+
+            const alreadyAssociated = new Set(
+                (STATE.data.aziendeProfili || [])
+                    .filter(ap => ap.azienda_id === aziendaId)
+                    .map(ap => ap.profilo_id)
+            );
+
+            // Per ogni Custom trova lo Standard appaiato e applica la regola
+            const standardsToHide = new Set();
+            customsForAzienda.forEach(custom => {
+                const baseName = customBaseName(custom.fields?.NomeProfilo || '').toLowerCase();
+                const paired = standards.find(s => (s.fields?.NomeProfilo || '').trim().toLowerCase() === baseName);
+                if (paired && !alreadyAssociated.has(paired.id)) {
+                    standardsToHide.add(paired.id);
+                }
+            });
+
+            const filteredStandards = standards.filter(s => !standardsToHide.has(s.id));
+            return [...filteredStandards, ...customsForAzienda];
+        }
+
+        function onAssociazioneAziendaChange() {
+            const form = document.getElementById('associazioneForm');
+            if (!form) return;
+            const aziendaId = form.querySelector('select[name="azienda_id"]')?.value || '';
+            const profiloSelect = form.querySelector('select[name="profilo_id"]');
+            if (!profiloSelect) return;
+            const profili = getProfiliOptionsForAssociazione(aziendaId);
+            profiloSelect.innerHTML = '<option value="">— Seleziona profilo —</option>'
+                + profili.map(p => '<option value="' + attrEsc(p.id) + '">'
+                    + esc(p.fields?.NomeProfilo || '') + ' (' + esc(p.fields?.TipoProfilo || '') + ')'
+                    + '</option>').join('');
+            updateAssociazioneDuplicateBanner();
+        }
+
         function renderAssociazioneForm(canWrite = false) {
             const aziende = STATE.data.aziende || [];
-            const profili = (STATE.data.profili || []).filter(p => p.fields?.Attivo !== false);
 
             return `
                 <form id="associazioneForm" onsubmit="associateProfiloAzienda(event)" onchange="updateAssociazioneDuplicateBanner()">
                     <div class="form-grid cols-3">
                         <div class="form-field">
                             <label>Azienda <span class="required">*</span></label>
-                            <select name="azienda_id" required onchange="updateAssociazioneDuplicateBanner()">
+                            <select name="azienda_id" required onchange="onAssociazioneAziendaChange(); updateAssociazioneDuplicateBanner();">
                                 <option value="">— Seleziona azienda —</option>
                                 ${aziende.map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
                             </select>
@@ -2732,8 +2845,7 @@
                         <div class="form-field">
                             <label>Profilo <span class="required">*</span></label>
                             <select name="profilo_id" required onchange="updateAssociazioneDuplicateBanner()">
-                                <option value="">— Seleziona profilo —</option>
-                                ${profili.map(p => `<option value="${p.id}">${esc(p.fields.NomeProfilo || '')} (${esc(p.fields.TipoProfilo || '')})</option>`).join('')}
+                                <option value="">— Seleziona prima l'azienda —</option>
                             </select>
                         </div>
                         <div class="form-field" style="align-self:end;">

@@ -510,6 +510,35 @@
             font-size: 12px;
             color: var(--sp-text-secondary);
         }
+
+        .custom-profili-filter-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 12px 16px 18px;
+        }
+
+        .custom-profili-filter-bar label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--sp-text);
+            white-space: nowrap;
+            margin: 0;
+        }
+
+        .custom-profili-filter-bar select {
+            min-width: 220px;
+            max-width: 360px;
+            padding: 6px 10px;
+            border: 1px solid var(--sp-border-strong);
+            border-radius: 2px;
+            font-size: 14px;
+            font-family: inherit;
+            min-height: 32px;
+            background: var(--sp-bg-card);
+            color: var(--sp-text);
+        }
         
         /* ───── MODAL ───── */
         .modal-overlay {
@@ -2737,11 +2766,10 @@
             if (!content) return;
 
             content.innerHTML = ''
-                + '<div class="card-body" style="padding-bottom:0;">'
-                + '<div class="form-grid cols-2" style="margin-bottom:0;">'
-                + '<div class="form-field"><label>Filtra per azienda proprietaria</label>'
-                + '<select onchange="filterCustomProfili(this.value)">' + aziendeOptions + '</select></div>'
-                + '</div></div>'
+                + '<div class="custom-profili-filter-bar">'
+                + '<label for="customProfiliAziendaFilter">Filtra per azienda proprietaria</label>'
+                + '<select id="customProfiliAziendaFilter" onchange="filterCustomProfili(this.value)">' + aziendeOptions + '</select>'
+                + '</div>'
                 + '<div class="card-body" style="padding:0;">'
                 + '<table class="data-table"><thead><tr>'
                 + '<th>Nome Profilo</th><th>Tipo Personale</th><th>Azienda Proprietaria</th><th>Attivo</th><th></th>'

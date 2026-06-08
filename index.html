@@ -505,6 +505,89 @@
             margin: 0;
             pointer-events: none;
         }
+        /* ── Associazioni board ── */
+        .assoc-board-picker {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+        }
+        .assoc-board-picker label {
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .assoc-board-picker select {
+            flex: 1;
+            min-width: 200px;
+            max-width: 400px;
+        }
+        .assoc-board-panels {
+            display: grid;
+            grid-template-columns: 1fr 1.35fr;
+            border: 1px solid var(--sp-border);
+            border-radius: 8px;
+            overflow: hidden;
+            min-height: 180px;
+        }
+        @media (max-width: 640px) {
+            .assoc-board-panels { grid-template-columns: 1fr; }
+        }
+        .assoc-board-pool {
+            background: var(--sp-bg-hover);
+            padding: 16px;
+            border-right: 1px solid var(--sp-border);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .assoc-board-assigned {
+            background: var(--sp-bg-card);
+            padding: 16px;
+        }
+        .assoc-panel-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--sp-text-secondary);
+            margin-bottom: 4px;
+        }
+        .assoc-pool-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            flex: 1;
+        }
+        .assoc-assigned-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 0;
+            border-bottom: 1px solid var(--sp-border);
+        }
+        .assoc-assigned-row:last-child { border-bottom: none; }
+        .assoc-assigned-info { flex: 1; min-width: 0; }
+        .assoc-assigned-name {
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .assoc-assigned-meta {
+            font-size: 12px;
+            color: var(--sp-text-secondary);
+            margin-top: 2px;
+        }
+        .assoc-board-empty {
+            font-size: 13px;
+            color: var(--sp-text-secondary);
+            padding: 8px 0;
+        }
+        /* ── / Associazioni board ── */
+
         .profilo-acc-row {
             display: flex;
             flex-wrap: wrap;
@@ -744,6 +827,22 @@
         }
         @media (max-width: 520px) {
             .valutazione-pg-grid { grid-template-columns: 1fr; }
+        }
+        .valutazioni-profilo-field--prompt label {
+            color: var(--sp-primary);
+        }
+        .valutazioni-profilo-field--prompt select {
+            border-color: var(--sp-primary);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--sp-primary) 22%, transparent);
+        }
+        .input-readonly {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--sp-border);
+            border-radius: 4px;
+            background: var(--sp-bg-hover);
+            color: var(--sp-text);
+            cursor: default;
         }
 
         .modal.modal--rile-wide {
@@ -2505,10 +2604,12 @@
             return candidate;
         }
 
-        /** Azienda per duplicazione rapida: filtro tab Associazioni, oppure unica azienda in elenco. */
+        /** Azienda per duplicazione rapida: picker tab Associazioni, oppure unica azienda in elenco. */
         function getAziendaIdForProfiloDuplicate() {
-            const fromFilter = document.getElementById('associazioniAziendaFilter')?.value || '';
-            if (fromFilter) return fromFilter;
+            const fromPicker = document.getElementById('assocAziendaSelect')?.value
+                || document.getElementById('associazioniAziendaFilter')?.value
+                || '';
+            if (fromPicker) return fromPicker;
             const aziende = STATE.data.aziende || [];
             if (aziende.length === 1) return aziende[0].id;
             return null;
@@ -2725,17 +2826,6 @@
                 ? '<tr><td colspan="6"><div class="empty-state" style="padding:20px;"><h3>Nessun profilo Standard</h3></div></td></tr>'
                 : standards.map(renderProfiloRow).join('');
 
-            const assocBody = associazioni.length === 0
-                ? `<div class="empty-state" style="padding:20px;">
-                       <h3>Nessuna associazione</h3>
-                       <p>Associa un profilo a un'azienda per generare automaticamente le valutazioni rischio.</p>
-                   </div>`
-                : `<table class="data-table">
-                       <thead><tr>
-                           <th>Azienda</th><th>P.IVA</th><th>Profilo</th><th>Tipo</th><th>Data</th><th></th>
-                       </tr></thead>
-                       <tbody id="associazioniTableBody">${renderAssociazioniGroupedRows(associazioni)}</tbody>
-                   </table>`;
 
             main.innerHTML = ''
                 // ── Page header ──
@@ -2776,15 +2866,7 @@
                 // ── Associazioni ──
                 + '<div class="card" style="margin-top:12px;">'
                 + '<div class="card-header"><div class="card-title">Associazioni Azienda – Profilo</div></div>'
-                + '<div class="card-body">' + renderAssociazioneForm(canWrite) + '</div>'
-                + '<div class="card-body" style="padding-top:0;">'
-                + '<div class="form-grid cols-3"><div class="form-field">'
-                + '<label>Vista per Azienda</label>'
-                + '<select id="associazioniAziendaFilter" onchange="filterAssociazioniByAzienda()">'
-                + '<option value="">— Tutte le aziende —</option>'
-                + (STATE.data.aziende || []).map(a => '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>').join('')
-                + '</select></div></div></div>'
-                + '<div class="card-body" style="padding-top:0;">' + assocBody + '</div>'
+                + '<div class="card-body">' + renderAssocPanel(canWrite) + '</div>'
                 + '</div>';
         }
 
@@ -2986,48 +3068,166 @@
             return [...filteredStandards, ...customsForAzienda];
         }
 
-        function onAssociazioneAziendaChange() {
-            const form = document.getElementById('associazioneForm');
-            if (!form) return;
-            const aziendaId = form.querySelector('select[name="azienda_id"]')?.value || '';
-            const profiloSelect = form.querySelector('select[name="profilo_id"]');
-            if (!profiloSelect) return;
-            const profili = getProfiliOptionsForAssociazione(aziendaId);
-            profiloSelect.innerHTML = '<option value="">— Seleziona profilo —</option>'
-                + profili.map(p => '<option value="' + attrEsc(p.id) + '">'
-                    + esc(p.fields?.NomeProfilo || '') + ' (' + esc(p.fields?.TipoProfilo || '') + ')'
-                    + '</option>').join('');
-            updateAssociazioneDuplicateBanner();
+        function onAssociaziendaChange() { /* legacy no-op */ }
+        function onAssociazioneAziendaChange() { /* legacy no-op */ }
+
+        function onAssocAziendaSelect() {
+            const aziendaId = document.getElementById('assocAziendaSelect')?.value || '';
+            const panels = document.getElementById('assocBoardPanels');
+            if (!panels) return;
+            if (!aziendaId) {
+                panels.style.display = 'none';
+                return;
+            }
+            panels.style.display = '';
+            renderAssocPool(aziendaId);
+            renderAssocAssigned(aziendaId);
         }
 
-        function renderAssociazioneForm(canWrite = false) {
-            const aziende = STATE.data.aziende || [];
+        function renderAssocPool(aziendaId) {
+            const chips = document.getElementById('assocPoolChips');
+            if (!chips) return;
+            const profili = getProfiliOptionsForAssociazione(aziendaId);
+            if (!profili.length) {
+                chips.innerHTML = '<span class="assoc-board-empty">Nessun profilo disponibile.</span>';
+                return;
+            }
+            chips.innerHTML = profili.map(p => {
+                const tipo = p.fields?.TipoProfilo || 'Standard';
+                const badgeCls = tipo === 'Custom' ? 'warning' : 'info';
+                return ''
+                    + '<label class="profilo-token">'
+                    + '<input type="checkbox" data-profilo-id="' + attrEsc(p.id) + '">'
+                    + '<span>' + esc(p.fields?.NomeProfilo || '?')
+                    + ' <span class="badge ' + badgeCls + '" style="font-size:10px;padding:1px 5px;margin-left:4px;">' + esc(tipo) + '</span></span>'
+                    + '</label>';
+            }).join('');
+        }
 
-            return `
-                <form id="associazioneForm" onsubmit="associateProfiloAzienda(event)" onchange="updateAssociazioneDuplicateBanner()">
-                    <div class="form-grid cols-3">
-                        <div class="form-field">
-                            <label>Azienda <span class="required">*</span></label>
-                            <select name="azienda_id" required onchange="onAssociazioneAziendaChange(); updateAssociazioneDuplicateBanner();">
-                                <option value="">— Seleziona azienda —</option>
-                                ${aziende.map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div class="form-field">
-                            <label>Profilo <span class="required">*</span></label>
-                            <select name="profilo_id" required onchange="updateAssociazioneDuplicateBanner()">
-                                <option value="">— Seleziona prima l'azienda —</option>
-                            </select>
-                        </div>
-                        <div class="form-field" style="align-self:end;">
-                            <button class="btn btn-primary" type="submit" ${canWrite ? '' : 'disabled'}>+ Associa Profilo</button>
-                        </div>
-                    </div>
-                    <div id="associazioneDuplicateBanner" style="display:none; margin-top:10px; padding:10px 12px; border-radius:8px; border:1px solid var(--sp-warning); background:rgba(255, 185, 0, 0.15); color:var(--sp-text-primary);">
-                        Associazione già presente per azienda e profilo selezionati.
-                    </div>
-                </form>
-            `;
+        function renderAssocAssigned(aziendaId) {
+            const list = document.getElementById('assocAssignedList');
+            if (!list) return;
+            const rows = (STATE.data.aziendeProfili || []).filter(ap => ap.azienda_id === aziendaId);
+            if (!rows.length) {
+                list.innerHTML = '<div class="assoc-board-empty">Nessun profilo associato.</div>';
+                return;
+            }
+            const canWrite = canMutateData();
+            list.innerHTML = rows.map(ap => {
+                const tipo = ap.fields?.TipoProfilo || '—';
+                const badgeCls = tipo === 'Custom' ? 'warning' : 'info';
+                const data = ap.fields?.DataAssociazione || '';
+                return ''
+                    + '<div class="assoc-assigned-row">'
+                    + '<div class="assoc-assigned-info">'
+                    + '<div class="assoc-assigned-name">' + esc(ap.fields?.Profilo || '—') + '</div>'
+                    + '<div class="assoc-assigned-meta">'
+                    + '<span class="badge ' + badgeCls + '" style="font-size:10px;padding:1px 5px;">' + esc(tipo) + '</span>'
+                    + (data ? ' · ' + esc(data) : '')
+                    + '</div>'
+                    + '</div>'
+                    + (canWrite
+                        ? '<button type="button" class="icon-btn danger" title="Disassocia" onclick="deleteAssociazioneBoard(\'' + ap.id + '\')">🗑️</button>'
+                        : '')
+                    + '</div>';
+            }).join('');
+        }
+
+        async function deleteAssociazioneBoard(associazioneId) {
+            if (!canMutateData()) { showToast('Permessi insufficienti: sola lettura', 'warning'); return; }
+            const row = (STATE.data.aziendeProfili || []).find(a => a.id == associazioneId);
+            if (!row) return;
+            if (!confirm('Confermi disassociazione? Verranno eliminate anche le valutazioni correlate.')) return;
+            try {
+                const { error: delValErr } = await supabaseClient
+                    .from(CONFIG.tables.valutazioniRischio)
+                    .delete()
+                    .eq('azienda_id', row.azienda_id)
+                    .eq('profilo_id', row.profilo_id);
+                if (delValErr) throw delValErr;
+                const { error } = await supabaseClient
+                    .from(CONFIG.tables.aziendeProfili)
+                    .delete()
+                    .eq('id', associazioneId);
+                if (error) throw error;
+                showToast('Associazione rimossa', 'success');
+                await loadProfiliAndAssociazioni();
+                const aziendaId = document.getElementById('assocAziendaSelect')?.value || '';
+                if (aziendaId) { renderAssocPool(aziendaId); renderAssocAssigned(aziendaId); }
+            } catch (e) {
+                console.error(e);
+                showToast('Errore disassociazione: ' + e.message, 'error');
+            }
+        }
+
+        async function associateProfiliSelezionati() {
+            if (!canMutateData()) {
+                showToast('Permessi insufficienti: sola lettura', 'warning');
+                return;
+            }
+            const aziendaId = document.getElementById('assocAziendaSelect')?.value || '';
+            if (!aziendaId) { showToast('Seleziona prima un\'azienda', 'warning'); return; }
+
+            const checked = Array.from(
+                document.querySelectorAll('#assocPoolChips input[type="checkbox"]:checked')
+            );
+            if (!checked.length) { showToast('Seleziona almeno un profilo', 'warning'); return; }
+
+            const profiloIds = checked.map(el => el.dataset.profiloId).filter(id => id && !isAssociazioneProfiloGiaPresente(aziendaId, id));
+            if (!profiloIds.length) { showToast('I profili selezionati sono già tutti associati', 'warning'); return; }
+
+            let ok = 0, fail = 0;
+            for (const profiloId of profiloIds) {
+                try {
+                    const { error } = await supabaseClient.rpc('fn_associa_profilo_azienda', {
+                        p_azienda_id: aziendaId,
+                        p_profilo_id: profiloId,
+                        p_user_id: STATE.account?.id || null
+                    });
+                    if (error) throw error;
+                    ok++;
+                } catch (e) {
+                    console.error(e);
+                    fail++;
+                }
+            }
+
+            if (ok) {
+                showToast(ok + ' associazion' + (ok === 1 ? 'e creata' : 'i create') + (fail ? ', ' + fail + ' fallite' : ''), ok && !fail ? 'success' : 'warning');
+                await loadProfiliAndAssociazioni();
+                renderAssocPool(aziendaId);
+                renderAssocAssigned(aziendaId);
+            } else {
+                showToast('Errore: nessuna associazione creata', 'error');
+            }
+        }
+
+        function renderAssocPanel(canWrite = false) {
+            const aziende = STATE.data.aziende || [];
+            const aziendeOpts = aziende.map(a =>
+                '<option value="' + attrEsc(a.id) + '">' + esc(a.fields.RagioneSociale || '') + '</option>'
+            ).join('');
+            return ''
+                + '<div class="assoc-board-picker">'
+                + '<label>Azienda</label>'
+                + '<select id="assocAziendaSelect" onchange="onAssocAziendaSelect()">'
+                + '<option value="">— Seleziona azienda —</option>'
+                + aziendeOpts
+                + '</select>'
+                + '</div>'
+                + '<div class="assoc-board-panels" id="assocBoardPanels" style="display:none;">'
+                + '<div class="assoc-board-pool">'
+                + '<div class="assoc-panel-label">Profili disponibili</div>'
+                + '<div class="assoc-pool-chips" id="assocPoolChips"></div>'
+                + (canWrite
+                    ? '<button type="button" class="btn btn-primary" style="align-self:flex-start;margin-top:4px;" onclick="associateProfiliSelezionati()">Associa selezionati</button>'
+                    : '')
+                + '</div>'
+                + '<div class="assoc-board-assigned">'
+                + '<div class="assoc-panel-label">Già associati</div>'
+                + '<div id="assocAssignedList"></div>'
+                + '</div>'
+                + '</div>';
         }
 
         function isAssociazioneProfiloGiaPresente(aziendaId, profiloId) {
@@ -3244,7 +3444,6 @@
             await loadValutazioniData();
 
             const aziende = STATE.data.aziende || [];
-            const profili = STATE.data.profili || [];
 
             main.innerHTML = `
                 <div class="page-header">
@@ -3260,23 +3459,15 @@
                             <div class="form-grid cols-3">
                                 <div class="form-field">
                                     <label>Azienda</label>
-                                    <select id="valutazioniAziendaFilter" onchange="updateValutazioniProfiloFilter();loadValutazioniByFilters()">
+                                    <select id="valutazioniAziendaFilter" onchange="updateValutazioniProfiloFilter()">
                                         <option value="">— Seleziona azienda —</option>
                                         ${aziende.map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
                                     </select>
                                 </div>
-                                <div class="form-field">
+                                <div class="form-field" id="valutazioniProfiloField">
                                     <label>Profilo</label>
-                                    <select id="valutazioniProfiloFilter" onchange="loadValutazioniByFilters()">
-                                        <option value="">— Tutti i profili —</option>
-                                        ${profili.map(p => `<option value="${p.id}">${esc(p.fields.NomeProfilo || '')}</option>`).join('')}
-                                    </select>
-                                </div>
-                                <div class="form-field">
-                                    <label>Vista</label>
-                                    <select id="valutazioniViewMode" onchange="loadValutazioniByFilters()">
-                                        <option value="perAzienda">PerAzienda</option>
-                                        <option value="perProfilo">PerProfilo</option>
+                                    <select id="valutazioniProfiloFilter" disabled onchange="onValutazioniProfiloSelect()">
+                                        <option value="">— Seleziona prima l'azienda —</option>
                                     </select>
                                 </div>
                                 <div class="form-field" style="align-self:end;">
@@ -3296,7 +3487,26 @@
                     </div>
                 </div>
             `;
-            updateValutazioniProfiloFilter();
+        }
+
+        function setValutazioniListEmpty(title, message) {
+            const container = document.getElementById('valutazioniListContainer');
+            if (!container) return;
+            container.innerHTML = `
+                <div class="empty-state" style="padding:20px;">
+                    <h3>${esc(title)}</h3>
+                    <p>${esc(message)}</p>
+                </div>
+            `;
+        }
+
+        function onValutazioniProfiloSelect() {
+            const profiloField = document.getElementById('valutazioniProfiloField');
+            const profiloId = document.getElementById('valutazioniProfiloFilter')?.value || '';
+            if (profiloField) {
+                profiloField.classList.toggle('valutazioni-profilo-field--prompt', !profiloId);
+            }
+            loadValutazioniByFilters();
         }
 
         function getValutazioniProfiliForAzienda(aziendaId) {
@@ -3320,17 +3530,42 @@
         function updateValutazioniProfiloFilter() {
             const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value || '';
             const profiloSelect = document.getElementById('valutazioniProfiloFilter');
+            const profiloField = document.getElementById('valutazioniProfiloField');
             if (!profiloSelect) return;
             const current = profiloSelect.value || '';
+
+            if (!aziendaId) {
+                profiloSelect.innerHTML = '<option value="">— Seleziona prima l\'azienda —</option>';
+                profiloSelect.disabled = true;
+                profiloSelect.value = '';
+                if (profiloField) profiloField.classList.remove('valutazioni-profilo-field--prompt');
+                setValutazioniListEmpty('Seleziona azienda e profilo', 'Visualizzerai qui le valutazioni generate in automatico.');
+                return;
+            }
+
             const profili = getValutazioniProfiliForAzienda(aziendaId);
+            if (!profili.length) {
+                profiloSelect.innerHTML = '<option value="">— Nessun profilo associato —</option>';
+                profiloSelect.disabled = true;
+                profiloSelect.value = '';
+                if (profiloField) profiloField.classList.remove('valutazioni-profilo-field--prompt');
+                setValutazioniListEmpty('Nessun profilo associato', 'Associa un profilo a questa azienda dalla sezione Profili.');
+                return;
+            }
+
+            profiloSelect.disabled = false;
             profiloSelect.innerHTML = `
-                <option value="">— Tutti i profili —</option>
+                <option value="">— Seleziona profilo —</option>
                 ${profili.map(p => `<option value="${p.id}">${esc(p.fields.NomeProfilo || '')}</option>`).join('')}
             `;
             if (current && profili.some(p => p.id === current)) {
                 profiloSelect.value = current;
+                if (profiloField) profiloField.classList.remove('valutazioni-profilo-field--prompt');
+                loadValutazioniByFilters();
             } else {
                 profiloSelect.value = '';
+                if (profiloField) profiloField.classList.add('valutazioni-profilo-field--prompt');
+                setValutazioniListEmpty('Seleziona un profilo', 'Scegli il profilo associato all\'azienda per visualizzare le valutazioni.');
             }
         }
 
@@ -3451,23 +3686,7 @@
             const canWrite = canMutateData();
             const aziendaId = document.getElementById('valutazioniAziendaFilter')?.value;
             const profiloId = document.getElementById('valutazioniProfiloFilter')?.value || '';
-            const viewMode = document.getElementById('valutazioniViewMode')?.value || 'perAzienda';
-            if (!aziendaId) {
-                container.innerHTML = `
-                    <div class="empty-state" style="padding:20px;">
-                        <h3>Filtri incompleti</h3>
-                        <p>Seleziona almeno un'azienda.</p>
-                    </div>
-                `;
-                return;
-            }
-            if (viewMode === 'perProfilo' && !profiloId) {
-                container.innerHTML = `
-                    <div class="empty-state" style="padding:20px;">
-                        <h3>Vista PerProfilo</h3>
-                        <p>Seleziona un profilo per questa vista.</p>
-                    </div>
-                `;
+            if (!aziendaId || !profiloId) {
                 return;
             }
 
@@ -3478,7 +3697,7 @@
             }
 
             container.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento valutazioni...</div>';
-            let query = supabaseClient
+            const { data, error } = await supabaseClient
                 .from(CONFIG.tables.valutazioniRischio)
                 .select(`
                     *,
@@ -3486,17 +3705,15 @@
                     testo_dvr:testo_dvr_id(id, titolo_testo, livello),
                     profilo:profilo_id(id, nome_profilo)
                 `)
-                .eq('azienda_id', aziendaId);
-            const { data, error } = await query.order('created_at', { ascending: true });
+                .eq('azienda_id', aziendaId)
+                .eq('profilo_id', profiloId)
+                .order('created_at', { ascending: true });
             if (error) {
                 container.innerHTML = `<div class="card-body" style="color:var(--sp-error);">${esc(error.message)}</div>`;
                 return;
             }
 
             let rows = data || [];
-            if (profiloId) {
-                rows = rows.filter(v => v.profilo_id === profiloId);
-            }
 
             // Ordinamento prioritario: prima i rischi "Presenti", poi indice più alto.
             const statoRank = (stato) => (stato === 'Presente' ? 0 : 1);
@@ -3523,36 +3740,16 @@
             }
 
             const renderGroupedRows = () => {
-                if (viewMode === 'perAzienda') {
-                    const groups = {};
-                    rows.forEach(v => {
-                        const macro = v.rischio?.macro_categoria || 'Altro';
-                        const prof = v.profilo?.nome_profilo || 'Senza profilo';
-                        groups[macro] = groups[macro] || {};
-                        groups[macro][prof] = groups[macro][prof] || [];
-                        groups[macro][prof].push(v);
-                    });
-                    return Object.entries(groups).map(([macro, byProf]) => `
-                        <tr><td colspan="11"><strong>${esc(macro)}</strong></td></tr>
-                        ${Object.entries(byProf).map(([prof, list]) => `
-                            <tr><td colspan="11" style="padding-left:24px;"><em>${esc(prof)}</em></td></tr>
-                            ${list.map((v) => renderValutazioneRow(v, canWrite)).join('')}
-                        `).join('')}
-                    `).join('');
-                }
-                if (viewMode === 'perProfilo') {
-                    const byLevel = {};
-                    rows.forEach(v => {
-                        const level = v.livello_rischio || 'Trascurabile';
-                        byLevel[level] = byLevel[level] || [];
-                        byLevel[level].push(v);
-                    });
-                    return Object.entries(byLevel).map(([level, list]) => `
-                        <tr><td colspan="11"><strong>Livello: ${esc(level)}</strong></td></tr>
-                        ${list.map((v) => renderValutazioneRow(v, canWrite)).join('')}
-                    `).join('');
-                }
-                return rows.map((v) => renderValutazioneRow(v, canWrite)).join('');
+                const byLevel = {};
+                rows.forEach(v => {
+                    const level = v.livello_rischio || 'Trascurabile';
+                    byLevel[level] = byLevel[level] || [];
+                    byLevel[level].push(v);
+                });
+                return Object.entries(byLevel).map(([level, list]) => `
+                    <tr><td colspan="10"><strong>Livello: ${esc(level)}</strong></td></tr>
+                    ${list.map((v) => renderValutazioneRow(v, canWrite)).join('')}
+                `).join('');
             };
 
             function renderValutazioneRow(v, allowEdit) {
@@ -3601,19 +3798,15 @@
         function clearValutazioniFilters() {
             const a = document.getElementById('valutazioniAziendaFilter');
             const p = document.getElementById('valutazioniProfiloFilter');
-            const v = document.getElementById('valutazioniViewMode');
+            const profiloField = document.getElementById('valutazioniProfiloField');
             if (a) a.value = '';
-            if (p) p.value = '';
-            if (v) v.value = 'perAzienda';
-            updateValutazioniProfiloFilter();
-            const container = document.getElementById('valutazioniListContainer');
-            if (container) {
-                container.innerHTML = `
-                    <div class="empty-state" style="padding:20px;">
-                        <h3>Seleziona azienda e profilo</h3>
-                    </div>
-                `;
+            if (p) {
+                p.innerHTML = '<option value="">— Seleziona prima l\'azienda —</option>';
+                p.disabled = true;
+                p.value = '';
             }
+            if (profiloField) profiloField.classList.remove('valutazioni-profilo-field--prompt');
+            setValutazioniListEmpty('Seleziona azienda e profilo', 'Visualizzerai qui le valutazioni generate in automatico.');
         }
 
         /** Stessa logica di fn_calcola_indice_livello (Supabase). */
@@ -4317,6 +4510,8 @@
 
         async function renderRilevamenti() {
             const main = document.getElementById('mainContent');
+            const prevAzienda = document.getElementById('rilevamentiAziendaFilter')?.value || '';
+            const prevMode = document.getElementById('rilevamentiViewMode')?.value || 'perAzienda';
             await ensureAziendeLoaded();
             const { data: tipiData, error: tipiError } = await supabaseClient
                 .from(CONFIG.tables.tipiRilevamento)
@@ -4325,13 +4520,7 @@
                 .order('nome_tipo', { ascending: true });
             if (tipiError) throw tipiError;
             STATE.data.tipiRilevamento = tipiData || [];
-
-            const { data, error } = await supabaseClient
-                .from(CONFIG.tables.rilevamentiAmbientali)
-                .select('*, azienda:azienda_id(id, ragione_sociale, partita_iva), tipo_rilevamento:tipo_rilevamento_id(id, nome_tipo)')
-                .order('data_rilevamento', { ascending: false });
-            if (error) throw error;
-            STATE.data.rilevamentiAmbientali = data || [];
+            STATE.data.rilevamentiAmbientali = [];
 
             main.innerHTML = `
                 <div class="page-header">
@@ -4339,51 +4528,137 @@
                         <h1 class="page-title">Rilevamenti</h1>
                         <p class="page-subtitle">Misurazioni ambientali e controllo conformita</p>
                     </div>
-                    <button class="btn btn-primary" onclick="openRilevamentoModal()">
+                    <button type="button" class="btn btn-primary" id="rilevamentiNuovoBtn" onclick="openRilevamentoModal()" disabled>
                         + Nuovo Rilevamento
                     </button>
                 </div>
                 <div class="toolbar">
-                    <div class="form-grid cols-3" style="width:100%;">
+                    <div class="form-grid cols-2" style="width:100%;">
                         <div class="form-field">
-                            <label>Vista</label>
-                            <select id="rilevamentiViewMode" onchange="applyRilevamentiView()">
-                                <option value="perAzienda">PerAzienda</option>
-                                <option value="nonConformi">NonConformi</option>
+                            <label>Azienda</label>
+                            <select id="rilevamentiAziendaFilter" onchange="onRilevamentiAziendaSelect()">
+                                <option value="">— Seleziona azienda —</option>
+                                ${(STATE.data.aziende || []).map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-field">
-                            <label>Azienda</label>
-                            <select id="rilevamentiAziendaFilter" onchange="applyRilevamentiView()">
-                                <option value="">— Tutte le aziende —</option>
-                                ${(STATE.data.aziende || []).map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
+                            <label>Vista</label>
+                            <select id="rilevamentiViewMode" onchange="renderRilevamentiTableBody()" disabled>
+                                <option value="perAzienda">PerAzienda</option>
+                                <option value="nonConformi">NonConformi</option>
                             </select>
                         </div>
                     </div>
                 </div>
                 <div class="card">
-                    <div class="card-body" style="padding:0;">
-                        ${STATE.data.rilevamentiAmbientali.length === 0 ? `
-                            <div class="empty-state"><h3>Nessun rilevamento inserito</h3></div>
-                        ` : `
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Azienda</th>
-                                        <th>Tipo</th>
-                                        <th>Valore</th>
-                                        <th>Limite</th>
-                                        <th>Esito</th>
-                                        <th>Data</th>
-                                        <th></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="rilevamentiTableBody">
-                                    ${renderRilevamentiRows('perAzienda', '')}
-                                </tbody>
-                            </table>
-                        `}
+                    <div class="card-body" id="rilevamentiListContainer">
+                        <div class="empty-state" style="padding:20px;">
+                            <h3>Seleziona un'azienda</h3>
+                            <p>Visualizzerai qui i rilevamenti ambientali dell'azienda selezionata.</p>
+                        </div>
                     </div>
+                </div>
+            `;
+
+            if (prevAzienda) {
+                const aziendaSel = document.getElementById('rilevamentiAziendaFilter');
+                const modeSel = document.getElementById('rilevamentiViewMode');
+                if (aziendaSel) aziendaSel.value = prevAzienda;
+                if (modeSel) modeSel.value = prevMode;
+                await loadRilevamentiByFilters();
+            }
+        }
+
+        function setRilevamentiListEmpty(title, message) {
+            const container = document.getElementById('rilevamentiListContainer');
+            if (!container) return;
+            container.innerHTML = `
+                <div class="empty-state" style="padding:20px;">
+                    <h3>${esc(title)}</h3>
+                    <p>${esc(message)}</p>
+                </div>
+            `;
+        }
+
+        function onRilevamentiAziendaSelect() {
+            const aziendaId = document.getElementById('rilevamentiAziendaFilter')?.value || '';
+            const viewSelect = document.getElementById('rilevamentiViewMode');
+            const nuovoBtn = document.getElementById('rilevamentiNuovoBtn');
+            if (viewSelect) viewSelect.disabled = !aziendaId;
+            if (nuovoBtn) nuovoBtn.disabled = !aziendaId;
+            if (!aziendaId) {
+                STATE.data.rilevamentiAmbientali = [];
+                setRilevamentiListEmpty('Seleziona un\'azienda', 'Visualizzerai qui i rilevamenti ambientali dell\'azienda selezionata.');
+                return;
+            }
+            loadRilevamentiByFilters();
+        }
+
+        async function loadRilevamentiByFilters() {
+            const container = document.getElementById('rilevamentiListContainer');
+            const aziendaId = document.getElementById('rilevamentiAziendaFilter')?.value || '';
+            if (!container || !aziendaId) return;
+
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>Caricamento rilevamenti...</div>';
+            const { data, error } = await supabaseClient
+                .from(CONFIG.tables.rilevamentiAmbientali)
+                .select('*, azienda:azienda_id(id, ragione_sociale, partita_iva), tipo_rilevamento:tipo_rilevamento_id(id, nome_tipo)')
+                .eq('azienda_id', aziendaId)
+                .order('data_rilevamento', { ascending: false });
+            if (error) {
+                container.innerHTML = `<div class="card-body" style="color:var(--sp-error);">${esc(error.message)}</div>`;
+                return;
+            }
+            STATE.data.rilevamentiAmbientali = data || [];
+            renderRilevamentiTableBody();
+        }
+
+        function renderRilevamentiTableBody() {
+            const container = document.getElementById('rilevamentiListContainer');
+            const aziendaId = document.getElementById('rilevamentiAziendaFilter')?.value || '';
+            if (!container || !aziendaId) return;
+            const mode = document.getElementById('rilevamentiViewMode')?.value || 'perAzienda';
+            const list = STATE.data.rilevamentiAmbientali || [];
+            if (!list.length) {
+                setRilevamentiListEmpty('Nessun rilevamento inserito', 'Usa «Nuovo Rilevamento» per aggiungere la prima misurazione.');
+                return;
+            }
+            container.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Azienda</th>
+                            <th>Tipo</th>
+                            <th>Valore</th>
+                            <th>Limite</th>
+                            <th>Esito</th>
+                            <th>Data</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="rilevamentiTableBody">
+                        ${renderRilevamentiRows(mode, aziendaId)}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function reloadRilevamentiList() {
+            if (document.getElementById('rilevamentiListContainer')) {
+                await loadRilevamentiByFilters();
+            } else {
+                await renderRilevamenti();
+            }
+        }
+
+        function rilevamentoAziendaFieldHtml(aziendaId) {
+            const az = (STATE.data.aziende || []).find(a => String(a.id) === String(aziendaId));
+            const nome = az?.fields?.RagioneSociale || '—';
+            return `
+                <div class="form-field">
+                    <label>Azienda</label>
+                    <input type="hidden" name="azienda_id" value="${attrEsc(aziendaId)}">
+                    <input type="text" class="input-readonly" value="${esc(nome)}" readonly tabindex="-1">
                 </div>
             `;
         }
@@ -4471,11 +4746,7 @@
         }
 
         function applyRilevamentiView() {
-            const tbody = document.getElementById('rilevamentiTableBody');
-            if (!tbody) return;
-            const mode = document.getElementById('rilevamentiViewMode')?.value || 'perAzienda';
-            const aziendaId = document.getElementById('rilevamentiAziendaFilter')?.value || '';
-            tbody.innerHTML = renderRilevamentiRows(mode, aziendaId);
+            renderRilevamentiTableBody();
         }
 
         /** I 4 tipi «sessione tabellare»: un record + dettaglio_microclima. */
@@ -4960,7 +5231,7 @@
             }
             closeModal('rilevamentoModal');
             showToast('Rilevamento radon salvato', 'success');
-            await renderRilevamenti();
+            await reloadRilevamentiList();
         }
 
         async function saveRumoreTabellareRecord(formEl, editId) {
@@ -5056,7 +5327,7 @@
             }
             closeModal('rilevamentoModal');
             showToast('Rilevamento rumore salvato', 'success');
-            await renderRilevamenti();
+            await reloadRilevamentiList();
         }
 
         window.syncMicroBulkRowTitles = function () {
@@ -5220,7 +5491,7 @@
             }
             closeModal('rilevamentoModal');
             showToast('Rilevamento salvato', 'success');
-            await renderRilevamenti();
+            await reloadRilevamentiList();
         }
 
         function openRilevamentoModal(itemId = null) {
@@ -5229,9 +5500,15 @@
                 return;
             }
             const isEdit = itemId !== null;
+            const filterAziendaId = document.getElementById('rilevamentiAziendaFilter')?.value || '';
+            if (!isEdit && !filterAziendaId) {
+                showToast('Seleziona prima un\'azienda dai filtri', 'warning');
+                return;
+            }
             const item = isEdit ? (STATE.data.rilevamentiAmbientali || []).find(r => r.id == itemId) : null;
-            const aziende = STATE.data.aziende || [];
             const tipi = STATE.data.tipiRilevamento || [];
+            const modalAziendaId = isEdit ? (item?.azienda_id || filterAziendaId) : filterAziendaId;
+            const aziendaFieldHtml = rilevamentoAziendaFieldHtml(modalAziendaId);
 
             const modal = document.createElement('div');
             modal.className = 'modal-overlay';
@@ -5261,13 +5538,7 @@
                                     <label>Descrizione Rilevamento</label>
                                     <input type="text" name="descrizione_rilevamento" value="${esc(item?.descrizione_rilevamento || '')}" required>
                                 </div>
-                                <div class="form-field">
-                                    <label>Azienda</label>
-                                    <select name="azienda_id" required>
-                                        <option value="">— Seleziona —</option>
-                                        ${aziende.map(a => `<option value="${a.id}" ${item?.azienda_id === a.id ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                    </select>
-                                </div>
+                                ${aziendaFieldHtml}
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
                                     <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyMicroModalTipoVisibility();">
@@ -5358,13 +5629,7 @@
                                     <label>Descrizione Rilevamento</label>
                                     <input type="text" name="descrizione_rilevamento" value="${esc(item?.descrizione_rilevamento || '')}" required>
                                 </div>
-                                <div class="form-field">
-                                    <label>Azienda</label>
-                                    <select name="azienda_id" required>
-                                        <option value="">— Seleziona —</option>
-                                        ${aziende.map(a => `<option value="${a.id}" ${item?.azienda_id === a.id ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                    </select>
-                                </div>
+                                ${aziendaFieldHtml}
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
                                     <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
@@ -5417,13 +5682,7 @@
                                     <label>Descrizione Rilevamento</label>
                                     <input type="text" name="descrizione_rilevamento" value="${esc(item?.descrizione_rilevamento || '')}" required>
                                 </div>
-                                <div class="form-field">
-                                    <label>Azienda</label>
-                                    <select name="azienda_id" required>
-                                        <option value="">— Seleziona —</option>
-                                        ${aziende.map(a => `<option value="${a.id}" ${item?.azienda_id === a.id ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                    </select>
-                                </div>
+                                ${aziendaFieldHtml}
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
                                     <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
@@ -5473,13 +5732,7 @@
                                     <label>Descrizione Rilevamento</label>
                                     <input type="text" name="descrizione_rilevamento" value="${esc(item?.descrizione_rilevamento || '')}" required>
                                 </div>
-                                <div class="form-field">
-                                    <label>Azienda</label>
-                                    <select name="azienda_id" required>
-                                        <option value="">— Seleziona —</option>
-                                        ${aziende.map(a => `<option value="${a.id}" ${item?.azienda_id === a.id ? 'selected' : ''}>${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                    </select>
-                                </div>
+                                ${aziendaFieldHtml}
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
                                     <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
@@ -5547,13 +5800,7 @@
                                     <label>Descrizione Rilevamento</label>
                                     <input type="text" name="descrizione_rilevamento" value="" required>
                                 </div>
-                                <div class="form-field">
-                                    <label>Azienda</label>
-                                    <select name="azienda_id" required>
-                                        <option value="">— Seleziona —</option>
-                                        ${aziende.map(a => `<option value="${a.id}">${esc(a.fields.RagioneSociale || '')}</option>`).join('')}
-                                    </select>
-                                </div>
+                                ${aziendaFieldHtml}
                                 <div class="form-field">
                                     <label>Tipo Rilevamento</label>
                                     <select name="tipo_rilevamento_id" required onchange="applyTipoRilevamentoDefaults(this.value); applyRilevamentoModalTipoVisibility();">
@@ -5705,7 +5952,7 @@
             }
             closeModal('rilevamentoModal');
             showToast('Rilevamento salvato', 'success');
-            await renderRilevamenti();
+            await reloadRilevamentiList();
         }
 
         async function deleteRilevamento(itemId) {
@@ -5723,7 +5970,7 @@
                 return;
             }
             showToast('Rilevamento eliminato', 'success');
-            await renderRilevamenti();
+            await reloadRilevamentiList();
         }
 
         function modelloStoragePath(codice, fileName) {

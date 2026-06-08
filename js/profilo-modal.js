@@ -118,42 +118,45 @@
     const cfg = mat.normalizeProtocolloProfilo(draft.protocollo);
     draft.protocollo = cfg;
 
-    let html = '<p class="hint-str" style="margin-bottom:10px;">Rischi lavorativi (matrice) → accertamenti e periodicità.</p>';
+    let html = '<div class="profilo-protocollo-box">';
+    html += '<p class="hint-str" style="margin:0 0 12px;">Rischi lavorativi (matrice) → accertamenti e periodicità.</p>';
+    html += '<div class="profilo-protocollo-label">Rischi lavorativi</div>';
     html += '<div class="profilo-matrice-rischi">';
     mat.RISCHI_LAVORATIVI.forEach((r) => {
       const on = cfg.rischi_ids.includes(r.id);
       html += ''
-        + '<label class="profilo-check-chip">'
+        + '<label class="profilo-token">'
         + '<input type="checkbox" data-rischio-id="' + attrEsc(r.id) + '"'
         + (on ? ' checked' : '')
-        + ' onchange="ProfiloModal.toggleProtocolloRischio(this)"> '
-        + esc(r.nome)
+        + ' onchange="ProfiloModal.toggleProtocolloRischio(this)">'
+        + '<span>' + esc(r.nome) + '</span>'
         + '</label>';
     });
     html += '</div>';
 
     const accs = mat.accertamentiForRischi(cfg.rischi_ids);
-    html += '<div id="profiloProtocolloAccertamenti" style="margin-top:14px;">';
+    html += '<div id="profiloProtocolloAccertamenti" style="margin-top:16px;">';
     if (!accs.length) {
-      html += '<p class="hint-str">Seleziona almeno un rischio lavorativo.</p>';
+      html += '<p class="hint-str" style="margin:0;">Seleziona almeno un rischio lavorativo.</p>';
     } else {
+      html += '<div class="profilo-protocollo-label">Accertamenti · periodicità</div>';
       accs.forEach((acc) => {
         const selIds = mat.mergePeriodicitaIds(cfg.periodicita, acc.id);
-        html += '<div class="profilo-acc-row"><div><strong>' + esc(acc.nome) + '</strong></div><div class="profilo-per-chips">';
+        html += '<div class="profilo-acc-row"><div class="profilo-acc-name">' + esc(acc.nome) + '</div><div class="profilo-per-chips">';
         mat.PERIODICITA_OPTS.forEach((p) => {
           const on = selIds.includes(p.id);
           html += ''
-            + '<label class="profilo-check-chip">'
+            + '<label class="profilo-token profilo-token-sm">'
             + '<input type="checkbox" data-acc-id="' + attrEsc(acc.id) + '" data-per-id="' + attrEsc(p.id) + '"'
             + (on ? ' checked' : '')
-            + ' onchange="ProfiloModal.toggleProtocolloPeriodicita(this)"> '
-            + esc(p.label)
+            + ' onchange="ProfiloModal.toggleProtocolloPeriodicita(this)">'
+            + '<span>' + esc(p.label) + '</span>'
             + '</label>';
         });
         html += '</div></div>';
       });
     }
-    html += '</div>';
+    html += '</div></div>';
     wrap.innerHTML = html;
   }
 

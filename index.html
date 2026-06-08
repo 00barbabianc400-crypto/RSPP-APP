@@ -17,7 +17,7 @@
     <script src="./env.js"></script>
     <script src="js/audit-delete-log.js?v=20260529a"></script>
     <script src="js/rischio-accertamento-matrice.js?v=20260604c"></script>
-    <script src="js/profilo-modal.js?v=20260603e"></script>
+    <script src="js/profilo-modal.js?v=20260605b"></script>
     <script src="js/azienda-sedi-modal.js?v=20260604b"></script>
     <!-- Fluent UI (solo foglio di stile, non modulo JS) -->
     <link rel="stylesheet" href="https://res.cdn.office.net/files/fabric-cdn-prod_20230815.002/office-ui-fabric-core/11.1.0/css/fabric.min.css">
@@ -442,21 +442,93 @@
         .profilo-fase-card-head { flex: 1; min-width: 0; }
         .profilo-fase-card-head .hint-str { display: block; font-size: 12px; margin-top: 4px; }
         .profilo-fase-card-actions { display: flex; gap: 6px; flex-shrink: 0; }
-        .profilo-matrice-rischi { display: flex; flex-wrap: wrap; gap: 8px; }
-        .profilo-check-chip {
-            font-size: 13px;
-            padding: 4px 8px;
-            border: 1px solid var(--sp-border);
-            border-radius: 4px;
-            background: var(--sp-bg-card);
-            cursor: pointer;
+        .profilo-matrice-rischi,
+        .profilo-per-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
         }
-        .profilo-check-chip input { margin-right: 4px; vertical-align: middle; }
+        .profilo-protocollo-box {
+            padding: 14px 16px;
+            border: 1px solid var(--sp-border);
+            border-radius: 8px;
+            background: var(--sp-bg-hover);
+        }
+        .profilo-protocollo-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--sp-text-secondary);
+            margin-bottom: 10px;
+        }
+        .profilo-token {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 7px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--sp-border-strong, var(--sp-border));
+            background: var(--sp-bg-card);
+            font-size: 13px;
+            font-weight: 500;
+            line-height: 1.2;
+            color: var(--sp-text);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+        }
+        .profilo-token:hover {
+            border-color: var(--sp-primary);
+        }
+        .profilo-token:has(input:checked) {
+            background: var(--sp-primary);
+            border-color: var(--sp-primary);
+            color: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        .profilo-token:has(input:focus-visible) {
+            outline: 2px solid var(--sp-primary);
+            outline-offset: 2px;
+        }
+        .profilo-token-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .profilo-token input {
+            position: absolute;
+            opacity: 0;
+            width: 1px;
+            height: 1px;
+            margin: 0;
+            pointer-events: none;
+        }
         .profilo-acc-row {
-            padding: 10px 0;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px 16px;
+            padding: 12px 0;
             border-bottom: 1px solid var(--sp-border);
         }
-        .profilo-per-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+        .profilo-acc-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .profilo-acc-name {
+            flex: 0 0 min(100%, 260px);
+            min-width: 180px;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--sp-text);
+            line-height: 1.35;
+        }
+        .profilo-acc-row .profilo-per-chips {
+            flex: 1;
+            min-width: min(100%, 220px);
+        }
         .hint-str { font-size: 12px; color: var(--sp-text-secondary); }
         
         .form-field {

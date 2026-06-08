@@ -675,6 +675,77 @@
             gap: 8px;
         }
 
+        .valutazione-modal {
+            max-width: 640px;
+            border-radius: 8px;
+        }
+        .valutazione-modal-header {
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .valutazione-modal-header > div:first-child {
+            flex: 1;
+            min-width: 0;
+        }
+        .valutazione-modal-sub {
+            margin: 6px 0 0;
+            font-size: 13px;
+            color: var(--sp-text-secondary);
+            line-height: 1.45;
+        }
+        .valutazione-modal-panel {
+            padding: 14px 16px;
+            border: 1px solid var(--sp-border);
+            border-radius: 8px;
+            background: var(--sp-bg-hover);
+            margin-bottom: 14px;
+        }
+        .valutazione-modal-panel:last-child {
+            margin-bottom: 0;
+        }
+        .valutazione-pg-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        .valutazione-field-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--sp-text);
+        }
+        .valutazione-kpi-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px 14px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--sp-border);
+        }
+        .valutazione-kpi-indice {
+            font-size: 13px;
+            color: var(--sp-text-secondary);
+        }
+        .valutazione-kpi-indice strong {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--sp-text);
+            margin-left: 4px;
+        }
+        .valutazione-dvr-hint {
+            margin: 0 0 8px !important;
+            font-size: 12px;
+            color: var(--sp-text-secondary);
+        }
+        .valutazione-modal textarea {
+            min-height: 72px;
+            resize: vertical;
+        }
+        @media (max-width: 520px) {
+            .valutazione-pg-grid { grid-template-columns: 1fr; }
+        }
+
         .modal.modal--rile-wide {
             max-width: 980px;
         }
@@ -3588,6 +3659,25 @@
             return { indice: calc.indice, livello };
         }
 
+        function getValutazioneFormValue(form, name) {
+            const checked = form.querySelector('[name="' + name + '"]:checked');
+            if (checked) return checked.value;
+            const el = form.querySelector('[name="' + name + '"]');
+            return el ? el.value : '';
+        }
+
+        function valutazioneScaleTokensHtml(fieldName, currentVal) {
+            const cur = currentVal != null && currentVal !== '' ? parseInt(currentVal, 10) : null;
+            return [1, 2, 3, 4].map((n) => ''
+                + '<label class="profilo-token profilo-token-sm">'
+                + '<input type="radio" name="' + fieldName + '" value="' + n + '"'
+                + (cur === n ? ' checked' : '')
+                + ' onchange="refreshValutazioneTestiDvrSelect()">'
+                + '<span>' + n + '</span>'
+                + '</label>'
+            ).join('');
+        }
+
         function refreshValutazioneTestiDvrSelect() {
             const form = document.getElementById('valutazioneForm');
             if (!form) return;
@@ -3595,11 +3685,14 @@
             const rischioId = form.dataset.rischioId;
             const aziendaId = form.dataset.aziendaId || null;
             const livelloSalvato = form.dataset.livelloSalvato || '';
-            const stato = form.querySelector('[name="stato"]')?.value || 'Trascurabile';
-            const probabilita = form.querySelector('[name="probabilita"]')?.value;
-            const gravita = form.querySelector('[name="gravita"]')?.value;
+            const stato = getValutazioneFormValue(form, 'stato') || 'Trascurabile';
+            const probabilita = getValutazioneFormValue(form, 'probabilita');
+            const gravita = getValutazioneFormValue(form, 'gravita');
             const select = form.querySelector('[name="testo_dvr_id"]');
             const hint = document.getElementById('valutazioneLivelloHint');
+            const kpiBar = document.getElementById('valutazioneKpiBar');
+            const kpiIndice = document.getElementById('valutazioneKpiIndice');
+            const kpiLivello = document.getElementById('valutazioneKpiLivello');
             if (!select || !rischioId) return;
 
             const { indice, livello } = livelloPerTestiDvrValutazione(stato, probabilita, gravita, livelloSalvato);
@@ -3612,16 +3705,24 @@
                 select.value = prev;
             }
 
+            if (kpiBar && kpiIndice && kpiLivello) {
+                if (stato === 'Presente' && indice != null) {
+                    kpiBar.style.display = '';
+                    kpiIndice.textContent = String(indice);
+                    kpiLivello.textContent = livello;
+                    kpiLivello.className = 'badge ' + getMacroBadgeClass(livello);
+                } else {
+                    kpiBar.style.display = 'none';
+                }
+            }
+
             if (hint) {
                 if (stato === 'Presente' && indice != null) {
-                    hint.textContent = 'Indice ' + indice + ' → livello ' + livello + ' (testi filtrati per fascia)';
-                    hint.style.display = '';
+                    hint.textContent = 'Testi filtrati per fascia ' + livello + ' (P×G = ' + indice + ').';
                 } else if (stato === 'Presente') {
-                    hint.textContent = 'Inserisci P e G (1–4) per calcolare la fascia e filtrare i testi DVR';
-                    hint.style.display = '';
+                    hint.textContent = 'Seleziona P e G (1–4) per calcolare l\'indice e filtrare i testi DVR.';
                 } else {
-                    hint.textContent = 'Stato Non applicabile: testi per livello ' + livello;
-                    hint.style.display = '';
+                    hint.textContent = 'Stato non applicabile: testi per livello ' + livello + '.';
                 }
             }
         }
@@ -3640,12 +3741,15 @@
             const modal = document.createElement('div');
             modal.className = 'modal-overlay';
             modal.id = 'valutazioneModal';
+            const pgVisible = item.stato === 'Presente';
             modal.innerHTML = `
-                <div class="modal" onclick="event.stopPropagation()">
-                    <div class="modal-header">
-                        <div class="modal-title">Compila Valutazione</div>
-                        <p class="form-hint" style="margin:4px 0 0;font-size:12px;">${esc(sottotitolo)}</p>
-                        <button class="icon-btn" onclick="closeModal('valutazioneModal')">✕</button>
+                <div class="modal valutazione-modal" onclick="event.stopPropagation()">
+                    <div class="modal-header valutazione-modal-header">
+                        <div>
+                            <div class="modal-title">Compila Valutazione</div>
+                            <p class="valutazione-modal-sub">${esc(sottotitolo)}</p>
+                        </div>
+                        <button type="button" class="icon-btn" onclick="closeModal('valutazioneModal')">✕</button>
                     </div>
                     <div class="modal-body">
                         <form id="valutazioneForm"
@@ -3654,41 +3758,56 @@
                               data-livello-salvato="${esc(item.livello_rischio || '')}"
                               data-initial-testo="${item.testo_dvr_id || ''}"
                               onsubmit="saveValutazione(event, '${valutazioneId}')">
-                            <div class="form-grid cols-3">
-                                <div class="form-field">
-                                    <label>Stato</label>
-                                    <select name="stato" required onchange="toggleValutazionePG(this.value); refreshValutazioneTestiDvrSelect();">
-                                        <option value="Trascurabile" ${item.stato === 'Trascurabile' ? 'selected' : ''}>Non applicabile</option>
-                                        <option value="Presente" ${item.stato === 'Presente' ? 'selected' : ''}>Presente</option>
-                                    </select>
+                            <div class="valutazione-modal-panel">
+                                <div class="profilo-protocollo-label">Stato del rischio</div>
+                                <div class="profilo-matrice-rischi">
+                                    <label class="profilo-token">
+                                        <input type="radio" name="stato" value="Trascurabile" required
+                                               ${item.stato === 'Trascurabile' ? 'checked' : ''}
+                                               onchange="toggleValutazionePG(this.value); refreshValutazioneTestiDvrSelect();">
+                                        <span>Non applicabile</span>
+                                    </label>
+                                    <label class="profilo-token">
+                                        <input type="radio" name="stato" value="Presente"
+                                               ${item.stato === 'Presente' ? 'checked' : ''}
+                                               onchange="toggleValutazionePG(this.value); refreshValutazioneTestiDvrSelect();">
+                                        <span>Presente</span>
+                                    </label>
                                 </div>
-                                <div class="form-field pg-field" style="${item.stato === 'Presente' ? '' : 'display:none;'}">
-                                    <label>Probabilità (1-4)</label>
-                                    <input type="number" name="probabilita" min="1" max="4" value="${item.probabilita ?? ''}"
-                                           oninput="refreshValutazioneTestiDvrSelect()" onchange="refreshValutazioneTestiDvrSelect()">
+                            </div>
+                            <div class="valutazione-modal-panel pg-field" style="${pgVisible ? '' : 'display:none;'}">
+                                <div class="profilo-protocollo-label">Matrice P × G</div>
+                                <div class="valutazione-pg-grid">
+                                    <div class="valutazione-pg-field">
+                                        <div class="valutazione-field-label">Probabilità (1–4)</div>
+                                        <div class="profilo-matrice-rischi">${valutazioneScaleTokensHtml('probabilita', item.probabilita)}</div>
+                                    </div>
+                                    <div class="valutazione-pg-field">
+                                        <div class="valutazione-field-label">Gravità (1–4)</div>
+                                        <div class="profilo-matrice-rischi">${valutazioneScaleTokensHtml('gravita', item.gravita)}</div>
+                                    </div>
                                 </div>
-                                <div class="form-field pg-field" style="${item.stato === 'Presente' ? '' : 'display:none;'}">
-                                    <label>Gravità (1-4)</label>
-                                    <input type="number" name="gravita" min="1" max="4" value="${item.gravita ?? ''}"
-                                           oninput="refreshValutazioneTestiDvrSelect()" onchange="refreshValutazioneTestiDvrSelect()">
+                                <div id="valutazioneKpiBar" class="valutazione-kpi-bar" style="display:none;">
+                                    <span class="valutazione-kpi-indice">Indice<strong id="valutazioneKpiIndice">—</strong></span>
+                                    <span class="badge" id="valutazioneKpiLivello">—</span>
                                 </div>
-                                <div class="form-field full">
-                                    <label>Testo DVR</label>
-                                    <p id="valutazioneLivelloHint" class="form-hint" style="margin:0 0 6px;font-size:12px;color:var(--sp-text-secondary);"></p>
-                                    <select name="testo_dvr_id">
-                                        <option value="">— Nessuno —</option>
-                                    </select>
-                                </div>
-                                <div class="form-field full">
-                                    <label>Note</label>
-                                    <textarea name="note">${esc(item.note || '')}</textarea>
-                                </div>
+                            </div>
+                            <div class="valutazione-modal-panel">
+                                <div class="profilo-protocollo-label">Testo DVR</div>
+                                <p id="valutazioneLivelloHint" class="valutazione-dvr-hint"></p>
+                                <select name="testo_dvr_id">
+                                    <option value="">— Nessuno —</option>
+                                </select>
+                            </div>
+                            <div class="form-field" style="margin-top:14px;">
+                                <label>Note</label>
+                                <textarea name="note">${esc(item.note || '')}</textarea>
                             </div>
                         </form>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn" onclick="closeModal('valutazioneModal')">Annulla</button>
-                        <button class="btn btn-primary" onclick="document.getElementById('valutazioneForm').requestSubmit()">Salva</button>
+                        <button type="button" class="btn" onclick="closeModal('valutazioneModal')">Annulla</button>
+                        <button type="button" class="btn btn-primary" onclick="document.getElementById('valutazioneForm').requestSubmit()">Salva</button>
                     </div>
                 </div>
             `;

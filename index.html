@@ -811,6 +811,42 @@
             font-size: 12px;
             color: var(--sp-text-secondary);
         }
+        .valutazione-dvr-select-wrap {
+            margin-top: 4px;
+        }
+        .valutazione-modal .valutazione-dvr-select {
+            width: 100%;
+            display: block;
+            padding: 10px 36px 10px 12px;
+            border: 1px solid var(--sp-border-strong, var(--sp-border));
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.35;
+            font-family: inherit;
+            background-color: var(--sp-bg-card);
+            color: var(--sp-text);
+            min-height: 42px;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .valutazione-modal .valutazione-dvr-select:hover {
+            border-color: var(--sp-primary);
+        }
+        .valutazione-modal .valutazione-dvr-select:focus {
+            outline: none;
+            border-color: var(--sp-primary);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--sp-primary) 22%, transparent);
+        }
+        .valutazione-modal .valutazione-dvr-select:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .valutazione-modal textarea {
             min-height: 72px;
             resize: vertical;
@@ -4049,9 +4085,11 @@
                             <div class="valutazione-modal-panel">
                                 <div class="profilo-protocollo-label">Testo DVR</div>
                                 <p id="valutazioneLivelloHint" class="valutazione-dvr-hint"></p>
-                                <select name="testo_dvr_id">
-                                    <option value="">— Nessuno —</option>
-                                </select>
+                                <div class="valutazione-dvr-select-wrap">
+                                    <select name="testo_dvr_id" class="valutazione-dvr-select">
+                                        <option value="">— Nessuno —</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="form-field" style="margin-top:14px;">
                                 <label>Note</label>
